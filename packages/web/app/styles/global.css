@@ -1,0 +1,100 @@
+@import "tailwindcss";
+@import "tailwindcss-safe-area";
+
+@import "./fonts/inter.css";
+
+@plugin "@tailwindcss/forms";
+
+@custom-variant print (@media print);
+@custom-variant dark (&:where(.dark, .dark *, [data-theme=dark], [data-theme=dark] *));
+@custom-variant light (&:where(.light, .light *, [data-theme=light], [data-theme=light] *));
+
+@utility no-scrollbar {
+	&::-webkit-scrollbar {
+		display: none;
+	}
+
+	-ms-overflow-style: none;
+	scrollbar-width: none;
+}
+
+@utility light-theme {
+	--color-background: oklch(0.985 0.018 241.43);
+	--color-foreground: oklch(0.22 0.015 241.43);
+	--color-muted: oklch(0.48 0.02 247.1);
+	--color-border: oklch(0.9 0.01 241.43);
+	--color-surface: oklch(0.97 0.015 241.43);
+	--color-surface-muted: oklch(0.92 0.018 241.43);
+	--color-accent: oklch(0.69 0.15 244.55);
+	--color-accent-foreground: oklch(0.24 0.01 241.43);
+	--color-ring: oklch(0.73 0.11 244.55);
+}
+
+@utility dark-theme {
+	--color-background: oklch(0.17 0.015 241.43);
+	--color-foreground: oklch(0.92 0.01 241.43);
+	--color-muted: oklch(0.7 0.02 241.43);
+	--color-border: oklch(0.29 0.013 241.43);
+	--color-surface: oklch(0.22 0.012 241.43);
+	--color-surface-muted: oklch(0.28 0.012 241.43);
+	--color-accent: oklch(0.74 0.16 244.55);
+	--color-accent-foreground: oklch(0.21 0.01 241.43);
+	--color-ring: oklch(0.67 0.1 244.55);
+}
+
+@theme {
+	--font-sans: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
+
+	--color-background: var(--color-background);
+	--color-foreground: var(--color-foreground);
+	--color-muted: var(--color-muted);
+	--color-border: var(--color-border);
+	--color-surface: var(--color-surface);
+	--color-surface-muted: var(--color-surface-muted);
+	--color-accent: var(--color-accent);
+	--color-accent-foreground: var(--color-accent-foreground);
+	--color-ring: var(--color-ring);
+
+	/* Legacy aliases */
+	--color-text: var(--color-foreground);
+	--color-text-muted: var(--color-muted);
+}
+
+@layer base {
+	* {
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+	}
+
+	/* Theme application */
+	@media (prefers-color-scheme: dark) {
+		:root {
+			@apply dark-theme;
+		}
+	}
+
+	@media (prefers-color-scheme: light) {
+		:root {
+			@apply light-theme;
+		}
+	}
+
+	:root[data-theme="light"],
+	:root[class~="light"] {
+		@apply light-theme;
+	}
+
+	:root[data-theme="dark"],
+	:root[class~="dark"] {
+		@apply dark-theme;
+	}
+
+	@supports (font-variation-settings: normal) {
+		:root {
+			--font-sans:
+				"InterVariable", -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
+
+			font-optical-sizing: auto;
+		}
+	}
+}

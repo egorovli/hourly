@@ -1,0 +1,214 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.2.5/schema.json",
+	"vcs": {
+		"enabled": false,
+		"clientKind": "git",
+		"useIgnoreFile": true
+	},
+	"files": {
+		"ignoreUnknown": false,
+
+		"includes": [
+			"**",
+			"!.claude/**/*",
+			"!.cursor/**/*",
+			"!.old/**/*",
+			"!.playwright-mcp/**/*",
+			"!.vscode/**/*",
+			"!.zed/**/*",
+			"!designs/**/*",
+			"!docs/**/*",
+			"!packages/web/.react-router/**/*",
+			"!packages/web/build/**/*"
+		]
+	},
+	"formatter": {
+		"enabled": true,
+		"indentStyle": "tab",
+		"indentWidth": 2,
+		"lineWidth": 100,
+		"formatWithErrors": true
+	},
+	"assist": {
+		"actions": {
+			"source": {
+				"organizeImports": "off"
+			}
+		}
+	},
+	"linter": {
+		"enabled": true,
+		"domains": {
+			"project": "recommended",
+			"react": "recommended",
+			"test": "recommended"
+		},
+		"rules": {
+			"recommended": true,
+
+			"complexity": {
+				"noExcessiveCognitiveComplexity": {
+					"level": "warn",
+					"options": {
+						"maxAllowedComplexity": 15
+					}
+				},
+				"noUselessStringConcat": "error",
+				"noUselessUndefinedInitialization": "error",
+				"useDateNow": "warn",
+				"useSimplifiedLogicExpression": "off",
+				"noUselessEscapeInRegex": "error",
+				"noUselessStringRaw": "error",
+				"useFlatMap": "off"
+			},
+			"correctness": {
+				"noConstantMathMinMaxClamp": "error",
+				"noUndeclaredDependencies": "off",
+				"noUndeclaredVariables": "error",
+				"noUnusedFunctionParameters": "off",
+				"noUnusedImports": "warn",
+				"noUnusedPrivateClassMembers": "error",
+				"noUnusedVariables": "off",
+				"useHookAtTopLevel": "error",
+				"useImportExtensions": "error",
+
+				"noUnknownProperty": "off"
+			},
+			"nursery": {
+				"noSecrets": "off",
+				"useExplicitType": "off"
+			},
+			"style": {
+				"noDefaultExport": "error",
+				"noNegationElse": "error",
+				"noParameterAssign": "off",
+				"noYodaExpression": "error",
+				"useBlockStatements": "error",
+				"useCollapsedElseIf": "error",
+				"useConsistentBuiltinInstantiation": "error",
+				"useConst": "off",
+				"useExplicitLengthCheck": "error",
+				"useThrowOnlyError": "error",
+				"useAsConstAssertion": "error",
+				"useDefaultParameterLast": "error",
+				"useEnumInitializers": "error",
+				"useSelfClosingElements": "error",
+				"useSingleVarDeclarator": "error",
+				"noUnusedTemplateLiteral": "error",
+				"useNumberNamespace": "error",
+				"noInferrableTypes": "error",
+				"noUselessElse": "error",
+				"useArrayLiterals": "error",
+				"noCommonJs": "error",
+				"noProcessEnv": "error",
+				"noSubstr": "error",
+				"useCollapsedIf": "warn",
+				"useConsistentCurlyBraces": "error",
+				"useConsistentMemberAccessibility": "warn",
+				"useTrimStartEnd": "error"
+			},
+			"suspicious": {
+				"noImplicitAnyLet": "off",
+				"noExplicitAny": "off",
+				"noConsole": "warn",
+				"noEmptyBlockStatements": "warn",
+				"noEvolvingTypes": "warn",
+				"useAwait": "off",
+				"useErrorMessage": "error",
+				"useNumberToFixedDigitsArgument": "error",
+				"noIrregularWhitespace": "error",
+				"useAdjacentOverloadSignatures": "warn",
+
+				"noUnknownAtRules": "off"
+			},
+			"a11y": {
+				"noStaticElementInteractions": "error",
+				"useValidAutocomplete": "error"
+			}
+		}
+	},
+	"javascript": {
+		"formatter": {
+			"quoteStyle": "single",
+			"arrowParentheses": "asNeeded",
+			"jsxQuoteStyle": "single",
+			"quoteProperties": "preserve",
+			"trailingCommas": "none",
+			"semicolons": "asNeeded",
+			"attributePosition": "multiline",
+			"bracketSpacing": true
+		}
+	},
+	"json": {
+		"parser": {
+			"allowComments": true
+		},
+		"formatter": {
+			"indentStyle": "tab",
+			"indentWidth": 2
+		}
+	},
+	"overrides": [
+		{
+			"includes": ["packages/web/app/**/*"],
+			"javascript": {
+				"globals": ["React"]
+			}
+		},
+		{
+			"includes": [
+				"packages/web/**/*.test.{ts,tsx}",
+				"packages/web/.jest/setup.ts",
+				"packages/web/jest.config.ts"
+			],
+			"javascript": {
+				"globals": [
+					"test",
+					"expect",
+					"describe",
+					"it",
+					"beforeEach",
+					"afterEach",
+					"beforeAll",
+					"afterAll",
+					"jest"
+				]
+			},
+			"linter": {
+				"rules": {
+					"style": {
+						"noDefaultExport": "off"
+					}
+				}
+			}
+		},
+		{
+			"includes": ["packages/api/src/**/*"],
+			"javascript": {
+				"globals": ["Bun"]
+			}
+		},
+		{
+			"includes": [
+				"packages/web/postcss.config.mjs",
+				"packages/web/react-router.config.ts",
+				"packages/web/jest.config.ts",
+				"packages/web/vite.config.ts",
+				"packages/web/vite.storybook.config.ts",
+				"packages/web/app/root.tsx",
+				"packages/web/app/routes.ts",
+				"packages/web/app/routes/**/*.tsx",
+				"packages/web/.storybook/**/*.{ts,tsx}",
+				"packages/web/stories/**/*.{ts,tsx}",
+				"packages/mobile/src/app/**/*.{ts,tsx}"
+			],
+			"linter": {
+				"rules": {
+					"style": {
+						"noDefaultExport": "off"
+					}
+				}
+			}
+		}
+	]
+}
