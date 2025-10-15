@@ -23,14 +23,24 @@ export interface FilterOption {
 	count?: number
 }
 
+export interface FilterGroup {
+	label: string
+	options: FilterOption[]
+}
+
 interface FilterProps {
 	title?: string
 	options: FilterOption[]
+	groups?: FilterGroup[]
 	selectedValues: Set<string>
 	onSelect: (values: Set<string>) => void
 }
 
-export function Filter({ title, options, selectedValues, onSelect }: FilterProps) {
+export function Filter({ title, options, groups, selectedValues, onSelect }: FilterProps) {
+	// For header badges: flatten all options from groups when provided
+	const allOptions: FilterOption[] =
+		groups && groups.length > 0 ? groups.flatMap(g => g.options) : options
+	const selectedOptionItems = allOptions.filter(opt => selectedValues.has(opt.value))
 	return (
 		<Popover>
 			<PopoverTrigger asChild>
@@ -62,17 +72,15 @@ export function Filter({ title, options, selectedValues, onSelect }: FilterProps
 										{selectedValues.size} selected
 									</Badge>
 								) : (
-									options
-										.filter(option => selectedValues.has(option.value))
-										.map(option => (
-											<Badge
-												variant='secondary'
-												key={option.value}
-												className='rounded-sm px-1 font-normal'
-											>
-												{option.label}
-											</Badge>
-										))
+									selectedOptionItems.map(option => (
+										<Badge
+											variant='secondary'
+											key={option.value}
+											className='rounded-sm px-1 font-normal'
+										>
+											{option.label}
+										</Badge>
+									))
 								)}
 							</div>
 						</>
@@ -87,44 +95,93 @@ export function Filter({ title, options, selectedValues, onSelect }: FilterProps
 					<CommandInput placeholder={title} />
 					<CommandList>
 						<CommandEmpty>No results found.</CommandEmpty>
-						<CommandGroup>
-							{options.map(option => {
-								const isSelected = selectedValues.has(option.value)
-								return (
-									<CommandItem
-										key={option.value}
-										onSelect={() => {
-											const newSelectedValues = new Set(selectedValues)
-											if (isSelected) {
-												newSelectedValues.delete(option.value)
-											} else {
-												newSelectedValues.add(option.value)
-											}
-											onSelect(newSelectedValues)
-										}}
-									>
-										<div
-											className={cn(
-												'mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary',
-												isSelected
-													? 'bg-primary text-primary-foreground'
-													: 'opacity-50 [&_svg]:invisible'
-											)}
+						{groups && groups.length > 0 ? (
+							groups.map(group => (
+								<CommandGroup
+									key={group.label}
+									heading={group.label}
+								>
+									{group.options.map(option => {
+										const isSelected = selectedValues.has(option.value)
+										return (
+											<CommandItem
+												key={option.value}
+												onSelect={() => {
+													const newSelectedValues = new Set(selectedValues)
+													if (isSelected) {
+														newSelectedValues.delete(option.value)
+													} else {
+														newSelectedValues.add(option.value)
+													}
+													onSelect(newSelectedValues)
+												}}
+											>
+												<div
+													className={cn(
+														'mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary',
+														isSelected
+															? 'bg-primary text-primary-foreground'
+															: 'opacity-50 [&_svg]:invisible'
+													)}
+												>
+													<Check />
+												</div>
+												{option.icon && (
+													<option.icon className='mr-2 h-4 w-4 text-muted-foreground' />
+												)}
+												<span>{option.label}</span>
+												{typeof option.count === 'number' && (
+													<span className='ml-auto flex h-4 w-4 items-center justify-center font-mono text-xs'>
+														{option.count}
+													</span>
+												)}
+											</CommandItem>
+										)
+									})}
+								</CommandGroup>
+							))
+						) : (
+							<CommandGroup>
+								{options.map(option => {
+									const isSelected = selectedValues.has(option.value)
+									return (
+										<CommandItem
+											key={option.value}
+											onSelect={() => {
+												const newSelectedValues = new Set(selectedValues)
+												if (isSelected) {
+													newSelectedValues.delete(option.value)
+												} else {
+													newSelectedValues.add(option.value)
+												}
+												onSelect(newSelectedValues)
+											}}
 										>
-											<Check />
-										</div>
-										{option.icon && <option.icon className='mr-2 h-4 w-4 text-muted-foreground' />}
-										<span>{option.label}</span>
+											<div
+												className={cn(
+													'mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary',
+													isSelected
+														? 'bg-primary text-primary-foreground'
+														: 'opacity-50 [&_svg]:invisible'
+												)}
+											>
+												<Check />
+											</div>
+											{option.icon && (
+												<option.icon className='mr-2 h-4 w-4 text-muted-foreground' />
+											)}
+											<span>{option.label}</span>
 
-										{typeof option.count === 'number' && (
-											<span className='ml-auto flex h-4 w-4 items-center justify-center font-mono text-xs'>
-												{option.count}
-											</span>
-										)}
-									</CommandItem>
-								)
-							})}
-						</CommandGroup>
+											{typeof option.count === 'number' && (
+												<span className='ml-auto flex h-4 w-4 items-center justify-center font-mono text-xs'>
+													{option.count}
+												</span>
+											)}
+										</CommandItem>
+									)
+								})}
+							</CommandGroup>
+						)}
 						{selectedValues.size > 0 && (
 							<>
 								<CommandSeparator />

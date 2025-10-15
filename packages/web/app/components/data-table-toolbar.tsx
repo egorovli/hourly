@@ -2,13 +2,14 @@ import { X } from 'lucide-react'
 
 import { Button } from '~/components/shadcn/ui/button.tsx'
 import { Input } from '~/components/shadcn/ui/input.tsx'
-import { Filter, type FilterOption } from './data-table-faceted-filter.tsx'
+import { Filter, type FilterOption, type FilterGroup } from './data-table-faceted-filter.tsx'
 import { DataTableDateRangeFilter } from './data-table-date-range-filter.tsx'
 
 export interface FilterConfig {
 	id: string
 	title: string
 	options: FilterOption[]
+	groups?: FilterGroup[]
 }
 
 interface DataTableToolbarProps {
@@ -64,6 +65,7 @@ export function DataTableToolbar({
 						key={filter.id}
 						title={filter.title}
 						options={filter.options}
+						groups={filter.groups}
 						selectedValues={selectedFilters[filter.id] ?? new Set()}
 						onSelect={values => onFilterChange?.(filter.id, values)}
 					/>

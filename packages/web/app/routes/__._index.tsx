@@ -1,6 +1,6 @@
 import type { ShouldRevalidateFunctionArgs } from 'react-router'
+import type { FilterConfig } from '~/components/data-table-toolbar.tsx'
 import type { Preferences } from '~/domain/preferences.ts'
-import type { ProjectListItem } from '~/lib/gitlab/client.ts'
 import type { Route } from './+types/__._index.ts'
 
 import { createViewDay, createViewMonthGrid, createViewWeek } from '@schedule-x/calendar'
@@ -9,42 +9,40 @@ import { createEventModalPlugin } from '@schedule-x/event-modal'
 import { createEventsServicePlugin } from '@schedule-x/events-service'
 import { ScheduleXCalendar, useCalendarApp } from '@schedule-x/react'
 import { createResizePlugin } from '@schedule-x/resize'
-// import { format } from 'date-fns'
+import { Bug, GitBranch, Users } from 'lucide-react'
 import { DateTime } from 'luxon'
 import { useCallback, useMemo, useState } from 'react'
 import { redirect, useRouteLoaderData } from 'react-router'
-import z from 'zod'
+import { z } from 'zod'
 
-import { GitBranch, Users, Bug } from 'lucide-react'
-
+import { DataTableToolbar } from '~/components/data-table-toolbar.tsx'
 import { Badge } from '~/components/shadcn/ui/badge.tsx'
 import { Button } from '~/components/shadcn/ui/button.tsx'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/shadcn/ui/card.tsx'
 
-import { DataTableToolbar } from '~/components/data-table-toolbar.tsx'
-import type { FilterConfig } from '~/components/data-table-toolbar.tsx'
-// import { ReportSettingsToolbar } from '~/components/report-settings-toolbar.tsx'
 import {
 	Collapsible,
 	CollapsibleContent,
 	CollapsibleTrigger
 } from '~/components/shadcn/ui/collapsible.tsx'
+
+import { AtlassianClient } from '~/lib/atlassian/index.ts'
 import { GitLabClient } from '~/lib/gitlab/index.ts'
 import { orm, Token } from '~/lib/mikro-orm/index.ts'
 import { getSession } from '~/lib/session/storage.ts'
 
 // Mock data fallback
-const mockGitlabProjects = [
-	{ id: '1', name: 'Frontend App', group: 'Company' },
-	{ id: '2', name: 'Backend API', group: 'Company' }
-]
+// const mockGitlabProjects = [
+// 	{ id: '1', name: 'Frontend App', group: 'Company' },
+// 	{ id: '2', name: 'Backend API', group: 'Company' }
+// ]
 
-const mockJiraProjects = [
-	{ id: 'PROJ', name: 'Main Project' },
-	{ id: 'DEV', name: 'Development' },
-	{ id: 'OPS', name: 'Operations' },
-	{ id: 'DOCS', name: 'Documentation' }
-]
+// const mockJiraProjects = [
+// 	{ id: 'PROJ', name: 'Main Project' },
+// 	{ id: 'DEV', name: 'Development' },
+// 	{ id: 'OPS', name: 'Operations' },
+// 	{ id: 'DOCS', name: 'Documentation' }
+// ]
 
 const mockAuthors = [
 	{ id: 'user1', name: 'John Doe', email: 'john@example.com', count: 10 },
@@ -76,15 +74,26 @@ export default function DashboardPage({ loaderData }: Route.ComponentProps): Rea
 			{
 				id: 'gitlab-projects',
 				title: 'GitLab Projects',
-				options: (loaderData.gitlabProjects && loaderData.gitlabProjects.length > 0
-					? loaderData.gitlabProjects
-					: mockGitlabProjects
-				).map(p => ({ label: p.name, value: String((p as any).id) }))
+				options: (loaderData.gitlab.projects && loaderData.gitlab.projects.length > 0
+					? loaderData.gitlab.projects
+					: []
+				).map(p => ({ label: p.name, value: p.id.toString(10) }))
 			},
 			{
 				id: 'jira-projects',
 				title: 'Jira Projects',
-				options: mockJiraProjects.map(p => ({ label: p.name, value: p.id }))
+				options: [],
+				groups: (loaderData.jira.resources && loaderData.jira.resources.length > 0
+					? loaderData.jira.resources
+					: []
+				).map((res: any) => ({
+					label: res.name,
+					options: (
+						(loaderData.jira.projects?.[res.id] as
+							| Array<{ id: string; name: string }>
+							| undefined) ?? []
+					).map(p => ({ label: p.name, value: p.id }))
+				}))
 			},
 			{
 				id: 'authors',
@@ -92,7 +101,7 @@ export default function DashboardPage({ loaderData }: Route.ComponentProps): Rea
 				options: mockAuthors.map(a => ({ label: a.name, value: a.id, count: a.count }))
 			}
 		],
-		[loaderData.gitlabProjects]
+		[loaderData.gitlab.projects, loaderData.jira.resources, loaderData.jira.projects]
 	)
 
 	const selectedFilters = useMemo(
@@ -367,29 +376,77 @@ export async function loader({ request, ...args }: Route.LoaderArgs) {
 		throw new Error('GitLab profile ID not found')
 	}
 
-	const em = orm.em.fork()
-	const token = await em.findOne(Token, { profileId: user.gitlab.id, provider: 'gitlab' })
-
-	if (!token?.accessToken) {
-		throw new Error('GitLab access token not found')
+	if (!user?.atlassian?.id) {
+		throw new Error('Atlassian profile ID not found')
 	}
 
-	const client = new GitLabClient({
-		accessToken: token.accessToken,
-		refreshToken: token.refreshToken
-	})
+	const em = orm.em.fork()
 
-	const { projects } = await client.listProjects({
-		perPage: 50,
-		membership: true,
-		withShared: false
-	})
+	async function getGitlabProjects(profileId: string) {
+		const token = await em.findOne(Token, { profileId, provider: 'gitlab' })
 
-	const gitlabProjects = projects.map(p => ({ id: p.id, name: p.name }))
+		if (!token?.accessToken) {
+			throw new Error('GitLab access token not found')
+		}
+
+		const client = new GitLabClient({
+			accessToken: token.accessToken,
+			refreshToken: token.refreshToken
+		})
+
+		const { projects } = await client.listProjects({
+			perPage: 50,
+			membership: true,
+			withShared: false
+		})
+
+		return {
+			projects: projects.map(p => ({ id: p.id, name: p.name }))
+		}
+	}
+
+	async function getJiraProjects(profileId: string) {
+		const token = await em.findOne(Token, { profileId, provider: 'atlassian' })
+
+		if (!token?.accessToken) {
+			throw new Error('Atlassian access token not found')
+		}
+
+		const client = new AtlassianClient({
+			accessToken: token.accessToken,
+			refreshToken: token.refreshToken
+		})
+
+		const resources = await client.getAccessibleResources()
+
+		interface JiraProject {
+			id: string
+			key: string
+			name: string
+		}
+
+		const projects: Record<string, JiraProject[]> = {}
+
+		for (const res of resources) {
+			const { projects: prjs } = await client.listJiraProjects(res.id, { maxResults: 100 })
+			projects[res.id] = prjs
+		}
+
+		return {
+			resources,
+			projects
+		}
+	}
+
+	const [gitlab, jira] = await Promise.all([
+		getGitlabProjects(user.gitlab.id),
+		getJiraProjects(user.atlassian.id)
+	])
 
 	return {
 		query,
-		gitlabProjects
+		gitlab,
+		jira
 	}
 }
 
