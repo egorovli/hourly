@@ -1,5 +1,6 @@
 import type { ShouldRevalidateFunctionArgs } from 'react-router'
 import type { Preferences } from '~/domain/preferences.ts'
+import type { ProjectListItem } from '~/lib/gitlab/client.ts'
 import type { Route } from './+types/__._index.ts'
 
 import { createViewDay, createViewMonthGrid, createViewWeek } from '@schedule-x/calendar'
@@ -14,24 +15,28 @@ import { useCallback, useMemo, useState } from 'react'
 import { redirect, useRouteLoaderData } from 'react-router'
 import z from 'zod'
 
-import { GitBranch, Users } from 'lucide-react'
+import { GitBranch, Users, Bug } from 'lucide-react'
 
 import { Badge } from '~/components/shadcn/ui/badge.tsx'
 import { Button } from '~/components/shadcn/ui/button.tsx'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/shadcn/ui/card.tsx'
-import { Separator } from '~/components/shadcn/ui/separator.tsx'
 
 import { DataTableToolbar } from '~/components/data-table-toolbar.tsx'
 import type { FilterConfig } from '~/components/data-table-toolbar.tsx'
 // import { ReportSettingsToolbar } from '~/components/report-settings-toolbar.tsx'
+import {
+	Collapsible,
+	CollapsibleContent,
+	CollapsibleTrigger
+} from '~/components/shadcn/ui/collapsible.tsx'
+import { GitLabClient } from '~/lib/gitlab/index.ts'
+import { orm, Token } from '~/lib/mikro-orm/index.ts'
+import { getSession } from '~/lib/session/storage.ts'
 
-// Mock data for demonstration
+// Mock data fallback
 const mockGitlabProjects = [
 	{ id: '1', name: 'Frontend App', group: 'Company' },
-	{ id: '2', name: 'Backend API', group: 'Company' },
-	{ id: '3', name: 'Mobile App', group: 'Company' },
-	{ id: '4', name: 'Infrastructure', group: 'DevOps' },
-	{ id: '5', name: 'Documentation', group: 'DevOps' }
+	{ id: '2', name: 'Backend API', group: 'Company' }
 ]
 
 const mockJiraProjects = [
@@ -71,7 +76,10 @@ export default function DashboardPage({ loaderData }: Route.ComponentProps): Rea
 			{
 				id: 'gitlab-projects',
 				title: 'GitLab Projects',
-				options: mockGitlabProjects.map(p => ({ label: p.name, value: p.id }))
+				options: (loaderData.gitlabProjects && loaderData.gitlabProjects.length > 0
+					? loaderData.gitlabProjects
+					: mockGitlabProjects
+				).map(p => ({ label: p.name, value: String((p as any).id) }))
 			},
 			{
 				id: 'jira-projects',
@@ -84,7 +92,7 @@ export default function DashboardPage({ loaderData }: Route.ComponentProps): Rea
 				options: mockAuthors.map(a => ({ label: a.name, value: a.id, count: a.count }))
 			}
 		],
-		[]
+		[loaderData.gitlabProjects]
 	)
 
 	const selectedFilters = useMemo(
@@ -292,6 +300,34 @@ export default function DashboardPage({ loaderData }: Route.ComponentProps): Rea
 						</CardContent>
 					</Card>
 				</div>
+
+				<div className='mt-6'>
+					<Collapsible>
+						<div className='flex items-center justify-between'>
+							<div className='flex items-center gap-2'>
+								<Bug className='h-4 w-4 text-muted-foreground' />
+								<span className='text-sm font-medium text-muted-foreground'>Debug</span>
+							</div>
+							<CollapsibleTrigger asChild>
+								<Button
+									variant='outline'
+									size='sm'
+								>
+									Toggle
+								</Button>
+							</CollapsibleTrigger>
+						</div>
+						<CollapsibleContent>
+							<Card className='mt-3'>
+								<CardContent>
+									<pre className='max-h-64 overflow-auto rounded-md bg-muted p-4 text-xs'>
+										<code>{JSON.stringify({ loaderData }, null, 2)}</code>
+									</pre>
+								</CardContent>
+							</Card>
+						</CollapsibleContent>
+					</Collapsible>
+				</div>
 			</div>
 		</div>
 	)
@@ -324,8 +360,36 @@ export async function loader({ request, ...args }: Route.LoaderArgs) {
 
 	await ensureCanonicalUrl({ request, query, ...args })
 
+	const session = await getSession(request.headers.get('Cookie'))
+	const user = session.get('user')
+
+	if (!user?.gitlab?.id) {
+		throw new Error('GitLab profile ID not found')
+	}
+
+	const em = orm.em.fork()
+	const token = await em.findOne(Token, { profileId: user.gitlab.id, provider: 'gitlab' })
+
+	if (!token?.accessToken) {
+		throw new Error('GitLab access token not found')
+	}
+
+	const client = new GitLabClient({
+		accessToken: token.accessToken,
+		refreshToken: token.refreshToken
+	})
+
+	const { projects } = await client.listProjects({
+		perPage: 50,
+		membership: true,
+		withShared: false
+	})
+
+	const gitlabProjects = projects.map(p => ({ id: p.id, name: p.name }))
+
 	return {
-		query
+		query,
+		gitlabProjects
 	}
 }
 

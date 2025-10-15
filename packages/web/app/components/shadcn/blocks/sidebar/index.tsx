@@ -1,12 +1,20 @@
 import type { SessionUser } from '~/lib/session/storage.ts'
 import type { Route as RootRoute } from '../../../../+types/root.ts'
 
-import { Link, useFetcher, useRouteLoaderData } from 'react-router'
+import {
+	CalendarIcon,
+	Clock10Icon,
+	Clock5Icon,
+	ClockFadingIcon,
+	ClockIcon,
+	Loader2,
+	Settings,
+	TimerIcon
+} from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { ClockFadingIcon, CalendarIcon, Settings, Loader2 } from 'lucide-react'
+import { Link, useFetcher, useRouteLoaderData } from 'react-router'
 
 import { Button } from '~/components/shadcn/ui/button.tsx'
-import { Input } from '~/components/shadcn/ui/input.tsx'
 import { Label } from '~/components/shadcn/ui/label.tsx'
 import { Separator } from '~/components/shadcn/ui/separator.tsx'
 
@@ -37,6 +45,7 @@ import {
 	SelectValue
 } from '~/components/shadcn/ui/select.tsx'
 
+import { InputGroup, InputGroupAddon, InputGroupInput } from '../../ui/input-group.tsx'
 import { NavMain } from './main.tsx'
 import { NavUser } from './user.tsx'
 
@@ -256,28 +265,38 @@ export function AppSidebar({ sessionUser, ...props }: AppSidebarProps) {
 									<div className='grid grid-cols-2 gap-4'>
 										<div className='flex flex-col gap-2'>
 											<Label htmlFor='work-start'>Start time</Label>
-											<Input
-												id='work-start'
-												name='workingDayStartTime'
-												type='time'
-												step='60'
-												defaultValue={rootData?.preferences?.workingDayStartTime ?? '09:00'}
-												className='font-mono'
-												required
-											/>
+											<InputGroup>
+												<InputGroupInput
+													id='work-start'
+													name='workingDayStartTime'
+													type='time'
+													step='60'
+													defaultValue={rootData?.preferences?.workingDayStartTime ?? '09:00'}
+													className='font-mono'
+													required
+												/>
+												<InputGroupAddon>
+													<Clock10Icon />
+												</InputGroupAddon>
+											</InputGroup>
 										</div>
 
 										<div className='flex flex-col gap-2'>
 											<Label htmlFor='work-end'>End time</Label>
-											<Input
-												id='work-end'
-												name='workingDayEndTime'
-												type='time'
-												step='60'
-												defaultValue={rootData?.preferences?.workingDayEndTime ?? '18:00'}
-												className='font-mono'
-												required
-											/>
+											<InputGroup>
+												<InputGroupInput
+													id='work-end'
+													name='workingDayEndTime'
+													type='time'
+													step='60'
+													defaultValue={rootData?.preferences?.workingDayEndTime ?? '18:00'}
+													className='font-mono'
+													required
+												/>
+												<InputGroupAddon>
+													<ClockIcon />
+												</InputGroupAddon>
+											</InputGroup>
 										</div>
 									</div>
 									<p className='text-xs text-muted-foreground'>
@@ -288,18 +307,25 @@ export function AppSidebar({ sessionUser, ...props }: AppSidebarProps) {
 								<div className='flex flex-col gap-2'>
 									<Label htmlFor='min-duration'>Minimum duration</Label>
 									<div className='flex gap-2'>
-										<Input
-											id='min-duration'
-											name='minimumDurationMinutes'
-											type='number'
-											min='1'
-											max='480'
-											defaultValue={
-												rootData?.preferences?.minimumDurationMinutes?.toString(10) ?? '60'
-											}
-											className='flex-1'
-											required
-										/>
+										<InputGroup>
+											<InputGroupInput
+												id='min-duration'
+												name='minimumDurationMinutes'
+												type='number'
+												min='1'
+												max='480'
+												defaultValue={
+													rootData?.preferences?.minimumDurationMinutes?.toString(10) ?? '60'
+												}
+												className='flex-1'
+												required
+											/>
+											<InputGroupAddon>
+												<TimerIcon />
+											</InputGroupAddon>
+
+											<InputGroupAddon align='inline-end'>minutes</InputGroupAddon>
+										</InputGroup>
 										{/* <Select
 											value={durationUnit}
 											onValueChange={(v: 'minutes' | 'seconds') => setDurationUnit(v)}
