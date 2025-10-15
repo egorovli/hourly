@@ -19,7 +19,8 @@
 			"!designs/**/*",
 			"!docs/**/*",
 			"!packages/web/.react-router/**/*",
-			"!packages/web/build/**/*"
+			"!packages/web/build/**/*",
+			"!packages/web/app/.old/**/*"
 		]
 	},
 	"formatter": {
@@ -152,7 +153,7 @@
 		{
 			"includes": ["packages/web/app/**/*"],
 			"javascript": {
-				"globals": ["React"]
+				"globals": ["React", "Temporal"]
 			}
 		},
 		{

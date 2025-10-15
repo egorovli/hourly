@@ -1,15 +1,15 @@
+import { redirect } from 'react-router'
 import type { Route } from './+types/auth.sign-out.ts'
 
-import { authenticator } from '../lib/auth/index.server.js'
+import { destroySession, getSession } from '~/lib/session/storage.ts'
 
 export async function loader({ request }: Route.LoaderArgs) {
-	// await authenticator.isAuthenticated(request, {
-	// 	failureRedirect: '/'
-	// })
+	const cookie = request.headers.get('Cookie')
+	const session = await getSession(cookie)
 
-	// await authenticator.logout(request, {
-	// 	redirectTo: '/'
-	// })
-
-	return {}
+	return redirect('/auth/sign-in', {
+		headers: {
+			'Set-Cookie': await destroySession(session)
+		}
+	})
 }

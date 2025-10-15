@@ -1,33 +1,70 @@
 import type { Route } from './+types/__.ts'
-import type { loader as rootLoader } from '~/root.tsx'
+import type React from 'react'
 
-import { Outlet, useRouteLoaderData } from 'react-router'
+import { Link, Outlet, redirect } from 'react-router'
 
-import { Header } from '~/components/header/index.tsx'
-import { Footer } from '~/components/footer/index.tsx'
-// import { authenticator } from '~/lib/auth/index.server.ts'
-import { sessionStorage } from '~/lib/session/storage.ts'
+import {
+	Breadcrumb,
+	BreadcrumbItem,
+	BreadcrumbLink,
+	BreadcrumbList,
+	BreadcrumbPage,
+	BreadcrumbSeparator
+} from '~/components/shadcn/ui/breadcrumb.tsx'
 
-export default function CommonLayout(): React.ReactNode {
-	const root = useRouteLoaderData('root') as Awaited<ReturnType<typeof rootLoader>> | undefined
-	void root
+import { AppSidebar } from '~/components/shadcn/blocks/sidebar/index.tsx'
+import { Separator } from '~/components/shadcn/ui/separator.tsx'
+import { SidebarInset, SidebarProvider, SidebarTrigger } from '~/components/shadcn/ui/sidebar.tsx'
 
+import { getSession } from '~/lib/session/storage.ts'
+
+export default function CommonLayout({ loaderData }: Route.ComponentProps): React.ReactNode {
 	return (
-		<div className='min-h-screen flex flex-col'>
-			<Header />
-
-			<main className='grow'>
-				<Outlet />
-			</main>
-
-			<Footer />
-		</div>
+		<SidebarProvider>
+			<AppSidebar sessionUser={loaderData.user} />
+			<SidebarInset>
+				<header className='flex h-16 shrink-0 items-center gap-2'>
+					<div className='flex items-center gap-2 px-4'>
+						<SidebarTrigger className='-ml-1' />
+						<Separator
+							orientation='vertical'
+							className='mr-2 data-[orientation=vertical]:h-4'
+						/>
+						<Breadcrumb>
+							<BreadcrumbList>
+								<BreadcrumbItem className='hidden md:block'>
+									<BreadcrumbLink asChild>
+										<Link to='/'>Worklog</Link>
+									</BreadcrumbLink>
+								</BreadcrumbItem>
+								<BreadcrumbSeparator className='hidden md:block' />
+								<BreadcrumbItem>
+									<BreadcrumbPage>Calendar</BreadcrumbPage>
+								</BreadcrumbItem>
+							</BreadcrumbList>
+						</Breadcrumb>
+					</div>
+				</header>
+				<div className='flex flex-1 flex-col gap-4 p-4 pt-0'>
+					<main className='flex flex-1 flex-col'>
+						<Outlet />
+					</main>
+				</div>
+			</SidebarInset>
+		</SidebarProvider>
 	)
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
-	const session = await sessionStorage.getSession(request.headers.get('Cookie'))
-	console.log('User from session:', session.get('user'))
+	const session = await getSession(request.headers.get('Cookie'))
+	const user = session.data.user
 
-	return {}
+	// Require both Atlassian and GitLab authentication
+	if (!user?.atlassian || !user?.gitlab) {
+		const url = new URL(request.url)
+		const redirectedFrom = [url.pathname, url.search, url.hash].join('')
+		return redirect(`/auth/sign-in?redirected-from=${encodeURIComponent(redirectedFrom)}`)
+	}
+
+	return { user }
 }

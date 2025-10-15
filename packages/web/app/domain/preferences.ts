@@ -1,9 +1,11 @@
-export enum Theme {
-	Light = 'light',
-	Dark = 'dark',
-	System = 'system'
-}
+import type { Theme } from './theme.enum.ts'
 
 export interface Preferences {
-	theme: Theme
+	theme?: Theme
+	locale?: string
+	timezone?: string
+	weekStartsOn?: number
+	workingDayStartTime?: string
+	workingDayEndTime?: string
+	minimumDurationMinutes?: number
 }

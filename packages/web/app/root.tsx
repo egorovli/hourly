@@ -17,7 +17,11 @@ import {
 } from 'react-router'
 
 import * as cookies from '~/lib/cookies/index.ts'
-import { cn } from '~/lib/cn/index.ts'
+import { cn } from '~/lib/util/index.ts'
+
+import 'temporal-polyfill/global'
+import '@schedule-x/theme-shadcn/dist/index.css'
+// import '@schedule-x/theme-default/dist/index.css'
 
 import '~/styles/global.css'
 
@@ -136,7 +140,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const preferences: Partial<Preferences> = (await cookies.preferences.parse(header)) ?? {}
 
 	const env = {
-		API_URL: process.env.API_URL,
 		VERSION: process.env.VERSION
 	}
 

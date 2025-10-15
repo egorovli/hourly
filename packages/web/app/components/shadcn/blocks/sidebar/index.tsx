@@ -1,0 +1,357 @@
+import type { SessionUser } from '~/lib/session/storage.ts'
+import type { Route as RootRoute } from '../../../../+types/root.ts'
+
+import { Link, useFetcher, useRouteLoaderData } from 'react-router'
+import { useEffect, useState } from 'react'
+import { ClockFadingIcon, CalendarIcon, Settings, Loader2 } from 'lucide-react'
+
+import { Button } from '~/components/shadcn/ui/button.tsx'
+import { Input } from '~/components/shadcn/ui/input.tsx'
+import { Label } from '~/components/shadcn/ui/label.tsx'
+import { Separator } from '~/components/shadcn/ui/separator.tsx'
+
+import {
+	Sidebar,
+	SidebarContent,
+	SidebarFooter,
+	SidebarHeader,
+	SidebarMenu,
+	SidebarMenuButton,
+	SidebarMenuItem
+} from '~/components/shadcn/ui/sidebar.tsx'
+
+import {
+	Dialog,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger
+} from '~/components/shadcn/ui/dialog.tsx'
+
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue
+} from '~/components/shadcn/ui/select.tsx'
+
+import { NavMain } from './main.tsx'
+import { NavUser } from './user.tsx'
+
+const data = {
+	navMain: [
+		{
+			title: 'Worklog',
+			icon: CalendarIcon,
+			items: [
+				{
+					title: 'Calendar',
+					url: '/',
+					isActive: true
+				}
+			]
+		}
+	]
+}
+
+export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
+	sessionUser?: SessionUser
+}
+
+export function AppSidebar({ sessionUser, ...props }: AppSidebarProps) {
+	const rootData = useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root')
+
+	const primary = sessionUser?.atlassian ?? sessionUser?.gitlab
+	const user = {
+		name: primary?.displayName ?? 'Guest',
+		email: primary?.email ?? 'Not connected',
+		avatar: primary?.avatarUrl ?? ''
+	}
+
+	const [isOpen, setIsOpen] = useState(false)
+	const [isLoading, setIsLoading] = useState(false)
+	// const [durationValue, setDurationValue] = useState('60')
+	// const [durationUnit, setDurationUnit] = useState<'minutes' | 'seconds'>('minutes')
+	const fetcher = useFetcher()
+
+	// Handle minimum 2-second loading animation
+	useEffect(() => {
+		if (fetcher.state === 'submitting') {
+			setIsLoading(true)
+			return undefined
+		}
+
+		// When submission completes, enforce minimum 2-second loading display
+		if (fetcher.state === 'idle' && isLoading) {
+			const timeout = setTimeout(() => {
+				setIsLoading(false)
+				// Close dialog on successful submission (no error)
+				if (!fetcher.data || (fetcher.data && !(fetcher.data as { error?: unknown }).error)) {
+					setIsOpen(false)
+				}
+			}, 2000)
+
+			return () => {
+				clearTimeout(timeout)
+			}
+		}
+
+		return undefined
+	}, [fetcher.state, fetcher.data, isLoading])
+
+	const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+		e.preventDefault()
+		const formData = new FormData(e.currentTarget)
+
+		// Convert duration to minutes based on unit
+		// const value = Number.parseInt(durationValue, 10)
+		// const minutes = durationUnit === 'seconds' ? Math.ceil(value / 60) : value
+		// formData.set('minimumDurationMinutes', String(minutes))
+
+		fetcher.submit(formData, {
+			method: 'post',
+			action: '/preferences'
+		})
+	}
+
+	return (
+		<Sidebar
+			variant='inset'
+			{...props}
+		>
+			<SidebarHeader>
+				<SidebarMenu>
+					<SidebarMenuItem>
+						<SidebarMenuButton
+							size='lg'
+							asChild
+						>
+							<Link to='#'>
+								<div className='bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg'>
+									<ClockFadingIcon className='size-4' />
+								</div>
+								<div className='grid flex-1 text-left text-sm leading-tight'>
+									<span className='truncate font-medium'>Working Hours</span>
+									<span className='truncate text-xs'>Enterprise</span>
+								</div>
+							</Link>
+						</SidebarMenuButton>
+					</SidebarMenuItem>
+				</SidebarMenu>
+			</SidebarHeader>
+			<SidebarContent>
+				<NavMain items={data.navMain} />
+			</SidebarContent>
+			<SidebarFooter>
+				<Dialog
+					open={isOpen}
+					onOpenChange={open => {
+						// Prevent closing dialog while saving
+						if (!open && isLoading) {
+							return
+						}
+						setIsOpen(open)
+					}}
+				>
+					<SidebarMenu>
+						<SidebarMenuItem>
+							<DialogTrigger asChild>
+								<SidebarMenuButton size='lg'>
+									<Settings className='size-4' />
+									Settings
+								</SidebarMenuButton>
+							</DialogTrigger>
+						</SidebarMenuItem>
+					</SidebarMenu>
+
+					<DialogContent className='sm:max-w-[500px]'>
+						<DialogHeader>
+							<DialogTitle>Report Settings</DialogTitle>
+							<p className='text-sm text-muted-foreground'>
+								Configure your working hours and calendar preferences
+							</p>
+						</DialogHeader>
+
+						<form
+							onSubmit={handleSubmit}
+							className='flex flex-col gap-6'
+						>
+							{/* Calendar Settings */}
+							<div className='flex flex-col gap-4'>
+								<div>
+									<h4 className='text-sm font-medium leading-none mb-3'>Calendar</h4>
+								</div>
+
+								<div className='flex flex-col gap-2'>
+									<Label htmlFor='timezone'>Timezone</Label>
+									<Select
+										name='timezone'
+										defaultValue={rootData?.preferences?.timezone ?? 'Europe/Moscow'}
+									>
+										<SelectTrigger
+											id='timezone'
+											className='w-full'
+										>
+											<SelectValue placeholder='Select timezone' />
+										</SelectTrigger>
+										<SelectContent>
+											{[
+												'Europe/Moscow',
+												'Europe/London',
+												'Europe/Warsaw',
+												'America/New_York',
+												'America/Los_Angeles',
+												'Asia/Tokyo',
+												'Asia/Shanghai',
+												'Australia/Sydney'
+											].map(tz => (
+												<SelectItem
+													key={tz}
+													value={tz}
+												>
+													{tz.replace(/_/g, ' ')}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+									<p className='text-xs text-muted-foreground'>
+										Display timezone for all calendar events
+									</p>
+								</div>
+
+								<div className='flex flex-col gap-2'>
+									<Label htmlFor='week-starts'>Week starts on</Label>
+									<Select
+										name='weekStartsOn'
+										defaultValue={rootData?.preferences?.weekStartsOn?.toString(10) ?? '1'}
+									>
+										<SelectTrigger
+											id='week-starts'
+											className='w-full'
+										>
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value='1'>Monday</SelectItem>
+											<SelectItem value='0'>Sunday</SelectItem>
+										</SelectContent>
+									</Select>
+									<p className='text-xs text-muted-foreground'>
+										First day of the week in calendar view
+									</p>
+								</div>
+							</div>
+
+							<Separator />
+
+							{/* Working Hours */}
+							<div className='flex flex-col gap-4'>
+								<div>
+									<h4 className='text-sm font-medium leading-none mb-3'>Working Hours</h4>
+								</div>
+
+								<div className='flex flex-col gap-2'>
+									<div className='grid grid-cols-2 gap-4'>
+										<div className='flex flex-col gap-2'>
+											<Label htmlFor='work-start'>Start time</Label>
+											<Input
+												id='work-start'
+												name='workingDayStartTime'
+												type='time'
+												step='60'
+												defaultValue={rootData?.preferences?.workingDayStartTime ?? '09:00'}
+												className='font-mono'
+												required
+											/>
+										</div>
+
+										<div className='flex flex-col gap-2'>
+											<Label htmlFor='work-end'>End time</Label>
+											<Input
+												id='work-end'
+												name='workingDayEndTime'
+												type='time'
+												step='60'
+												defaultValue={rootData?.preferences?.workingDayEndTime ?? '18:00'}
+												className='font-mono'
+												required
+											/>
+										</div>
+									</div>
+									<p className='text-xs text-muted-foreground'>
+										Define your typical working day schedule
+									</p>
+								</div>
+
+								<div className='flex flex-col gap-2'>
+									<Label htmlFor='min-duration'>Minimum duration</Label>
+									<div className='flex gap-2'>
+										<Input
+											id='min-duration'
+											name='minimumDurationMinutes'
+											type='number'
+											min='1'
+											max='480'
+											defaultValue={
+												rootData?.preferences?.minimumDurationMinutes?.toString(10) ?? '60'
+											}
+											className='flex-1'
+											required
+										/>
+										{/* <Select
+											value={durationUnit}
+											onValueChange={(v: 'minutes' | 'seconds') => setDurationUnit(v)}
+										>
+											<SelectTrigger className='w-[130px]'>
+												<SelectValue />
+											</SelectTrigger>
+											<SelectContent>
+												<SelectItem value='minutes'>Minutes</SelectItem>
+												<SelectItem value='seconds'>Seconds</SelectItem>
+											</SelectContent>
+										</Select> */}
+									</div>
+									<p className='text-xs text-muted-foreground'>
+										Minimum time block for calendar entries (1-480 minutes or 1-28800 seconds)
+									</p>
+								</div>
+							</div>
+
+							<DialogFooter className='gap-2'>
+								<Button
+									type='button'
+									variant='outline'
+									onClick={() => setIsOpen(false)}
+									disabled={isLoading}
+									className='w-full sm:w-auto'
+								>
+									Cancel
+								</Button>
+								<Button
+									type='submit'
+									disabled={isLoading}
+									className='w-full sm:w-auto'
+								>
+									{isLoading ? (
+										<>
+											<Loader2 className='mr-2 h-4 w-4 animate-spin' />
+											Saving...
+										</>
+									) : (
+										'Save preferences'
+									)}
+								</Button>
+							</DialogFooter>
+						</form>
+					</DialogContent>
+				</Dialog>
+				<NavUser
+					sessionUser={sessionUser}
+					user={user}
+				/>
+			</SidebarFooter>
+		</Sidebar>
+	)
+}
