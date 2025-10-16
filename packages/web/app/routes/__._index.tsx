@@ -1,18 +1,16 @@
-import type { ShouldRevalidateFunctionArgs } from 'react-router'
 import type { FilterConfig } from '~/components/data-table-toolbar.tsx'
-import type { Preferences } from '~/domain/preferences.ts'
 import type { Route } from './+types/__._index.ts'
 
-import { createViewDay, createViewMonthGrid, createViewWeek } from '@schedule-x/calendar'
+import { createViewMonthGrid, createViewWeek } from '@schedule-x/calendar'
 import { createDragAndDropPlugin } from '@schedule-x/drag-and-drop'
 import { createEventModalPlugin } from '@schedule-x/event-modal'
 import { createEventsServicePlugin } from '@schedule-x/events-service'
 import { ScheduleXCalendar, useCalendarApp } from '@schedule-x/react'
 import { createResizePlugin } from '@schedule-x/resize'
-import { Bug, GitBranch, Users } from 'lucide-react'
+import { GitBranch, Users } from 'lucide-react'
 import { DateTime } from 'luxon'
-import { useCallback, useMemo, useState } from 'react'
-import { redirect, useRouteLoaderData } from 'react-router'
+import { Suspense, use, useCallback, useMemo, useState } from 'react'
+import { redirect, useSearchParams } from 'react-router'
 import { z } from 'zod'
 
 import { DataTableToolbar } from '~/components/data-table-toolbar.tsx'
@@ -20,29 +18,10 @@ import { Badge } from '~/components/shadcn/ui/badge.tsx'
 import { Button } from '~/components/shadcn/ui/button.tsx'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/shadcn/ui/card.tsx'
 
-import {
-	Collapsible,
-	CollapsibleContent,
-	CollapsibleTrigger
-} from '~/components/shadcn/ui/collapsible.tsx'
-
-import { AtlassianClient } from '~/lib/atlassian/index.ts'
+import { AtlassianClient, type JiraProject } from '~/lib/atlassian/index.ts'
 import { GitLabClient } from '~/lib/gitlab/index.ts'
 import { orm, Token } from '~/lib/mikro-orm/index.ts'
 import { getSession } from '~/lib/session/storage.ts'
-
-// Mock data fallback
-// const mockGitlabProjects = [
-// 	{ id: '1', name: 'Frontend App', group: 'Company' },
-// 	{ id: '2', name: 'Backend API', group: 'Company' }
-// ]
-
-// const mockJiraProjects = [
-// 	{ id: 'PROJ', name: 'Main Project' },
-// 	{ id: 'DEV', name: 'Development' },
-// 	{ id: 'OPS', name: 'Operations' },
-// 	{ id: 'DOCS', name: 'Documentation' }
-// ]
 
 const mockAuthors = [
 	{ id: 'user1', name: 'John Doe', email: 'john@example.com', count: 10 },
@@ -50,10 +29,181 @@ const mockAuthors = [
 	{ id: 'user3', name: 'Bob Johnson', email: 'bob@example.com' }
 ]
 
-export default function DashboardPage({ loaderData }: Route.ComponentProps): React.ReactNode {
-	const rootData = useRouteLoaderData<{ preferences?: Partial<Preferences> }>('root')
-	// const [searchParams, setSearchParams] = useSearchParams()
+// Infer Schedule-X event element type from the React hook config
+type CalendarConfig = Parameters<typeof useCalendarApp>[0]
+type SxEventsArray = NonNullable<CalendarConfig['events']>
+type SxEvent = SxEventsArray[number]
 
+// For loader/serialization, allow string values for start/end which will be
+// converted back to Temporal in the view component.
+type SerializableEvent = Omit<SxEvent, 'start' | 'end'> & {
+	start: string
+	end: string
+}
+
+// Color palette used for Jira projects; assignment is index-based and cycles
+type ColorDefinition = { main: string; container: string; onContainer: string }
+const PROJECT_COLOR_PALETTE: Array<{ light: ColorDefinition; dark: ColorDefinition }> = [
+	{
+		light: { main: '#1c7df9', container: '#d2e7ff', onContainer: '#002859' },
+		dark: { main: '#c0dfff', container: '#426aa2', onContainer: '#dee6ff' }
+	},
+	{
+		light: { main: '#f91c45', container: '#ffd2dc', onContainer: '#59000d' },
+		dark: { main: '#ffc0cc', container: '#a24258', onContainer: '#ffdee6' }
+	},
+	{
+		light: { main: '#1cf9b0', container: '#dafff0', onContainer: '#004d3d' },
+		dark: { main: '#c0fff5', container: '#42a297', onContainer: '#e6fff5' }
+	},
+	{
+		light: { main: '#f9d71c', container: '#fff5aa', onContainer: '#594800' },
+		dark: { main: '#fff5c0', container: '#a29742', onContainer: '#fff5de' }
+	}
+]
+
+function getProjectColorsByIndex(index: number): { light: ColorDefinition; dark: ColorDefinition } {
+	const fallback: { light: ColorDefinition; dark: ColorDefinition } = {
+		light: { main: '#1c7df9', container: '#d2e7ff', onContainer: '#002859' },
+		dark: { main: '#c0dfff', container: '#426aa2', onContainer: '#dee6ff' }
+	}
+	const palette = PROJECT_COLOR_PALETTE.length > 0 ? PROJECT_COLOR_PALETTE : [fallback]
+	const idx = index % palette.length
+	const picked = palette[idx]
+	return picked ?? fallback
+}
+
+/**
+ * Generate fake events based on selected Jira project IDs
+ */
+async function generateFakeEvents(projectIds: string[]): Promise<SerializableEvent[]> {
+	// Simulate network delay
+	await new Promise(resolve => setTimeout(resolve, 1500))
+
+	if (projectIds.length === 0) {
+		return [
+			{
+				id: '1',
+				title: 'Select Jira projects to see events',
+				start: Temporal.ZonedDateTime.from('2025-10-15T09:00:00+03:00[Europe/Moscow]').toString(),
+				end: Temporal.ZonedDateTime.from('2025-10-15T10:00:00+03:00[Europe/Moscow]').toString()
+			}
+		]
+	}
+
+	const events: SerializableEvent[] = []
+	let eventId = 1
+
+	// Generate events for each selected project
+	projectIds.forEach((projectId, projectIndex) => {
+		const baseDate = DateTime.fromISO('2025-10-15').plus({ days: projectIndex })
+
+		// Generate 2-3 events per project
+		const eventCount = 2 + Math.floor(Math.random() * 2)
+
+		for (let i = 0; i < eventCount; i++) {
+			const startHour = 9 + i * 3
+			const duration = 1 + Math.floor(Math.random() * 2) // 1-2 hours
+
+			events.push({
+				id: `${eventId}`,
+				title: `${projectId}-${100 + eventId}: Task ${eventId}`,
+				calendarId: projectId,
+				start: Temporal.ZonedDateTime.from(
+					`${baseDate.toISODate()}T${startHour.toString().padStart(2, '0')}:00:00+03:00[Europe/Moscow]`
+				).toString(),
+				end: Temporal.ZonedDateTime.from(
+					`${baseDate.toISODate()}T${(startHour + duration).toString().padStart(2, '0')}:00:00+03:00[Europe/Moscow]`
+				).toString()
+			})
+
+			eventId++
+		}
+	})
+
+	return events
+}
+
+/**
+ * Calendar component that renders the Schedule-X calendar with events
+ * Uses React 19's use() hook to unwrap the promise from the loader
+ */
+function CalendarView({ eventsPromise }: { eventsPromise: Promise<SerializableEvent[]> }) {
+	// Use React 19's use() hook to unwrap the promise
+	const events = use(eventsPromise)
+
+	const eventsService = useMemo(() => createEventsServicePlugin(), [])
+	const eventModal = useMemo(() => createEventModalPlugin(), [])
+	const resize = useMemo(() => createResizePlugin(15), [])
+	const dragAndDrop = useMemo(() => createDragAndDropPlugin(15), [])
+
+	// Convert serialized event dates back to Temporal objects
+	type MaterializedEvent = Omit<SxEvent, 'start' | 'end'> & {
+		start: Temporal.PlainDate | Temporal.ZonedDateTime
+		end: Temporal.PlainDate | Temporal.ZonedDateTime
+	}
+	const calendarEvents = useMemo<MaterializedEvent[]>(
+		() =>
+			events.map(event => ({
+				...event,
+				start:
+					typeof event.start === 'string' ? Temporal.ZonedDateTime.from(event.start) : event.start,
+				end: typeof event.end === 'string' ? Temporal.ZonedDateTime.from(event.end) : event.end
+			})) as MaterializedEvent[],
+		[events]
+	)
+
+	// Build calendars config based on calendarIds present in events
+	const calendars = useMemo(() => {
+		const ids = Array.from(
+			new Set(
+				calendarEvents
+					.map(e => (typeof e['calendarId'] === 'string' ? (e['calendarId'] as string) : undefined))
+					.filter(Boolean)
+			)
+		) as string[]
+
+		const conf: Record<
+			string,
+			{ colorName: string; lightColors: ColorDefinition; darkColors: ColorDefinition }
+		> = {}
+		ids.forEach((id, index) => {
+			const c = getProjectColorsByIndex(index)
+			conf[id] = {
+				colorName: id,
+				lightColors: c.light,
+				darkColors: c.dark
+			}
+		})
+
+		return conf
+	}, [calendarEvents])
+
+	const calendar = useCalendarApp({
+		theme: 'shadcn',
+		views: [createViewMonthGrid(), createViewWeek()],
+		events: calendarEvents as unknown as SxEventsArray,
+		calendars,
+		plugins: [eventsService, eventModal, resize, dragAndDrop],
+		callbacks: {
+			onEventUpdate() {
+				/* no-op */
+			},
+			onBeforeEventUpdate() {
+				return true
+			}
+		},
+		selectedDate: Temporal.PlainDate.from('2025-10-14')
+	})
+
+	return (
+		<div className='sx-react-calendar-wrapper'>
+			<ScheduleXCalendar calendarApp={calendar} />
+		</div>
+	)
+}
+
+export default function DashboardPage({ loaderData }: Route.ComponentProps): React.ReactNode {
 	const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
 		from: new Date(loaderData.query.from),
 		to: loaderData.query.to ? new Date(loaderData.query.to) : undefined
@@ -61,12 +211,13 @@ export default function DashboardPage({ loaderData }: Route.ComponentProps): Rea
 
 	const [searchQuery, setSearchQuery] = useState('')
 	const [selectedGitlabProjects, setSelectedGitlabProjects] = useState<Set<string>>(new Set())
-	const [selectedJiraProjects, setSelectedJiraProjects] = useState<Set<string>>(new Set())
+
+	const [selectedJiraProjects, setSelectedJiraProjects] = useState<Set<string>>(
+		new Set(loaderData.query['jira-project-id'] ?? [])
+	)
+
 	const [selectedAuthors, setSelectedAuthors] = useState<Set<string>>(new Set())
-
-	// preferences are edited via modal; keep only date range for filters here
-
-	// removed collapsible settings UI
+	const [, setSearchParams] = useSearchParams()
 
 	// Filter configurations for DataTableToolbar
 	const filterConfigs: FilterConfig[] = useMemo(
@@ -74,25 +225,16 @@ export default function DashboardPage({ loaderData }: Route.ComponentProps): Rea
 			{
 				id: 'gitlab-projects',
 				title: 'GitLab Projects',
-				options: (loaderData.gitlab.projects && loaderData.gitlab.projects.length > 0
-					? loaderData.gitlab.projects
-					: []
-				).map(p => ({ label: p.name, value: p.id.toString(10) }))
+				options: loaderData.gitlab.projects.map(p => ({ label: p.name, value: p.id.toString(10) }))
 			},
 			{
 				id: 'jira-projects',
 				title: 'Jira Projects',
 				options: [],
-				groups: (loaderData.jira.resources && loaderData.jira.resources.length > 0
-					? loaderData.jira.resources
-					: []
-				).map((res: any) => ({
+				groups: loaderData.jira.resources.map(res => ({
 					label: res.name,
-					options: (
-						(loaderData.jira.projects?.[res.id] as
-							| Array<{ id: string; name: string }>
-							| undefined) ?? []
-					).map(p => ({ label: p.name, value: p.id }))
+					options:
+						loaderData.jira.projects[res.id]?.map(p => ({ label: p.name, value: p.id })) ?? []
 				}))
 			},
 			{
@@ -113,15 +255,36 @@ export default function DashboardPage({ loaderData }: Route.ComponentProps): Rea
 		[selectedGitlabProjects, selectedJiraProjects, selectedAuthors]
 	)
 
-	const handleFilterChange = useCallback((filterId: string, values: Set<string>) => {
-		if (filterId === 'gitlab-projects') {
-			setSelectedGitlabProjects(values)
-		} else if (filterId === 'jira-projects') {
-			setSelectedJiraProjects(values)
-		} else if (filterId === 'authors') {
-			setSelectedAuthors(values)
-		}
-	}, [])
+	const handleFilterChange = useCallback(
+		(filterId: string, values: Set<string>) => {
+			switch (filterId) {
+				case 'gitlab-projects':
+					setSelectedGitlabProjects(values)
+					break
+
+				case 'jira-projects':
+					setSelectedJiraProjects(values)
+
+					setSearchParams(prev => {
+						const params = new URLSearchParams(prev)
+
+						params.delete('jira-project-id')
+
+						values.forEach(value => {
+							params.append('jira-project-id', value)
+						})
+
+						return params
+					})
+					break
+
+				case 'authors':
+					setSelectedAuthors(values)
+					break
+			}
+		},
+		[setSearchParams]
+	)
 
 	const handleResetFilters = useCallback(() => {
 		setSearchQuery('')
@@ -131,77 +294,26 @@ export default function DashboardPage({ loaderData }: Route.ComponentProps): Rea
 		setDateRange({ from: undefined, to: undefined })
 	}, [])
 
-	// Initialize Schedule-X calendar
-	const eventsService = useMemo(() => createEventsServicePlugin(), [])
-	const eventModal = useMemo(() => createEventModalPlugin(), [])
-	const minStepMinutes = useMemo(() => {
-		const mins = rootData?.preferences?.minimumDurationMinutes
-		if (typeof mins === 'number' && Number.isFinite(mins)) {
-			return mins
+	// Map Jira project id -> name for legend
+	const jiraProjectIdToName = useMemo(() => {
+		const map = new Map<string, string>()
+		for (const res of loaderData.jira.resources) {
+			const arr = loaderData.jira.projects[res.id] ?? []
+			for (const p of arr) {
+				map.set(p.id, p.name)
+			}
 		}
-		return 60
-	}, [rootData?.preferences?.minimumDurationMinutes])
+		return map
+	}, [loaderData.jira.resources, loaderData.jira.projects])
 
-	const resize = useMemo(() => createResizePlugin(minStepMinutes), [minStepMinutes])
-	const dragAndDrop = useMemo(() => createDragAndDropPlugin(minStepMinutes), [minStepMinutes])
-	const calendar = useCalendarApp({
-		theme: 'shadcn',
-		views: [createViewMonthGrid(), createViewWeek(), createViewDay()],
-		events: [
-			// Sample events for UI demonstration
-			// Timed events for plugin testing
-			{
-				id: '1',
-				title: 'PROJ-123: Kickoff Meeting',
-				start: Temporal.ZonedDateTime.from('2025-10-15T09:00:00+03:00[Europe/Moscow]'),
-				end: Temporal.ZonedDateTime.from('2025-10-15T10:00:00+03:00[Europe/Moscow]')
-			},
-			{
-				id: '2',
-				title: 'PROJ-456: Implementation Block',
-				start: Temporal.ZonedDateTime.from('2025-10-15T11:00:00+03:00[Europe/Moscow]'),
-				end: Temporal.ZonedDateTime.from('2025-10-15T13:00:00+03:00[Europe/Moscow]')
-			},
-			{
-				id: '3',
-				title: 'Lunch',
-				start: Temporal.ZonedDateTime.from('2025-10-15T13:00:00+03:00[Europe/Moscow]'),
-				end: Temporal.ZonedDateTime.from('2025-10-15T14:00:00+03:00[Europe/Moscow]')
-			},
-			{
-				id: '4',
-				title: 'Client Review Call',
-				start: Temporal.ZonedDateTime.from('2025-10-15T16:00:00+03:00[Europe/Moscow]'),
-				end: Temporal.ZonedDateTime.from('2025-10-15T17:00:00+03:00[Europe/Moscow]')
-			},
-			{
-				id: '5',
-				title: 'OPS-12: Infra Maintenance',
-				start: Temporal.ZonedDateTime.from('2025-10-16T09:30:00+03:00[Europe/Moscow]'),
-				end: Temporal.ZonedDateTime.from('2025-10-16T11:00:00+03:00[Europe/Moscow]')
-			},
-			{
-				id: '6',
-				title: 'DOCS-77: Write Guide',
-				start: Temporal.ZonedDateTime.from('2025-10-16T14:00:00+03:00[Europe/Moscow]'),
-				end: Temporal.ZonedDateTime.from('2025-10-16T16:30:00+03:00[Europe/Moscow]')
-			}
-		],
-		plugins: [eventsService, eventModal, resize, dragAndDrop],
-		callbacks: {
-			onEventUpdate() {
-				/* no-op */
-			},
-			onBeforeEventUpdate() {
-				return true
-			}
-		},
-		selectedDate: Temporal.PlainDate.from('2025-10-14')
-	})
-
-	// timezones now live in ReportSettingsToolbar
-
-	// handled inline via date range filter and search params
+	const legendItems = useMemo(() => {
+		const arr = Array.from(selectedJiraProjects)
+		return arr.map((id, index) => ({
+			id,
+			name: jiraProjectIdToName.get(id) ?? id,
+			colors: getProjectColorsByIndex(index)
+		}))
+	}, [selectedJiraProjects, jiraProjectIdToName])
 
 	return (
 		<div className='min-h-screen bg-background'>
@@ -220,9 +332,6 @@ export default function DashboardPage({ loaderData }: Route.ComponentProps): Rea
 					</Button>
 				</div>
 
-				{/* Filters Section */}
-				{/* <Card>
-					<CardContent className='pt-6'> */}
 				<div className='flex flex-col gap-8'>
 					<DataTableToolbar
 						searchValue={searchQuery}
@@ -237,14 +346,6 @@ export default function DashboardPage({ loaderData }: Route.ComponentProps): Rea
 					/>
 				</div>
 
-				{/* </CardContent>
-				</Card> */}
-
-				{/* <Separator /> */}
-
-				{/* Calendar Section */}
-				{/* <Card> */}
-				{/* <CardHeader> */}
 				<div className='flex items-center justify-between'>
 					<div>
 						<CardTitle>Working Hours Calendar</CardTitle>
@@ -265,15 +366,40 @@ export default function DashboardPage({ loaderData }: Route.ComponentProps): Rea
 						</Badge>
 					</div>
 				</div>
-				{/* </CardHeader> */}
-				{/* <CardContent> */}
-				<div className='sx-react-calendar-wrapper'>
-					<ScheduleXCalendar calendarApp={calendar} />
-				</div>
-				{/* </CardContent> */}
-				{/* </Card> */}
 
-				{/* Summary Statistics */}
+				{legendItems.length > 0 ? (
+					<div className='mt-2 flex flex-wrap items-center gap-3'>
+						{legendItems.map(item => (
+							<div
+								key={item.id}
+								className='flex items-center gap-2 text-xs text-muted-foreground'
+							>
+								<span
+									className='h-3 w-3 rounded'
+									style={{ backgroundColor: item.colors.light.main }}
+								/>
+								<span>{item.name}</span>
+							</div>
+						))}
+					</div>
+				) : null}
+
+				<Suspense
+					// key={loaderData.query['jira-project-id']?.join(',') ?? 'no-projects'}
+					fallback={
+						<div className='sx-react-calendar-wrapper flex items-center justify-center rounded-lg border border-dashed p-12'>
+							<div className='text-center'>
+								<div className='mb-2 text-sm font-medium'>Loading calendar events...</div>
+								<div className='text-xs text-muted-foreground'>
+									Fetching events based on selected Jira projects
+								</div>
+							</div>
+						</div>
+					}
+				>
+					<CalendarView eventsPromise={loaderData.events} />
+				</Suspense>
+
 				<div className='grid gap-4 md:grid-cols-3'>
 					<Card>
 						<CardHeader className='pb-3'>
@@ -310,7 +436,7 @@ export default function DashboardPage({ loaderData }: Route.ComponentProps): Rea
 					</Card>
 				</div>
 
-				<div className='mt-6'>
+				{/* <div className='mt-6'>
 					<Collapsible>
 						<div className='flex items-center justify-between'>
 							<div className='flex items-center gap-2'>
@@ -336,7 +462,7 @@ export default function DashboardPage({ loaderData }: Route.ComponentProps): Rea
 							</Card>
 						</CollapsibleContent>
 					</Collapsible>
-				</div>
+				</div> */}
 			</div>
 		</div>
 	)
@@ -345,15 +471,17 @@ export default function DashboardPage({ loaderData }: Route.ComponentProps): Rea
 const schema = {
 	loader: {
 		query: z.object({
-			from: z.iso
+			'from': z.iso
 				.date()
 				.optional()
 				.default(() => DateTime.now().startOf('month').toISODate()),
 
-			to: z.iso
+			'to': z.iso
 				.date()
 				.optional()
-				.default(() => DateTime.now().endOf('month').startOf('day').toISODate())
+				.default(() => DateTime.now().endOf('month').startOf('day').toISODate()),
+
+			'jira-project-id': z.string().array().optional()
 		})
 	}
 }
@@ -364,7 +492,8 @@ export async function loader({ request, ...args }: Route.LoaderArgs) {
 	const url = new URL(request.url)
 
 	const query = schema.loader.query.parse({
-		...Object.fromEntries(url.searchParams.entries())
+		...Object.fromEntries(url.searchParams.entries()),
+		'jira-project-id': url.searchParams.getAll('jira-project-id')
 	})
 
 	await ensureCanonicalUrl({ request, query, ...args })
@@ -394,8 +523,7 @@ export async function loader({ request, ...args }: Route.LoaderArgs) {
 			refreshToken: token.refreshToken
 		})
 
-		const { projects } = await client.listProjects({
-			perPage: 50,
+		const projects = await client.listAllProjects({
 			membership: true,
 			withShared: false
 		})
@@ -418,13 +546,6 @@ export async function loader({ request, ...args }: Route.LoaderArgs) {
 		})
 
 		const resources = await client.getAccessibleResources()
-
-		interface JiraProject {
-			id: string
-			key: string
-			name: string
-		}
-
 		const projects: Record<string, JiraProject[]> = {}
 
 		for (const res of resources) {
@@ -443,23 +564,27 @@ export async function loader({ request, ...args }: Route.LoaderArgs) {
 		getJiraProjects(user.atlassian.id)
 	])
 
+	// Return events as a deferred promise (don't await)
+	const eventsPromise = generateFakeEvents(query['jira-project-id'] ?? [])
+
 	return {
 		query,
 		gitlab,
-		jira
+		jira,
+		events: eventsPromise
 	}
 }
 
-export function shouldRevalidate({
-	formAction,
-	formMethod
-}: ShouldRevalidateFunctionArgs): boolean {
-	// if (formAction === '/preferences' && formMethod === 'POST') {
-	// 	return false
-	// }
+// export function shouldRevalidate({
+// 	formAction,
+// 	formMethod
+// }: ShouldRevalidateFunctionArgs): boolean {
+// 	// if (formAction === '/preferences' && formMethod === 'POST') {
+// 	// 	return false
+// 	// }
 
-	return true
-}
+// 	return true
+// }
 
 interface GetCanonicalURLArgs extends Route.LoaderArgs {
 	query: Query
@@ -469,22 +594,18 @@ async function getCanonicalURL({ request, query }: GetCanonicalURLArgs): Promise
 	const url = new URL(request.url)
 	const canonicalUrl = new URL(url)
 
-	canonicalUrl.search = ''
+	const searchParams = new URLSearchParams([
+		...(query.from ? [['from', query.from]] : []),
+		...(query.to ? [['to', query.to]] : []),
+		...(query['jira-project-id'] ? query['jira-project-id'].map(id => ['jira-project-id', id]) : [])
+	])
 
-	if (query.from) {
-		canonicalUrl.searchParams.set('from', query.from)
-	}
+	const order = ['from', 'to', 'jira-project-id']
 
-	if (query.to) {
-		canonicalUrl.searchParams.set('to', query.to)
-	}
-
-	const order = ['from', 'to']
-
-	const init = [...new Set(canonicalUrl.searchParams.keys())]
+	const init = [...new Set(searchParams.keys())]
 		.sort((a, b) => (order.indexOf(a) ?? -1) - (order.indexOf(b) ?? -1))
 		.flatMap(key =>
-			canonicalUrl.searchParams
+			searchParams
 				.getAll(key)
 				.sort((a, b) => a.localeCompare(b))
 				.map(value => [key, value])

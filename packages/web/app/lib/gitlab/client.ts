@@ -35,6 +35,20 @@ export interface ProjectListItem {
 	namespace?: { full_path?: string; kind?: string }
 }
 
+export interface ListProjectsParams {
+	search?: string
+	page?: number
+	perPage?: number
+	membership?: boolean
+	withShared?: boolean
+}
+
+export interface PaginatedResult<T> {
+	items: T[]
+	nextPage?: number
+	totalPages?: number
+}
+
 export class GitLabClient {
 	private readonly baseUrl: string
 	private readonly accessToken: string
@@ -62,36 +76,70 @@ export class GitLabClient {
 	}
 
 	/**
+	 * Generic helper to fetch all paginated entities from GitLab API.
+	 * Automatically handles pagination by following the x-next-page header and collecting all results.
+	 *
+	 * @param fetcher - Function that fetches a single page. Should return { items, nextPage }.
+	 * @returns Array of all collected items.
+	 */
+	async fetchAllPaginated<T>(
+		fetcher: (page: number) => Promise<{ items: T[]; nextPage?: number }>
+	): Promise<T[]> {
+		const allItems: T[] = []
+		let currentPage = 1
+
+		while (true) {
+			const result = await fetcher(currentPage)
+			allItems.push(...result.items)
+
+			if (!result.nextPage) {
+				break
+			}
+
+			currentPage = result.nextPage
+		}
+
+		return allItems
+	}
+
+	/**
+	 * List all projects the current user has access to (fetches all pages).
+	 *
+	 * @param params - Optional search and filter parameters
+	 * @returns Array of all projects across all pages
+	 */
+	async listAllProjects(params?: Omit<ListProjectsParams, 'page'>): Promise<ProjectListItem[]> {
+		return this.fetchAllPaginated(async page => this.listProjects({ ...params, page }))
+	}
+
+	/**
 	 * List projects the current user has access to.
 	 * Uses minimal payload and supports server-side search & pagination.
 	 */
-	async listProjects(params?: {
-		search?: string
-		page?: number
-		perPage?: number
-		membership?: boolean
-		withShared?: boolean
-	}): Promise<{
-		projects: ProjectListItem[]
-		nextPage?: number
-		totalPages?: number
-	}> {
-		const page = params?.page ?? 1
-		const perPage = Math.min(Math.max(params?.perPage ?? 30, 1), 100)
+	async listProjects(params?: ListProjectsParams): Promise<PaginatedResult<ProjectListItem>> {
 		const membership = params?.membership ?? true
 		const withShared = params?.withShared ?? false
 		const search = params?.search?.trim()
 
 		const url = new URL(`${this.baseUrl}/projects`)
-		url.searchParams.set('membership', String(membership))
-		url.searchParams.set('simple', 'true')
+
+		url.searchParams.set('membership', membership ? 'true' : 'false')
 		url.searchParams.set('order_by', 'last_activity_at')
 		url.searchParams.set('sort', 'desc')
-		url.searchParams.set('per_page', String(perPage))
-		url.searchParams.set('page', String(page))
-		url.searchParams.set('with_shared', String(withShared))
+		url.searchParams.set('with_shared', withShared ? 'true' : 'false')
+		url.searchParams.set('simple', 'true')
+
 		if (search) {
 			url.searchParams.set('search', search)
+		}
+
+		// Only add pagination params if explicitly provided
+		if (params?.page !== undefined) {
+			url.searchParams.set('page', params.page.toString())
+		}
+
+		if (params?.perPage !== undefined) {
+			url.searchParams.set('per_page', Math.min(Math.max(params.perPage, 1), 100).toString())
 		}
 
 		const response = await this.fetchWithRetry(url.toString(), {
@@ -107,11 +155,12 @@ export class GitLabClient {
 
 		const projects = (await response.json()) as ProjectListItem[]
 
+		// GitLab returns pagination info in headers
 		const nextPageHeader = response.headers.get('x-next-page')
 		const totalPagesHeader = response.headers.get('x-total-pages')
 
 		return {
-			projects,
+			items: projects,
 			nextPage: nextPageHeader ? Number(nextPageHeader) : undefined,
 			totalPages: totalPagesHeader ? Number(totalPagesHeader) : undefined
 		}
