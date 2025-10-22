@@ -1,12 +1,12 @@
-import { redirect } from 'react-router'
 import type { Route } from './+types/auth.$provider.callback.ts'
 
+import { redirect } from 'react-router'
 import { z } from 'zod'
 
 import { authenticator } from '~/lib/auth/index.ts'
 import { orm } from '~/lib/mikro-orm/index.ts'
 import { Profile, Token } from '~/lib/mikro-orm/entities/index.ts'
-import { getSession, commitSession } from '~/lib/session/storage.ts'
+import * as sessionStorage from '~/lib/session/storage.ts'
 import { calculateSessionExpiration } from '~/lib/session/helpers.ts'
 
 const schema = {
@@ -74,7 +74,7 @@ export async function loader({ request, ...args }: Route.LoaderArgs) {
 	await em.flush()
 
 	// Update session with provider authentication
-	const session = await getSession(request.headers.get('Cookie'))
+	const session = await sessionStorage.getSession(request.headers.get('Cookie'))
 	const currentUser = session.get('user') || {}
 
 	session.set('user', {
@@ -104,7 +104,7 @@ export async function loader({ request, ...args }: Route.LoaderArgs) {
 
 	return redirect(redirectTo, {
 		headers: {
-			'Set-Cookie': await commitSession(session, {
+			'Set-Cookie': await sessionStorage.commitSession(session, {
 				expires: sessionExpires
 			})
 		}

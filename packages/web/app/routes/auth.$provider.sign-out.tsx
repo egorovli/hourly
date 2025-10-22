@@ -3,7 +3,7 @@ import type { Route } from './+types/auth.$provider.sign-out.ts'
 
 import { z } from 'zod'
 
-import { commitSession, destroySession, getSession } from '~/lib/session/storage.ts'
+import * as sessionStorage from '~/lib/session/storage.ts'
 
 const schema = {
 	loader: {
@@ -16,29 +16,33 @@ const schema = {
 export async function loader({ request, ...args }: Route.LoaderArgs) {
 	const params = schema.loader.params.parse(args.params)
 	const cookie = request.headers.get('Cookie')
-	const session = await getSession(cookie)
+	const session = await sessionStorage.getSession(cookie)
 
 	const user = session.get('user')
 
 	if (params.provider === 'atlassian' && user?.atlassian) {
-		const { atlassian: _removed, ...rest } = user
+		const { atlassian: _, ...rest } = user
+
 		if (rest.gitlab) {
 			session.set('user', rest)
+
 			return redirect('/auth/sign-in', {
 				headers: {
-					'Set-Cookie': await commitSession(session)
+					'Set-Cookie': await sessionStorage.commitSession(session)
 				}
 			})
 		}
 	}
 
 	if (params.provider === 'gitlab' && user?.gitlab) {
-		const { gitlab: _removed, ...rest } = user
+		const { gitlab: _, ...rest } = user
+
 		if (rest.atlassian) {
 			session.set('user', rest)
+
 			return redirect('/auth/sign-in', {
 				headers: {
-					'Set-Cookie': await commitSession(session)
+					'Set-Cookie': await sessionStorage.commitSession(session)
 				}
 			})
 		}
@@ -46,7 +50,7 @@ export async function loader({ request, ...args }: Route.LoaderArgs) {
 
 	return redirect('/auth/sign-in', {
 		headers: {
-			'Set-Cookie': await destroySession(session)
+			'Set-Cookie': await sessionStorage.destroySession(session)
 		}
 	})
 }

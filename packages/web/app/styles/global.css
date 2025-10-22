@@ -3,10 +3,11 @@
 @import "tailwindcss-safe-area";
 
 @import "./shadcn.css";
-@import "./schedule-x.css";
 @import "./fonts/inter.css";
 
-/* @plugin "@tailwindcss/forms"; */
+@plugin "@tailwindcss/forms" {
+	strategy: "class";
+}
 
 @custom-variant print (@media print);
 @custom-variant dark (&:where(.dark, .dark *, [data-theme=dark], [data-theme=dark] *));

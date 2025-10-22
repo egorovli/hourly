@@ -20,9 +20,6 @@ import * as cookies from '~/lib/cookies/index.ts'
 import { cn } from '~/lib/util/index.ts'
 
 import 'temporal-polyfill/global'
-import '@schedule-x/theme-shadcn/dist/index.css'
-// import '@schedule-x/theme-default/dist/index.css'
-
 import '~/styles/global.css'
 
 export const links: Route.LinksFunction = () => []

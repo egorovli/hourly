@@ -1,16 +1,7 @@
 import type { SessionUser } from '~/lib/session/storage.ts'
 import type { Route as RootRoute } from '../../../../+types/root.ts'
 
-import {
-	CalendarIcon,
-	Clock10Icon,
-	Clock5Icon,
-	ClockFadingIcon,
-	ClockIcon,
-	Loader2,
-	Settings,
-	TimerIcon
-} from 'lucide-react'
+import { CalendarIcon, Clock10Icon, ClockIcon, Loader2, Settings, TimerIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useFetcher, useRouteLoaderData } from 'react-router'
 
@@ -139,11 +130,11 @@ export function AppSidebar({ sessionUser, ...props }: AppSidebarProps) {
 						>
 							<Link to='#'>
 								<div className='bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg'>
-									<ClockFadingIcon className='size-4' />
+									<TimerIcon className='size-4' />
 								</div>
 								<div className='grid flex-1 text-left text-sm leading-tight'>
-									<span className='truncate font-medium'>Working Hours</span>
-									<span className='truncate text-xs'>Enterprise</span>
+									<span className='truncate font-medium'>Hourly</span>
+									<span className='truncate text-xs'>Jira Worklogs</span>
 								</div>
 							</Link>
 						</SidebarMenuButton>

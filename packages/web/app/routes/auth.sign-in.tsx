@@ -1,6 +1,6 @@
 import type { Route } from './+types/auth.sign-in.ts'
 
-import { ClockFadingIcon } from 'lucide-react'
+import { TimerIcon } from 'lucide-react'
 import { Link } from 'react-router'
 
 import { LoginForm } from '~/components/shadcn/blocks/login-form/index.tsx'
@@ -16,9 +16,9 @@ export default function SignInPage({ loaderData }: Route.ComponentProps): React.
 					className='flex items-center gap-2 self-center font-medium'
 				>
 					<div className='bg-primary text-primary-foreground flex size-6 items-center justify-center rounded-md'>
-						<ClockFadingIcon className='size-4' />
+						<TimerIcon className='size-4' />
 					</div>
-					Working Hours
+					Hourly
 				</Link>
 				<LoginForm connectedProviders={loaderData.connectedProviders} />
 			</div>
