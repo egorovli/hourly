@@ -163,6 +163,12 @@ export interface JiraWorklogDateRange {
 	to: string
 }
 
+export interface FetchWorklogEntriesOptions {
+	projectIds: string[]
+	userIds?: string[]
+	dateRange: JiraWorklogDateRange
+}
+
 export class AtlassianClientError extends Error {
 	constructor(
 		message: string,
@@ -362,15 +368,34 @@ export class AtlassianClient {
 		return this.requestJson<IssueWorklogResponse>(url.toString())
 	}
 
-	async fetchWorklogsForProjects(
-		selectedProjects: JiraProjectSelection[],
-		dateRange: JiraWorklogDateRange
-	): Promise<JiraWorklogsResult> {
-		if (selectedProjects.length === 0) {
+	async fetchWorklogEntries({
+		projectIds,
+		userIds,
+		dateRange
+	}: FetchWorklogEntriesOptions): Promise<JiraWorklogsResult> {
+		const uniqueProjectIds = Array.from(
+			new Set(projectIds.map(id => id.trim()).filter((id): id is string => id.length > 0))
+		)
+
+		if (uniqueProjectIds.length === 0) {
 			return emptyWorklogResult()
 		}
 
-		const projectsByCloud = groupProjectsByCloud(selectedProjects)
+		const uniqueUserIds = Array.from(
+			new Set((userIds ?? []).map(id => id.trim()).filter((id): id is string => id.length > 0))
+		)
+
+		const projects = await resolveProjectSelections({
+			client: this,
+			projectIds: uniqueProjectIds
+		})
+
+		if (projects.length === 0) {
+			return emptyWorklogResult()
+		}
+
+		const projectsByCloud = groupProjectsByCloud(projects)
+		const authorIdSet = new Set(uniqueUserIds)
 		const issues: JiraWorklogIssueBundle[] = []
 
 		let totalIssuesMatched = 0
@@ -378,10 +403,14 @@ export class AtlassianClient {
 		let totalWorklogs = 0
 		let truncated = false
 
-		for (const [cloudId, projects] of projectsByCloud.entries()) {
+		const startedAfter = startOfDayEpochMillis(dateRange.from) - 1
+		const startedBefore = endOfDayEpochMillis(dateRange.to) + 1
+
+		for (const [cloudId, selections] of projectsByCloud.entries()) {
 			const jql = buildWorklogJql(
-				projects.map(project => project.projectKey),
-				dateRange
+				selections.map(project => project.projectKey),
+				dateRange,
+				uniqueUserIds
 			)
 
 			const issueSummaries = await fetchIssuesForJql({
@@ -391,52 +420,50 @@ export class AtlassianClient {
 			})
 
 			totalIssuesMatched += issueSummaries.totalMatched
-			totalIssuesFetched += issueSummaries.issues.length
-
-			if (issueSummaries.truncated) {
-				truncated = true
-			}
+			truncated ||= issueSummaries.truncated
 
 			if (issueSummaries.issues.length === 0) {
 				continue
 			}
 
-			const fromEpochMillis = startOfDayEpochMillis(dateRange.from)
-			const toEpochMillis = endOfDayEpochMillis(dateRange.to)
-
-			const worklogBundles = await mapWithConcurrency(
-				issueSummaries.issues,
-				DEFAULT_CONCURRENCY,
-				async issue => {
-					const worklogs = await fetchAllWorklogsForIssue({
-						client: this,
-						cloudId,
-						issue,
-						startedAfter: fromEpochMillis - 1,
-						startedBefore: toEpochMillis + 1
-					})
-
-					const projectKey = issue.fields.project?.key ?? ''
-					const projectMatch = projects.find(project => project.projectKey === projectKey) ?? null
-
-					return {
-						issueId: issue.id,
-						issueKey: issue.key,
-						summary: issue.fields.summary,
-						project: {
-							id: projectMatch?.projectId ?? issue.fields.project?.id ?? '',
-							key: projectMatch?.projectKey ?? projectKey,
-							name: projectMatch?.projectName ?? issue.fields.project?.name ?? '',
-							cloudId
-						},
-						worklogs
-					}
-				}
+			const selectionByKey = new Map(
+				selections.map(project => [project.projectKey, project] as const)
 			)
 
-			for (const bundle of worklogBundles) {
-				totalWorklogs += bundle.worklogs.length
-				issues.push(bundle)
+			for (const issue of issueSummaries.issues) {
+				const { worklogs, truncated: worklogsTruncated } = await fetchIssueWorklogs({
+					client: this,
+					cloudId,
+					issue,
+					startedAfter,
+					startedBefore,
+					authorIds: authorIdSet
+				})
+
+				if (worklogs.length === 0) {
+					continue
+				}
+
+				truncated ||= worklogsTruncated
+
+				const projectKey = issue.fields.project?.key ?? ''
+				const projectMatch = selectionByKey.get(projectKey) ?? null
+
+				issues.push({
+					issueId: issue.id,
+					issueKey: issue.key,
+					summary: issue.fields.summary,
+					project: {
+						id: projectMatch?.projectId ?? issue.fields.project?.id ?? '',
+						key: projectMatch?.projectKey ?? projectKey,
+						name: projectMatch?.projectName ?? issue.fields.project?.name ?? '',
+						cloudId
+					},
+					worklogs
+				})
+
+				totalIssuesFetched += 1
+				totalWorklogs += worklogs.length
 			}
 		}
 
@@ -456,7 +483,6 @@ const ISSUE_SEARCH_PAGE_SIZE = 50
 const ISSUE_SEARCH_MAX_RESULTS = 1000
 const ISSUE_WORKLOG_PAGE_SIZE = 100
 const ISSUE_WORKLOG_MAX_RESULTS = 5000
-const DEFAULT_CONCURRENCY = 4
 
 function emptyWorklogResult(): JiraWorklogsResult {
 	return {
@@ -468,6 +494,47 @@ function emptyWorklogResult(): JiraWorklogsResult {
 			truncated: false
 		}
 	}
+}
+
+async function resolveProjectSelections({
+	client,
+	projectIds
+}: {
+	client: AtlassianClient
+	projectIds: string[]
+}): Promise<JiraProjectSelection[]> {
+	if (projectIds.length === 0) {
+		return []
+	}
+
+	const remaining = new Set(projectIds)
+	const selections: JiraProjectSelection[] = []
+	const resources = await client.getAccessibleResources()
+
+	for (const resource of resources) {
+		const { projects } = await client.listJiraProjects(resource.id)
+
+		for (const project of projects) {
+			if (!remaining.has(project.id)) {
+				continue
+			}
+
+			selections.push({
+				cloudId: resource.id,
+				projectId: project.id,
+				projectKey: project.key,
+				projectName: project.name
+			})
+
+			remaining.delete(project.id)
+		}
+
+		if (remaining.size === 0) {
+			break
+		}
+	}
+
+	return selections
 }
 
 function groupProjectsByCloud(projects: JiraProjectSelection[]) {
@@ -485,7 +552,11 @@ function groupProjectsByCloud(projects: JiraProjectSelection[]) {
 	return map
 }
 
-function buildWorklogJql(projectKeys: string[], dateRange: JiraWorklogDateRange) {
+function buildWorklogJql(
+	projectKeys: string[],
+	dateRange: JiraWorklogDateRange,
+	authorIds: string[]
+) {
 	const uniqueKeys = Array.from(
 		new Set(
 			projectKeys.filter((key): key is string => typeof key === 'string' && key.trim().length > 0)
@@ -495,16 +566,24 @@ function buildWorklogJql(projectKeys: string[], dateRange: JiraWorklogDateRange)
 	if (!firstKey) {
 		throw new Error('Unable to build JQL query without project keys')
 	}
-	const projectClause =
+
+	const clauses = [
 		uniqueKeys.length === 1
 			? `project = "${escapeJqlString(firstKey)}"`
-			: `project in (${uniqueKeys.map(key => `"${escapeJqlString(key)}"`).join(', ')})`
-
-	return [
-		projectClause,
+			: `project in (${uniqueKeys.map(key => `"${escapeJqlString(key)}"`).join(', ')})`,
 		`worklogDate >= "${dateRange.from}"`,
 		`worklogDate <= "${dateRange.to}"`
-	].join(' AND ')
+	]
+
+	if (authorIds.length === 1) {
+		clauses.push(`worklogAuthor = "${escapeJqlString(authorIds[0]!)}"`)
+	} else if (authorIds.length > 1) {
+		clauses.push(`worklogAuthor in (${authorIds.map(id => `"${escapeJqlString(id)}"`).join(', ')})`)
+	}
+
+	console.log('Built JQL:', clauses.join(' AND '))
+
+	return clauses.join(' AND ')
 }
 
 function escapeJqlString(input: string) {
@@ -525,9 +604,8 @@ async function fetchIssuesForJql({
 	truncated: boolean
 }> {
 	let startAt = 0
-	const issues: IssueSummary[] = []
-	let total = 0
-	let truncated = false
+	let total: number | null = null
+	const issuesById = new Map<string, IssueSummary>()
 
 	for (let page = 0; page < ISSUE_SEARCH_MAX_RESULTS / ISSUE_SEARCH_PAGE_SIZE; page += 1) {
 		const response = await client.searchIssues({
@@ -538,7 +616,7 @@ async function fetchIssuesForJql({
 			fields: ['summary', 'project']
 		})
 
-		if (page === 0) {
+		if (page === 0 && typeof response.total === 'number') {
 			total = response.total
 		}
 
@@ -546,42 +624,55 @@ async function fetchIssuesForJql({
 			break
 		}
 
-		issues.push(...response.issues)
+		const previousCount = issuesById.size
+
+		for (const issue of response.issues) {
+			issuesById.set(issue.id, issue)
+		}
 
 		startAt += response.issues.length
 
-		if (startAt >= response.total) {
+		if (typeof response.total === 'number' && startAt >= response.total) {
+			break
+		}
+
+		if (issuesById.size === previousCount) {
 			break
 		}
 	}
 
-	if (issues.length < total) {
-		truncated = true
-	}
+	const issues = Array.from(issuesById.values())
+	const totalMatched = total ?? issues.length
+	const truncated = totalMatched > issues.length
 
 	return {
 		issues,
-		totalMatched: total,
+		totalMatched,
 		truncated
 	}
 }
 
-async function fetchAllWorklogsForIssue({
+async function fetchIssueWorklogs({
 	client,
 	cloudId,
 	issue,
 	startedAfter,
-	startedBefore
+	startedBefore,
+	authorIds
 }: {
 	client: AtlassianClient
 	cloudId: string
 	issue: IssueSummary
 	startedAfter: number
 	startedBefore: number
-}): Promise<IssueWorklog[]> {
+	authorIds: Set<string>
+}): Promise<{
+	worklogs: IssueWorklog[]
+	truncated: boolean
+}> {
 	let startAt = 0
 	const worklogs: IssueWorklog[] = []
-	let total = 0
+	let truncated = false
 
 	for (let page = 0; page < ISSUE_WORKLOG_MAX_RESULTS / ISSUE_WORKLOG_PAGE_SIZE; page += 1) {
 		const response = await client.getIssueWorklogs(cloudId, issue.id, {
@@ -591,14 +682,23 @@ async function fetchAllWorklogsForIssue({
 			startedBefore
 		})
 
-		if (page === 0) {
-			total = response.total
+		if (page === 0 && response.total > ISSUE_WORKLOG_MAX_RESULTS) {
+			truncated = true
 		}
-
-		worklogs.push(...response.worklogs)
 
 		if (response.worklogs.length === 0) {
 			break
+		}
+
+		for (const worklog of response.worklogs) {
+			if (authorIds.size > 0) {
+				const authorId = worklog.author?.accountId
+				if (!authorId || !authorIds.has(authorId)) {
+					continue
+				}
+			}
+
+			worklogs.push(worklog)
 		}
 
 		startAt += response.worklogs.length
@@ -608,11 +708,10 @@ async function fetchAllWorklogsForIssue({
 		}
 	}
 
-	if (worklogs.length < total) {
-		return worklogs.slice(0, total)
+	return {
+		worklogs,
+		truncated
 	}
-
-	return worklogs
 }
 
 function startOfDayEpochMillis(date: string) {
@@ -621,40 +720,4 @@ function startOfDayEpochMillis(date: string) {
 
 function endOfDayEpochMillis(date: string) {
 	return new Date(`${date}T23:59:59.999Z`).getTime()
-}
-
-async function mapWithConcurrency<T, R>(
-	items: T[],
-	concurrency: number,
-	fn: (item: T, index: number) => Promise<R>
-): Promise<R[]> {
-	if (items.length === 0) {
-		return []
-	}
-
-	const results: R[] = new Array(items.length)
-	let currentIndex = 0
-
-	const worker = async () => {
-		// eslint-disable-next-line no-constant-condition
-		while (true) {
-			const index = currentIndex
-			if (index >= items.length) {
-				return
-			}
-			currentIndex += 1
-			const item = items[index]!
-			const result = await fn(item, index)
-			results[index] = result
-		}
-	}
-
-	const workers = Array.from(
-		{ length: Math.min(concurrency, items.length) },
-		async () => await worker()
-	)
-
-	await Promise.all(workers)
-
-	return results
 }

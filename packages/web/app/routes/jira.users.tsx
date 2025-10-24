@@ -26,7 +26,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 	})
 
 	const url = new URL(request.url)
-	const projectIds = url.searchParams.getAll('projectId').filter(Boolean)
+	const projectIds = url.searchParams.getAll('project-id').filter(Boolean)
 
 	if (projectIds.length === 0) {
 		return {
