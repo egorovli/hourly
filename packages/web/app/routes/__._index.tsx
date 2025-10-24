@@ -3,18 +3,19 @@ import type { Route } from './+types/__._index.ts'
 import type { loader as jiraProjectsLoader } from './jira.projects.tsx'
 import type { loader as jiraUsersLoader } from './jira.users.tsx'
 
-import { Check } from 'lucide-react'
-import { useReducer, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Check, FileBoxIcon, UsersIcon } from 'lucide-react'
+import { useCallback, useMemo, useReducer } from 'react'
 
-import { Skeleton } from '~/components/shadcn/ui/skeleton.tsx'
-import { CollapsibleDebugPanel } from '~/components/worklogs/collapsible-debug-panel.tsx'
 import { Button } from '~/components/shadcn/ui/button.tsx'
 import { Popover, PopoverContent, PopoverTrigger } from '~/components/shadcn/ui/popover.tsx'
+import { Skeleton } from '~/components/shadcn/ui/skeleton.tsx'
+import { CollapsibleDebugPanel } from '~/components/worklogs/collapsible-debug-panel.tsx'
 import { orm, Token } from '~/lib/mikro-orm/index.ts'
 import { getSession } from '~/lib/session/storage.ts'
 import { cn, invariant } from '~/lib/util/index.ts'
 
+import { Badge } from '~/components/shadcn/ui/badge.tsx'
 import {
 	Command,
 	CommandEmpty,
@@ -23,6 +24,7 @@ import {
 	CommandItem,
 	CommandList
 } from '~/components/shadcn/ui/command.tsx'
+import { Separator } from '~/components/shadcn/ui/separator.tsx'
 
 interface State {
 	selectedJiraProjectIds: string[]
@@ -65,17 +67,16 @@ interface ErrorPlaceholderProps {
 
 function ErrorPlaceholder({ message, className }: ErrorPlaceholderProps): React.ReactNode {
 	return (
-		<div
+		<output
 			className={cn(
-				'flex h-10 min-w-[8rem] items-center justify-center rounded-md border border-destructive/50 bg-destructive/10 px-3 text-sm font-medium text-destructive',
+				'flex h-10 min-w-32 items-center justify-center rounded-md border border-destructive/50 bg-destructive/10 px-3 text-sm font-medium text-destructive',
 				className
 			)}
-			role='status'
 			aria-label={`Error: ${message}`}
 			title={message}
 		>
 			Error
-		</div>
+		</output>
 	)
 }
 
@@ -147,59 +148,58 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 	}, [])
 
 	return (
-		<div className='bg-background'>
-			<div className='flex flex-col gap-6'>
-				<div className='flex flex-col gap-4'>
-					<div>
-						<h1 className='text-3xl font-bold'>Worklogs</h1>
-						<p className='mt-1 text-sm text-muted-foreground'>
-							Apply filters to view and manage Jira worklogs
-						</p>
-					</div>
-
-					<div className='flex flex-wrap items-center gap-3 py-2 pb-4 border-b'>
-						{projectsQuery.isLoading ? (
-							<Skeleton className='h-10 w-32 rounded-md' />
-						) : projectsQuery.error ? (
-							<ErrorPlaceholder
-								message={`Projects error: ${
-									projectsQuery.error instanceof Error
-										? projectsQuery.error.message
-										: 'Unknown error'
-								}`}
-							/>
-						) : projectsQuery.data ? (
-							<Projects
-								data={projectsQuery.data}
-								value={state.selectedJiraProjectIds}
-								onChange={handleJiraProjectIdsChange}
-							/>
-						) : null}
-
-						{usersQuery.isLoading ? (
-							<Skeleton className='h-10 w-32 rounded-md' />
-						) : usersQuery.error ? (
-							<ErrorPlaceholder
-								message={`Users error: ${
-									usersQuery.error instanceof Error ? usersQuery.error.message : 'Unknown error'
-								}`}
-							/>
-						) : usersQuery.data ? (
-							<Users
-								data={usersQuery.data}
-								value={state.selectedJiraUserIds}
-								onChange={handleJiraUserIdsChange}
-							/>
-						) : null}
-					</div>
+		<div className='flex flex-col gap-6 grow bg-background'>
+			<div className='flex flex-col gap-4'>
+				<div>
+					<h1 className='text-3xl font-bold'>Worklogs</h1>
+					<p className='mt-1 text-sm text-muted-foreground'>
+						Apply filters to view and manage Jira worklogs
+					</p>
 				</div>
 
-				<CollapsibleDebugPanel
-					title='Debug request payload'
-					className='mt-32'
-					data={{}}
-				/>
+				<div className='flex flex-wrap items-center gap-3 py-2 pb-4 border-b'>
+					{projectsQuery.isLoading ? (
+						<Skeleton className='h-9 w-32 rounded-md' />
+					) : projectsQuery.error ? (
+						<ErrorPlaceholder
+							message={`Projects error: ${
+								projectsQuery.error instanceof Error ? projectsQuery.error.message : 'Unknown error'
+							}`}
+						/>
+					) : projectsQuery.data ? (
+						<Projects
+							data={projectsQuery.data}
+							value={state.selectedJiraProjectIds}
+							onChange={handleJiraProjectIdsChange}
+						/>
+					) : null}
+
+					{usersQuery.isLoading ? (
+						<Skeleton className='h-9 w-32 rounded-md' />
+					) : usersQuery.error ? (
+						<ErrorPlaceholder
+							message={`Users error: ${
+								usersQuery.error instanceof Error ? usersQuery.error.message : 'Unknown error'
+							}`}
+						/>
+					) : usersQuery.data ? (
+						<Users
+							data={usersQuery.data}
+							value={state.selectedJiraUserIds}
+							onChange={handleJiraUserIdsChange}
+						/>
+					) : null}
+				</div>
 			</div>
+
+			<div className='grow' />
+
+			<CollapsibleDebugPanel
+				title='Debug request payload'
+				data={{
+					state
+				}}
+			/>
 		</div>
 	)
 }
@@ -212,18 +212,62 @@ interface ProjectsProps {
 }
 
 function Projects({ data, value, onChange }: ProjectsProps): React.ReactNode {
+	const projects = useMemo(() => {
+		const projects = data.resources.flatMap(resource => data.byResource[resource.id] ?? [])
+		return Object.fromEntries(projects.map(project => [project.id, project]))
+	}, [data])
+
 	return (
 		<Popover>
 			<PopoverTrigger asChild>
 				<Button
 					variant='outline'
 					role='combobox'
-					className='min-w-[8rem] justify-between'
 				>
-					{value.length === 0 ? 'Projects' : `${value.length} selected`}
+					<FileBoxIcon />
+					Projects
+					{value?.length > 0 && (
+						<>
+							<Separator
+								orientation='vertical'
+								className='mx-1 h-4'
+							/>
+							<Badge
+								variant='secondary'
+								className='rounded-sm px-1 font-normal lg:hidden'
+							>
+								{value.length}
+							</Badge>
+							<div className='hidden space-x-1 lg:flex'>
+								{value.length > 2 ? (
+									<Badge
+										variant='secondary'
+										className='rounded-sm px-1 font-normal'
+									>
+										{value.length} selected
+									</Badge>
+								) : (
+									value.map(id => {
+										return (
+											<Badge
+												variant='secondary'
+												key={id}
+												className='rounded-sm px-1 font-normal'
+											>
+												{projects[id]?.name ?? 'Unknown project'}
+											</Badge>
+										)
+									})
+								)}
+							</div>
+						</>
+					)}
 				</Button>
 			</PopoverTrigger>
-			<PopoverContent className='w-[260px] p-0'>
+			<PopoverContent
+				className='p-0'
+				align='start'
+			>
 				<Command>
 					<CommandInput
 						placeholder='Search projects...'
@@ -241,7 +285,19 @@ function Projects({ data, value, onChange }: ProjectsProps): React.ReactNode {
 							return (
 								<CommandGroup
 									key={resource.id}
-									heading={resource.name}
+									heading={
+										<div className='flex items-center gap-2'>
+											{resource.avatarUrl ? (
+												<img
+													src={resource.avatarUrl}
+													alt={`${resource.name} avatar`}
+													className='h-4 w-4 rounded-sm'
+												/>
+											) : null}
+
+											<span>{resource.name}</span>
+										</div>
+									}
 								>
 									{resourceProjects.map(project => (
 										<CommandItem
@@ -254,6 +310,14 @@ function Projects({ data, value, onChange }: ProjectsProps): React.ReactNode {
 												onChange(next)
 											}}
 										>
+											{project.avatarUrls?.['48x48'] ? (
+												<img
+													src={project.avatarUrls['48x48']}
+													alt={`${project.name} avatar`}
+													className='h-6 w-6 rounded-sm'
+												/>
+											) : null}
+
 											<div className='flex flex-col text-left'>
 												<span className='text-sm font-medium'>{project.name}</span>
 												<span className='text-xs text-muted-foreground'>{project.key}</span>
@@ -284,18 +348,62 @@ interface UsersProps {
 }
 
 function Users({ data, value, onChange }: UsersProps): React.ReactNode {
+	const users = useMemo(() => {
+		const users = data.users.filter(user => user.active ?? false)
+		return Object.fromEntries(users.map(user => [user.accountId, user]))
+	}, [data])
+
 	return (
 		<Popover>
 			<PopoverTrigger asChild>
 				<Button
 					variant='outline'
 					role='combobox'
-					className='min-w-[8rem] justify-between'
 				>
-					{value.length === 0 ? 'Users' : `${value.length} selected`}
+					<UsersIcon />
+					Users
+					{value?.length > 0 && (
+						<>
+							<Separator
+								orientation='vertical'
+								className='mx-1 h-4'
+							/>
+							<Badge
+								variant='secondary'
+								className='rounded-sm px-1 font-normal lg:hidden'
+							>
+								{value.length}
+							</Badge>
+							<div className='hidden space-x-1 lg:flex'>
+								{value.length > 2 ? (
+									<Badge
+										variant='secondary'
+										className='rounded-sm px-1 font-normal'
+									>
+										{value.length} selected
+									</Badge>
+								) : (
+									value.map(id => {
+										return (
+											<Badge
+												variant='secondary'
+												key={id}
+												className='rounded-sm px-1 font-normal'
+											>
+												{users[id]?.displayName ?? 'Unknown user'}
+											</Badge>
+										)
+									})
+								)}
+							</div>
+						</>
+					)}
 				</Button>
 			</PopoverTrigger>
-			<PopoverContent className='w-[280px] p-0'>
+			<PopoverContent
+				className='p-0'
+				align='start'
+			>
 				<Command>
 					<CommandInput
 						placeholder='Search users...'
@@ -304,52 +412,40 @@ function Users({ data, value, onChange }: UsersProps): React.ReactNode {
 					<CommandList>
 						<CommandEmpty>No users found.</CommandEmpty>
 
-						{data.resources.map(resource => {
-							const resourceUsers = [...(data.usersByResource[resource.id] ?? [])].sort((a, b) => {
-								const left = a.displayName ?? a.emailAddress ?? a.accountId
-								const right = b.displayName ?? b.emailAddress ?? b.accountId
-								return left.localeCompare(right, undefined, { sensitivity: 'base' })
-							})
-
-							if (resourceUsers.length === 0) {
-								return null
-							}
-
-							return (
-								<CommandGroup
-									key={resource.id}
-									heading={resource.name}
+						<CommandGroup>
+							{data.users.map(user => (
+								<CommandItem
+									key={user.accountId}
+									value={user.accountId}
+									onSelect={id => {
+										const next = value.includes(id) ? value.filter(v => v !== id) : [...value, id]
+										onChange(next)
+									}}
 								>
-									{resourceUsers.map(user => (
-										<CommandItem
-											key={user.accountId}
-											value={user.accountId}
-											onSelect={id => {
-												const next = value.includes(id)
-													? value.filter(v => v !== id)
-													: [...value, id]
-												onChange(next)
-											}}
-										>
-											<div className='flex flex-col text-left'>
-												<span className='text-sm font-medium'>
-													{user.displayName ?? 'Unknown user'}
-												</span>
-												{user.emailAddress ? (
-													<span className='text-xs text-muted-foreground'>{user.emailAddress}</span>
-												) : null}
-											</div>
-											<Check
-												className={cn('ml-auto h-4 w-4', {
-													'opacity-0': !value.includes(user.accountId),
-													'opacity-100': value.includes(user.accountId)
-												})}
-											/>
-										</CommandItem>
-									))}
-								</CommandGroup>
-							)
-						})}
+									{user.avatarUrls?.['48x48'] ? (
+										<img
+											src={user.avatarUrls['48x48']}
+											alt={`${user.displayName} avatar`}
+											className='h-6 w-6 rounded-sm'
+										/>
+									) : null}
+
+									<span className='flex flex-col text-left'>
+										<span className='text-sm font-medium'>{user.displayName}</span>
+
+										{typeof user.emailAddress === 'string' && (
+											<span className='text-xs text-muted-foreground'>{user.emailAddress}</span>
+										)}
+									</span>
+									<Check
+										className={cn('ml-auto h-4 w-4', {
+											'opacity-0': !value.includes(user.accountId),
+											'opacity-100': value.includes(user.accountId)
+										})}
+									/>
+								</CommandItem>
+							))}
+						</CommandGroup>
 					</CommandList>
 				</Command>
 			</PopoverContent>

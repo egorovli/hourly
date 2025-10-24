@@ -29,6 +29,7 @@ export interface AccessibleResource {
 	name: string
 	url: string
 	scopes?: string[]
+	avatarUrl?: string
 }
 
 export interface ListJiraProjectsParams {
@@ -41,6 +42,7 @@ export interface JiraProject {
 	id: string
 	key: string
 	name: string
+	avatarUrls?: Record<string, string>
 }
 
 export interface ListJiraProjectsResponse {

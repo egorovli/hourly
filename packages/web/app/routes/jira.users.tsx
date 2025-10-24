@@ -2,14 +2,9 @@ import type { Route } from './+types/jira.users.ts'
 
 import { invariant } from '~/lib/util/invariant.ts'
 
-import * as sessionStorage from '~/lib/session/storage.ts'
+import { AtlassianClient, type JiraProject, type JiraUser } from '~/lib/atlassian/index.ts'
 import { orm, Token } from '~/lib/mikro-orm/index.ts'
-import {
-	AtlassianClient,
-	type AccessibleResource,
-	type JiraProject,
-	type JiraUser
-} from '~/lib/atlassian/index.ts'
+import * as sessionStorage from '~/lib/session/storage.ts'
 
 export async function loader({ request }: Route.LoaderArgs) {
 	const session = await sessionStorage.getSession(request.headers.get('Cookie'))
@@ -34,7 +29,9 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const projectIds = url.searchParams.getAll('projectId').filter(Boolean)
 
 	if (projectIds.length === 0) {
-		return createEmptyResponse()
+		return {
+			users: []
+		}
 	}
 
 	const selectedProjectIds = new Set(projectIds)
@@ -55,7 +52,9 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 	const resourceEntries = Object.entries(projectsByResource)
 	if (resourceEntries.length === 0) {
-		return createEmptyResponse()
+		return {
+			users: []
+		}
 	}
 
 	const usersByResource: Record<string, JiraUser[]> = {}
@@ -66,9 +65,9 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 			await Promise.all(
 				projects.map(async project => {
+					// TODO: implement pagination
 					const users = await client.listAssignableUsers(resourceId, {
-						projectKey: project.key,
-						maxResults: 1000
+						projectKey: project.key
 					})
 
 					for (const user of users) {
@@ -83,26 +82,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		})
 	)
 
-	const filteredResources = resources.filter(resource => projectsByResource[resource.id]?.length)
-
 	return {
-		resources: filteredResources,
-		projectsByResource,
-		usersByResource,
 		users: Object.values(usersByResource).flat()
-	}
-}
-
-function createEmptyResponse(): {
-	resources: AccessibleResource[]
-	projectsByResource: Record<string, JiraProject[]>
-	usersByResource: Record<string, JiraUser[]>
-	users: JiraUser[]
-} {
-	return {
-		resources: [],
-		projectsByResource: {},
-		usersByResource: {},
-		users: []
 	}
 }
