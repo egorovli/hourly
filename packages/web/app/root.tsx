@@ -16,7 +16,10 @@ import {
 	useRouteLoaderData
 } from 'react-router'
 
+import { QueryClientProvider } from '@tanstack/react-query'
+
 import * as cookies from '~/lib/cookies/index.ts'
+import * as query from '~/lib/query/index.ts'
 import { cn } from '~/lib/util/index.ts'
 
 import 'temporal-polyfill/global'
@@ -95,9 +98,11 @@ export function Layout({ children }: LayoutProps): React.ReactNode {
 
 export default function App({ loaderData }: Route.ComponentProps): React.ReactNode {
 	return (
-		<div className='min-h-screen'>
-			<Outlet />
-		</div>
+		<QueryClientProvider client={query.client}>
+			<div className='min-h-screen'>
+				<Outlet />
+			</div>
+		</QueryClientProvider>
 	)
 }
 

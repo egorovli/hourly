@@ -1,37 +1,365 @@
 import type { Route } from './+types/__._index.ts'
 
-import { useForm } from '@conform-to/react'
-import { parseWithZod } from '@conform-to/zod/v4'
-import { Check, X } from 'lucide-react'
-import { Suspense, use, useState } from 'react'
-import { Form, useNavigation } from 'react-router'
-import { z } from 'zod'
+import type { loader as jiraProjectsLoader } from './jira.projects.tsx'
+import type { loader as jiraUsersLoader } from './jira.users.tsx'
 
-import { Filter, type FilterGroup } from '~/components/data-table-faceted-filter.tsx'
-import { Button } from '~/components/shadcn/ui/button.tsx'
+import { Check } from 'lucide-react'
+import { useReducer, useCallback } from 'react'
+import { useQuery } from '@tanstack/react-query'
+
 import { Skeleton } from '~/components/shadcn/ui/skeleton.tsx'
-import { Spinner } from '~/components/shadcn/ui/spinner.tsx'
-
-import { AtlassianClient, type JiraProject } from '~/lib/atlassian/index.ts'
+import { CollapsibleDebugPanel } from '~/components/worklogs/collapsible-debug-panel.tsx'
+import { Button } from '~/components/shadcn/ui/button.tsx'
+import { Popover, PopoverContent, PopoverTrigger } from '~/components/shadcn/ui/popover.tsx'
 import { orm, Token } from '~/lib/mikro-orm/index.ts'
 import { getSession } from '~/lib/session/storage.ts'
+import { cn, invariant } from '~/lib/util/index.ts'
 
-/**
- * Schema for validating project selection
- */
-const projectSelectionSchema = z.object({
-	'jira-project-id': z
-		.array(z.string())
-		.min(1, 'Please select at least one project')
-		.optional()
-		.default([])
-})
+import {
+	Command,
+	CommandEmpty,
+	CommandGroup,
+	CommandInput,
+	CommandItem,
+	CommandList
+} from '~/components/shadcn/ui/command.tsx'
 
-/**
- * Loader function - fetches available Jira projects and validates selected ones
- */
+interface State {
+	selectedJiraProjectIds: string[]
+	selectedJiraUserIds: string[]
+}
+
+type Action =
+	| { type: 'selectedJiraProjectIds.select'; payload: string[] }
+	| { type: 'selectedJiraUserIds.select'; payload: string[] }
+
+function reducer(state: State, action: Action): State {
+	switch (action.type) {
+		case 'selectedJiraProjectIds.select':
+			return {
+				...state,
+				selectedJiraProjectIds: action.payload,
+				selectedJiraUserIds: []
+			}
+
+		case 'selectedJiraUserIds.select':
+			return {
+				...state,
+				selectedJiraUserIds: action.payload
+			}
+
+		default:
+			return state
+	}
+}
+
+const initialState: State = {
+	selectedJiraProjectIds: [],
+	selectedJiraUserIds: []
+}
+
+interface ErrorPlaceholderProps {
+	message: string
+	className?: string
+}
+
+function ErrorPlaceholder({ message, className }: ErrorPlaceholderProps): React.ReactNode {
+	return (
+		<div
+			className={cn(
+				'flex h-10 min-w-[8rem] items-center justify-center rounded-md border border-destructive/50 bg-destructive/10 px-3 text-sm font-medium text-destructive',
+				className
+			)}
+			role='status'
+			aria-label={`Error: ${message}`}
+			title={message}
+		>
+			Error
+		</div>
+	)
+}
+
+export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
+	// const projectsFetcher = useFetcher()
+	invariant(loaderData.user?.atlassian?.id, 'Atlassian profile ID is required in loader data')
+
+	const [state, dispatch] = useReducer(reducer, initialState)
+
+	const projectsQuery = useQuery({
+		queryKey: [
+			'jira-projects',
+			{
+				userId: loaderData.user.atlassian.id
+			}
+		],
+
+		async queryFn({ queryKey, signal, pageParam }) {
+			const response = await fetch('/jira/projects', {
+				method: 'GET',
+				signal
+			})
+
+			if (!response.ok) {
+				throw new Error('Failed to fetch Jira projects')
+			}
+
+			const data = (await response.json()) as Awaited<ReturnType<typeof jiraProjectsLoader>>
+			return data
+		}
+	})
+
+	const usersQuery = useQuery({
+		queryKey: [
+			'jira-users',
+			{
+				userId: loaderData.user.atlassian.id,
+				projectIds: state.selectedJiraProjectIds
+			}
+		],
+
+		async queryFn({ queryKey, signal }) {
+			const [, { projectIds }] = queryKey as InferQueryKeyParams<typeof queryKey>
+			const searchParams = new URLSearchParams([...projectIds.map(id => ['projectId', id])])
+			const queryString = searchParams.toString()
+
+			const response = await fetch(`/jira/users${queryString ? `?${queryString}` : ''}`, {
+				method: 'GET',
+				signal
+			})
+
+			if (!response.ok) {
+				throw new Error('Failed to fetch Jira users')
+			}
+
+			const data = (await response.json()) as Awaited<ReturnType<typeof jiraUsersLoader>>
+			return data
+		},
+
+		enabled: state.selectedJiraProjectIds.length > 0
+	})
+
+	const handleJiraProjectIdsChange = useCallback((value: string[]) => {
+		dispatch({ type: 'selectedJiraProjectIds.select', payload: value })
+	}, [])
+
+	const handleJiraUserIdsChange = useCallback((value: string[]) => {
+		dispatch({ type: 'selectedJiraUserIds.select', payload: value })
+	}, [])
+
+	return (
+		<div className='bg-background'>
+			<div className='flex flex-col gap-6'>
+				<div className='flex flex-col gap-4'>
+					<div>
+						<h1 className='text-3xl font-bold'>Worklogs</h1>
+						<p className='mt-1 text-sm text-muted-foreground'>
+							Apply filters to view and manage Jira worklogs
+						</p>
+					</div>
+
+					<div className='flex flex-wrap items-center gap-3 py-2 pb-4 border-b'>
+						{projectsQuery.isLoading ? (
+							<Skeleton className='h-10 w-32 rounded-md' />
+						) : projectsQuery.error ? (
+							<ErrorPlaceholder
+								message={`Projects error: ${
+									projectsQuery.error instanceof Error
+										? projectsQuery.error.message
+										: 'Unknown error'
+								}`}
+							/>
+						) : projectsQuery.data ? (
+							<Projects
+								data={projectsQuery.data}
+								value={state.selectedJiraProjectIds}
+								onChange={handleJiraProjectIdsChange}
+							/>
+						) : null}
+
+						{usersQuery.isLoading ? (
+							<Skeleton className='h-10 w-32 rounded-md' />
+						) : usersQuery.error ? (
+							<ErrorPlaceholder
+								message={`Users error: ${
+									usersQuery.error instanceof Error ? usersQuery.error.message : 'Unknown error'
+								}`}
+							/>
+						) : usersQuery.data ? (
+							<Users
+								data={usersQuery.data}
+								value={state.selectedJiraUserIds}
+								onChange={handleJiraUserIdsChange}
+							/>
+						) : null}
+					</div>
+				</div>
+
+				<CollapsibleDebugPanel
+					title='Debug request payload'
+					className='mt-32'
+					data={{}}
+				/>
+			</div>
+		</div>
+	)
+}
+
+interface ProjectsProps {
+	data: Awaited<ReturnType<typeof jiraProjectsLoader>>
+
+	value: string[]
+	onChange: (value: string[]) => void
+}
+
+function Projects({ data, value, onChange }: ProjectsProps): React.ReactNode {
+	return (
+		<Popover>
+			<PopoverTrigger asChild>
+				<Button
+					variant='outline'
+					role='combobox'
+					className='min-w-[8rem] justify-between'
+				>
+					{value.length === 0 ? 'Projects' : `${value.length} selected`}
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent className='w-[260px] p-0'>
+				<Command>
+					<CommandInput
+						placeholder='Search projects...'
+						className='h-9'
+					/>
+					<CommandList>
+						<CommandEmpty>No projects found.</CommandEmpty>
+
+						{data.resources.map(resource => {
+							const resourceProjects = data.byResource[resource.id] ?? []
+							if (resourceProjects.length === 0) {
+								return null
+							}
+
+							return (
+								<CommandGroup
+									key={resource.id}
+									heading={resource.name}
+								>
+									{resourceProjects.map(project => (
+										<CommandItem
+											key={project.id}
+											value={project.id}
+											onSelect={id => {
+												const next = value.includes(id)
+													? value.filter(v => v !== id)
+													: [...value, id]
+												onChange(next)
+											}}
+										>
+											<div className='flex flex-col text-left'>
+												<span className='text-sm font-medium'>{project.name}</span>
+												<span className='text-xs text-muted-foreground'>{project.key}</span>
+											</div>
+											<Check
+												className={cn('ml-auto h-4 w-4', {
+													'opacity-0': !value.includes(project.id),
+													'opacity-100': value.includes(project.id)
+												})}
+											/>
+										</CommandItem>
+									))}
+								</CommandGroup>
+							)
+						})}
+					</CommandList>
+				</Command>
+			</PopoverContent>
+		</Popover>
+	)
+}
+
+interface UsersProps {
+	data: Awaited<ReturnType<typeof jiraUsersLoader>>
+
+	value: string[]
+	onChange: (value: string[]) => void
+}
+
+function Users({ data, value, onChange }: UsersProps): React.ReactNode {
+	return (
+		<Popover>
+			<PopoverTrigger asChild>
+				<Button
+					variant='outline'
+					role='combobox'
+					className='min-w-[8rem] justify-between'
+				>
+					{value.length === 0 ? 'Users' : `${value.length} selected`}
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent className='w-[280px] p-0'>
+				<Command>
+					<CommandInput
+						placeholder='Search users...'
+						className='h-9'
+					/>
+					<CommandList>
+						<CommandEmpty>No users found.</CommandEmpty>
+
+						{data.resources.map(resource => {
+							const resourceUsers = [...(data.usersByResource[resource.id] ?? [])].sort((a, b) => {
+								const left = a.displayName ?? a.emailAddress ?? a.accountId
+								const right = b.displayName ?? b.emailAddress ?? b.accountId
+								return left.localeCompare(right, undefined, { sensitivity: 'base' })
+							})
+
+							if (resourceUsers.length === 0) {
+								return null
+							}
+
+							return (
+								<CommandGroup
+									key={resource.id}
+									heading={resource.name}
+								>
+									{resourceUsers.map(user => (
+										<CommandItem
+											key={user.accountId}
+											value={user.accountId}
+											onSelect={id => {
+												const next = value.includes(id)
+													? value.filter(v => v !== id)
+													: [...value, id]
+												onChange(next)
+											}}
+										>
+											<div className='flex flex-col text-left'>
+												<span className='text-sm font-medium'>
+													{user.displayName ?? 'Unknown user'}
+												</span>
+												{user.emailAddress ? (
+													<span className='text-xs text-muted-foreground'>{user.emailAddress}</span>
+												) : null}
+											</div>
+											<Check
+												className={cn('ml-auto h-4 w-4', {
+													'opacity-0': !value.includes(user.accountId),
+													'opacity-100': value.includes(user.accountId)
+												})}
+											/>
+										</CommandItem>
+									))}
+								</CommandGroup>
+							)
+						})}
+					</CommandList>
+				</Command>
+			</PopoverContent>
+		</Popover>
+	)
+}
+
+type InferQueryKeyParams<T> = T extends Array<string | infer U> ? [string, U] : never
+
 export async function loader({ request }: Route.LoaderArgs) {
-	// Get session and validate user (critical data - await immediately)
 	const session = await getSession(request.headers.get('Cookie'))
 	const user = session.get('user')
 
@@ -39,7 +367,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 		throw new Error('Atlassian profile ID not found. Please sign in.')
 	}
 
-	// Get token (critical data - await immediately)
 	const em = orm.em.fork()
 	const token = await em.findOne(Token, {
 		profileId: user.atlassian.id,
@@ -50,183 +377,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		throw new Error('Atlassian access token not found. Please reconnect your account.')
 	}
 
-	const client = new AtlassianClient({
-		accessToken: token.accessToken,
-		refreshToken: token.refreshToken
-	})
-
-	// Parse query parameters early (critical for validation)
-	const url = new URL(request.url)
-
-	// Return promise for non-critical data (resources and projects)
-	// This allows the page to render immediately with a loading state
-	const projects = (async () => {
-		// Fetch all accessible resources and their projects
-		const resources = await client.getAccessibleResources()
-		const projectsByResource: Record<string, JiraProject[]> = {}
-
-		for (const resource of resources) {
-			const { projects } = await client.listJiraProjects(resource.id, { maxResults: 100 })
-			projectsByResource[resource.id] = projects
-		}
-
-		// Validate query parameters with fetched data
-		const schema = projectSelectionSchema.refine(
-			data => {
-				// Validate that all selected project IDs exist
-				const allProjectIds = new Set(
-					Object.values(projectsByResource)
-						.flat()
-						.map(p => p.id)
-				)
-				return data['jira-project-id'].every(id => allProjectIds.has(id))
-			},
-			{
-				message: 'One or more selected projects are not available',
-				path: ['jira-project-id']
-			}
-		)
-
-		const submission = parseWithZod(url.searchParams, { schema })
-
-		const selectedProjectIds =
-			submission.status === 'success' ? submission.value['jira-project-id'] : []
-
-		const hasSelection = selectedProjectIds.length > 0
-
-		return {
-			lastResult: submission.reply(),
-			resources,
-			projectsByResource,
-			selectedProjectIds,
-			hasSelection
-		}
-	})()
-
-	// Return object with promise (not awaited)
 	return {
-		projects: projects
+		user
 	}
-}
-
-/**
- * Component that uses React.use() to unwrap the projects promise
- * This must be a separate component to trigger Suspense boundary
- */
-function ProjectsContent({
-	promise: projectsPromise
-}: {
-	promise: Awaited<ReturnType<typeof loader>>['projects']
-}) {
-	// Use React.use() to unwrap the promise
-	const { lastResult, resources, projectsByResource, selectedProjectIds } = use(projectsPromise)
-
-	const navigation = useNavigation()
-	const isNavigating = navigation.state === 'loading'
-
-	// Initialize Conform form with validation
-	const [form] = useForm({
-		lastResult,
-		onValidate({ formData }) {
-			return parseWithZod(formData, { schema: projectSelectionSchema })
-		},
-		shouldValidate: 'onSubmit',
-		shouldRevalidate: 'onInput'
-	})
-
-	// Local state for managing filter selection before applying
-	const [localSelectedIds, setLocalSelectedIds] = useState<Set<string>>(new Set(selectedProjectIds))
-
-	// Build filter groups from resources and projects
-	const filterGroups: FilterGroup[] = resources.map(resource => ({
-		label: resource.name,
-		options: (projectsByResource[resource.id] || []).map(project => ({
-			label: project.name,
-			value: project.id
-		}))
-	}))
-
-	// Check if local state differs from URL state
-	const hasLocalChanges =
-		localSelectedIds.size !== selectedProjectIds.length ||
-		![...localSelectedIds].every(id => selectedProjectIds.includes(id))
-
-	return (
-		<Form
-			method='get'
-			id={form.id}
-			onSubmit={form.onSubmit}
-			className='contents'
-		>
-			{/* Faceted filter for project selection */}
-			<Filter
-				title='Projects'
-				groups={filterGroups}
-				options={[]}
-				selectedValues={localSelectedIds}
-				onSelect={setLocalSelectedIds}
-			/>
-
-			{/* Hidden inputs for form submission */}
-			{[...localSelectedIds].map(projectId => (
-				<input
-					key={projectId}
-					type='hidden'
-					name='jira-project-id'
-					value={projectId}
-				/>
-			))}
-
-			{/* Status indicator and actions */}
-			{hasLocalChanges && (
-				<div className='flex items-start justify-start gap-1'>
-					<Button
-						type='submit'
-						size='icon-sm'
-						variant='default'
-						disabled={isNavigating}
-					>
-						{isNavigating ? <Spinner /> : <Check />}
-					</Button>
-					<Button
-						type='button'
-						size='icon-sm'
-						variant='ghost'
-						disabled={localSelectedIds.size === 0}
-						onClick={() => {
-							setLocalSelectedIds(new Set())
-						}}
-					>
-						<X />
-					</Button>
-				</div>
-			)}
-		</Form>
-	)
-}
-
-/**
- * Main component with Suspense boundary
- */
-export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
-	return (
-		<div className='bg-background'>
-			<div className='flex flex-col gap-6'>
-				<div className='space-y-3'>
-					<div>
-						<h1 className='text-3xl font-bold //tracking-tight'>Worklogs</h1>
-						<p className='mt-1 text-sm text-muted-foreground'>
-							Select Jira projects to view and manage worklogs
-						</p>
-					</div>
-
-					<div className='flex items-center gap-3 py-2 pb-4 border-b'>
-						<Suspense fallback={<Skeleton className='h-8 w-48' />}>
-							<ProjectsContent promise={loaderData.projects} />
-						</Suspense>
-					</div>
-				</div>
-			</div>
-		</div>
-	)
 }
