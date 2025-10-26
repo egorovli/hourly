@@ -340,13 +340,13 @@ export class AtlassianClient {
 		url.searchParams.set('startAt', String(startAt))
 		url.searchParams.set('maxResults', String(maxResults))
 
-		if (fields?.length) {
+		if (fields?.length > 0) {
 			for (const field of fields) {
 				url.searchParams.append('fields', field)
 			}
 		}
 
-		if (expand?.length) {
+		if (expand?.length > 0) {
 			for (const item of expand) {
 				url.searchParams.append('expand', item)
 			}
@@ -837,7 +837,7 @@ async function fetchIssuesForJql({
 			jql,
 			startAt,
 			maxResults: ISSUE_SEARCH_PAGE_SIZE,
-			fields: fields?.length ? fields : ['summary', 'project']
+			fields: fields?.length > 0 ? fields : ['summary', 'project']
 		})
 
 		if (page === 0 && typeof response.total === 'number') {

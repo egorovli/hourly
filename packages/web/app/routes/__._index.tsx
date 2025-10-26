@@ -26,6 +26,8 @@ import { cn, invariant } from '~/lib/util/index.ts'
 
 import { Badge } from '~/components/shadcn/ui/badge.tsx'
 import { Separator } from '~/components/shadcn/ui/separator.tsx'
+import { AutoLoadProgress } from '~/components/ui/auto-load-progress.tsx'
+import { useAutoLoadInfiniteQuery } from '~/hooks/use-auto-load-infinite-query.ts'
 
 import {
 	Command,
@@ -437,7 +439,7 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 				throw new Error('Date range is required to fetch GitLab commits')
 			}
 
-			if (!projectIds.length || !contributorIds.length) {
+			if (projectIds.length === 0 || contributorIds.length === 0) {
 				throw new Error('Projects and contributors are required to fetch GitLab commits')
 			}
 
@@ -540,6 +542,17 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 		return chunkArray(commitIssueKeys, PAGE_SIZE)
 	}, [commitIssueKeys])
 
+	// Auto-load all pages for infinite queries
+	const worklogAutoLoad = useAutoLoadInfiniteQuery(worklogEntriesQuery, {
+		enabled: canLoadWorklogs
+	})
+	const jiraIssuesAutoLoad = useAutoLoadInfiniteQuery(jiraIssuesQuery, {
+		enabled: canLoadRelevantIssues
+	})
+	const gitlabCommitsAutoLoad = useAutoLoadInfiniteQuery(gitlabCommitsQuery, {
+		enabled: canLoadGitlabCommits
+	})
+
 	const commitIssuesFromGitlabQuery = useInfiniteQuery({
 		queryKey: ['jira-issues-from-commits', commitIssueKeys.join('|')],
 		initialPageParam: 0,
@@ -592,6 +605,10 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 			const next = lastPageParam + 1
 			return next < commitIssueKeyChunks.length ? next : undefined
 		}
+	})
+
+	const commitIssuesAutoLoad = useAutoLoadInfiniteQuery(commitIssuesFromGitlabQuery, {
+		enabled: commitIssueKeys.length > 0
 	})
 
 	const worklogDebugEntries = useMemo(() => {
@@ -825,13 +842,19 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 			<div className='grid gap-4 xl:grid-cols-2'>
 				<section className='flex flex-col gap-3 rounded-lg border bg-card/30 p-4 shadow-sm'>
 					<div className='flex items-center justify-between gap-2'>
-						<div>
+						<div className='flex flex-col gap-1'>
 							<p className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
 								Jira worklog entries
 							</p>
 							<p className='text-xs text-muted-foreground'>
 								Loaded {worklogDebugEntries.length} of {totalWorklogEntries} worklogs
 							</p>
+							<AutoLoadProgress
+								isLoading={worklogAutoLoad.isAutoLoading}
+								pagesLoaded={worklogAutoLoad.pagesLoaded}
+								totalPages={worklogAutoLoad.totalPages}
+								progressPercent={worklogAutoLoad.progressPercent}
+							/>
 						</div>
 						{totalWorklogEntries > 0 ? (
 							<Badge
@@ -859,35 +882,14 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 								No worklog entries for the current filters.
 							</p>
 						) : (
-							<>
-								<div className='flex max-h-[24rem] flex-col gap-2 overflow-y-auto pr-1'>
-									{worklogDebugEntries.map(entry => (
-										<WorklogEntryDebugCard
-											key={entry.id}
-											entry={entry}
-										/>
-									))}
-								</div>
-								{worklogEntriesQuery.hasNextPage ? (
-									<Button
-										variant='outline'
-										size='sm'
-										onClick={() => {
-											worklogEntriesQuery.fetchNextPage().catch(() => {})
-										}}
-										disabled={worklogEntriesQuery.isFetchingNextPage}
-									>
-										{worklogEntriesQuery.isFetchingNextPage
-											? `Loading page ${nextWorklogPageNumber}...`
-											: 'Load more worklogs'}
-									</Button>
-								) : null}
-								{worklogEntriesQuery.isFetchingNextPage ? (
-									<p className='text-[11px] text-muted-foreground'>
-										Loading page {nextWorklogPageNumber}...
-									</p>
-								) : null}
-							</>
+							<div className='flex max-h-[24rem] flex-col gap-2 overflow-y-auto pr-1'>
+								{worklogDebugEntries.map(entry => (
+									<WorklogEntryDebugCard
+										key={entry.id}
+										entry={entry}
+									/>
+								))}
+							</div>
 						)
 					) : (
 						<FilterDependencyMessage>
@@ -898,13 +900,19 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 
 				<section className='flex flex-col gap-3 rounded-lg border bg-card/30 p-4 shadow-sm'>
 					<div className='flex items-center justify-between gap-2'>
-						<div>
+						<div className='flex flex-col gap-1'>
 							<p className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
 								Relevant Jira issues
 							</p>
 							<p className='text-xs text-muted-foreground'>
 								Loaded {relevantIssueDebugEntries.length} of {totalRelevantIssues} issues
 							</p>
+							<AutoLoadProgress
+								isLoading={jiraIssuesAutoLoad.isAutoLoading}
+								pagesLoaded={jiraIssuesAutoLoad.pagesLoaded}
+								totalPages={jiraIssuesAutoLoad.totalPages}
+								progressPercent={jiraIssuesAutoLoad.progressPercent}
+							/>
 						</div>
 						{totalRelevantIssues > 0 ? (
 							<Badge
@@ -932,35 +940,14 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 								No issues matched the current filters.
 							</p>
 						) : (
-							<>
-								<div className='flex max-h-[24rem] flex-col gap-2 overflow-y-auto pr-1'>
-									{relevantIssueDebugEntries.map(issue => (
-										<RelevantIssueDebugCard
-											key={issue.id}
-											issue={issue}
-										/>
-									))}
-								</div>
-								{jiraIssuesQuery.hasNextPage ? (
-									<Button
-										variant='outline'
-										size='sm'
-										onClick={() => {
-											jiraIssuesQuery.fetchNextPage().catch(() => {})
-										}}
-										disabled={jiraIssuesQuery.isFetchingNextPage}
-									>
-										{jiraIssuesQuery.isFetchingNextPage
-											? `Loading page ${nextRelevantIssuesPageNumber}...`
-											: 'Load more issues'}
-									</Button>
-								) : null}
-								{jiraIssuesQuery.isFetchingNextPage ? (
-									<p className='text-[11px] text-muted-foreground'>
-										Loading page {nextRelevantIssuesPageNumber}...
-									</p>
-								) : null}
-							</>
+							<div className='flex max-h-[24rem] flex-col gap-2 overflow-y-auto pr-1'>
+								{relevantIssueDebugEntries.map(issue => (
+									<RelevantIssueDebugCard
+										key={issue.id}
+										issue={issue}
+									/>
+								))}
+							</div>
 						)
 					) : (
 						<FilterDependencyMessage>
@@ -973,13 +960,19 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 			<div className='grid gap-4 xl:grid-cols-2'>
 				<section className='flex flex-col gap-3 rounded-lg border bg-card/30 p-4 shadow-sm'>
 					<div className='flex items-center justify-between gap-2'>
-						<div>
+						<div className='flex flex-col gap-1'>
 							<p className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
 								GitLab commits
 							</p>
 							<p className='text-xs text-muted-foreground'>
 								Loaded {gitlabCommitsDebugEntries.length} of {totalGitlabCommits} commits
 							</p>
+							<AutoLoadProgress
+								isLoading={gitlabCommitsAutoLoad.isAutoLoading}
+								pagesLoaded={gitlabCommitsAutoLoad.pagesLoaded}
+								totalPages={gitlabCommitsAutoLoad.totalPages}
+								progressPercent={gitlabCommitsAutoLoad.progressPercent}
+							/>
 						</div>
 						{totalGitlabCommits > 0 ? (
 							<Badge
@@ -1007,35 +1000,14 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 								No commits matched the current filters.
 							</p>
 						) : (
-							<>
-								<div className='flex max-h-[24rem] flex-col gap-2 overflow-y-auto pr-1'>
-									{gitlabCommitsDebugEntries.map(commit => (
-										<GitlabCommitDebugCard
-											key={commit.id}
-											commit={commit}
-										/>
-									))}
-								</div>
-								{gitlabCommitsQuery.hasNextPage ? (
-									<Button
-										variant='outline'
-										size='sm'
-										onClick={() => {
-											gitlabCommitsQuery.fetchNextPage().catch(() => {})
-										}}
-										disabled={gitlabCommitsQuery.isFetchingNextPage}
-									>
-										{gitlabCommitsQuery.isFetchingNextPage
-											? `Loading page ${nextGitlabCommitsPageNumber}...`
-											: 'Load more commits'}
-									</Button>
-								) : null}
-								{gitlabCommitsQuery.isFetchingNextPage ? (
-									<p className='text-[11px] text-muted-foreground'>
-										Loading page {nextGitlabCommitsPageNumber}...
-									</p>
-								) : null}
-							</>
+							<div className='flex max-h-[24rem] flex-col gap-2 overflow-y-auto pr-1'>
+								{gitlabCommitsDebugEntries.map(commit => (
+									<GitlabCommitDebugCard
+										key={commit.id}
+										commit={commit}
+									/>
+								))}
+							</div>
 						)
 					) : (
 						<FilterDependencyMessage>
@@ -1046,13 +1018,19 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 
 				<section className='flex flex-col gap-3 rounded-lg border bg-card/30 p-4 shadow-sm'>
 					<div className='flex items-center justify-between gap-2'>
-						<div>
+						<div className='flex flex-col gap-1'>
 							<p className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
 								Issues referenced in commits
 							</p>
 							<p className='text-xs text-muted-foreground'>
 								Loaded {commitIssueDebugEntries.length} of {totalCommitReferencedIssues} references
 							</p>
+							<AutoLoadProgress
+								isLoading={commitIssuesAutoLoad.isAutoLoading}
+								pagesLoaded={commitIssuesAutoLoad.pagesLoaded}
+								totalPages={commitIssuesAutoLoad.totalPages}
+								progressPercent={commitIssuesAutoLoad.progressPercent}
+							/>
 						</div>
 						{totalCommitReferencedIssues > 0 ? (
 							<Badge
@@ -1083,35 +1061,14 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 							Commit references did not resolve to accessible Jira issues.
 						</p>
 					) : (
-						<>
-							<div className='flex max-h-[24rem] flex-col gap-2 overflow-y-auto pr-1'>
-								{commitIssueDebugEntries.map(issue => (
-									<RelevantIssueDebugCard
-										key={issue.id}
-										issue={issue}
-									/>
-								))}
-							</div>
-							{commitIssuesFromGitlabQuery.hasNextPage ? (
-								<Button
-									variant='outline'
-									size='sm'
-									onClick={() => {
-										commitIssuesFromGitlabQuery.fetchNextPage().catch(() => {})
-									}}
-									disabled={commitIssuesFromGitlabQuery.isFetchingNextPage}
-								>
-									{commitIssuesFromGitlabQuery.isFetchingNextPage
-										? `Loading page ${nextCommitIssuesPageNumber}...`
-										: 'Load more referenced issues'}
-								</Button>
-							) : null}
-							{commitIssuesFromGitlabQuery.isFetchingNextPage ? (
-								<p className='text-[11px] text-muted-foreground'>
-									Loading page {nextCommitIssuesPageNumber}...
-								</p>
-							) : null}
-						</>
+						<div className='flex max-h-[24rem] flex-col gap-2 overflow-y-auto pr-1'>
+							{commitIssueDebugEntries.map(issue => (
+								<RelevantIssueDebugCard
+									key={issue.id}
+									issue={issue}
+								/>
+							))}
+						</div>
 					)}
 				</section>
 			</div>

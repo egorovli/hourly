@@ -56,6 +56,22 @@
 		-moz-osx-font-smoothing: grayscale;
 	}
 
+	/* Indeterminate progress bar animation */
+	@keyframes progress-indeterminate {
+		0% {
+			transform: translateX(-100%);
+		}
+		100% {
+			transform: translateX(100%);
+		}
+	}
+
+	.progress-indeterminate [data-slot="progress-indicator"] {
+		width: 45%;
+		transform: translateX(-100%);
+		animation: progress-indeterminate 1.5s ease-in-out infinite;
+	}
+
 	/* Theme application */
 	@media (prefers-color-scheme: dark) {
 		:root {

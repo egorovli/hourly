@@ -3,10 +3,25 @@
 ## Project Structure & Module Organization
 The workspace uses Bun workspaces with code under `packages/`. The web app lives in `packages/web` and follows React Router v7 file-based routing: route files sit in `packages/web/app/routes`, shared UI lives in `packages/web/app/components`, and domain logic in `packages/web/app/domain`. Client and server entries are `packages/web/app/entry.client.tsx` and `packages/web/app/entry.server.tsx`. Global styles and Tailwind directives live in `packages/web/app/styles`, while reusable types live in `packages/web/types`. Public assets are served from `packages/web/public`.
 
+## Documentation Search Protocol (Required)
+
+**Before implementing any feature using unfamiliar libraries or APIs, search for documentation using these MCP tools:**
+
+1. **Context7 MCP** - Library-specific documentation (resolve library ID first, then fetch docs with optional topic filter)
+2. **DDG Search MCP** - Web search for tutorials, guides, stack overflow threads, and community resources
+3. **Perplexity MCP** - AI-augmented search with recency filters (day/week/month/year) for latest patterns and best practices
+
+**Rationale:** This ensures code follows current best practices, avoids deprecated patterns, and documents the research process for future maintainers. Use all three sources when exploring new territory; cross-reference findings before committing to an implementation approach.
+
+**Example:** When adding infinite scroll, search Context7 for "TanStack Query useInfiniteQuery", DDG for "React Router v7 infinite queries pagination", and Perplexity with recency="month" for "React infinite scroll auto-load patterns 2025".
+
 ## Build, Test, and Development Commands
 Run `bun install` from the repo root to sync dependencies. Use `bun run --filter @working-hours/web dev` for the local server at http://localhost:3000 with SSR enabled. Build production bundles with `bun run --filter @working-hours/web build`, and generate type output with `bun run --filter @working-hours/web check-types`. Static analysis runs through Biome via `bun run lint` or `bun run lint:fix`.
 
 ## Coding Style & Naming Conventions
+
+**Don't waste tokens on formatting.** All code formatting is automatically handled by `bun run lint:fix` from the project root (or `bunx --bun biome check . --write --unsafe` for unsafe fixes like `==` to `===`). Ignore indentation, quote style, line width, and whitespace when writing code - focus only on logic and correctness.
+
 Biome enforces single quotes, tab indentation (visual width 2), 100 character lines, and a strong preference for named exports (`noDefaultExport`). React files use the `~/` alias for modules under `app/`. Co-locate UI-specific hooks and components beside their routes, name files with kebab-case (e.g., `user-summary.card.tsx`), and keep Tailwind utility classes in `global.css` or `app/styles`. TypeScript is strict; prefer explicit return types for shared utilities and keep enums, zod schemas, and XState machines in `packages/web/app/domain`.
 
 ### Singleton Pattern for Connections
