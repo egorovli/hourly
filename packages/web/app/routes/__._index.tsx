@@ -10,8 +10,8 @@ import type { loader as gitlabContributorsLoader } from './gitlab.contributors.t
 import type { loader as gitlabCommitsLoader } from './gitlab.commits.tsx'
 
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
-import { Check, UsersIcon, CalendarDays, ChevronDown } from 'lucide-react'
-import { useCallback, useMemo, useReducer } from 'react'
+import { Check, UsersIcon, CalendarDays, ChevronDown, Save, Undo2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useReducer } from 'react'
 import { endOfMonth, format, startOfMonth, subMonths } from 'date-fns'
 import { SiGitlab, SiAtlassian, SiAtlassianHex, SiGitlabHex } from '@icons-pack/react-simple-icons'
 
@@ -19,11 +19,9 @@ import { Button } from '~/components/shadcn/ui/button.tsx'
 import { Calendar } from '~/components/shadcn/ui/calendar.tsx'
 import { Popover, PopoverContent, PopoverTrigger } from '~/components/shadcn/ui/popover.tsx'
 import { Skeleton } from '~/components/shadcn/ui/skeleton.tsx'
-import { CollapsibleDebugPanel } from '~/components/worklogs/collapsible-debug-panel.tsx'
 import { orm, Token } from '~/lib/mikro-orm/index.ts'
 import { getSession } from '~/lib/session/storage.ts'
 import { cn, invariant } from '~/lib/util/index.ts'
-
 import { Badge } from '~/components/shadcn/ui/badge.tsx'
 import { Separator } from '~/components/shadcn/ui/separator.tsx'
 import { AutoLoadProgress } from '~/components/ui/auto-load-progress.tsx'
@@ -38,12 +36,27 @@ import {
 	CommandList
 } from '~/components/shadcn/ui/command.tsx'
 
+interface LocalWorklogEntry {
+	localId: string
+	id?: string
+	issueKey: string
+	summary: string
+	projectName: string
+	authorName: string
+	started: string
+	timeSpentSeconds: number
+	isNew?: boolean
+}
+
 interface State {
 	selectedJiraProjectIds: string[]
 	selectedJiraUserIds: string[]
 	selectedGitlabProjectIds: string[]
 	selectedGitlabContributorIds: string[]
 	dateRange?: DateRange
+	calendarViewDateRange?: DateRange
+	loadedWorklogEntries: Map<string, LocalWorklogEntry>
+	localWorklogEntries: Map<string, LocalWorklogEntry>
 }
 
 type Action =
@@ -52,6 +65,13 @@ type Action =
 	| { type: 'selectedGitlabProjectIds.select'; payload: string[] }
 	| { type: 'selectedGitlabContributorIds.select'; payload: string[] }
 	| { type: 'dateRange.select'; payload: DateRange | undefined }
+	| { type: 'calendarViewDateRange.select'; payload: DateRange | undefined }
+	| { type: 'worklog.setLoaded'; payload: LocalWorklogEntry[] }
+	| { type: 'worklog.create'; payload: Omit<LocalWorklogEntry, 'localId'> }
+	| { type: 'worklog.update'; payload: LocalWorklogEntry }
+	| { type: 'worklog.delete'; payload: string }
+	| { type: 'worklog.apply' }
+	| { type: 'worklog.revert' }
 
 function reducer(state: State, action: Action): State {
 	switch (action.type) {
@@ -87,6 +107,70 @@ function reducer(state: State, action: Action): State {
 				dateRange: action.payload
 			}
 
+		case 'calendarViewDateRange.select':
+			return {
+				...state,
+				calendarViewDateRange: action.payload
+			}
+
+		case 'worklog.setLoaded': {
+			const loadedMap = new Map<string, LocalWorklogEntry>()
+			for (const entry of action.payload) {
+				loadedMap.set(entry.localId, entry)
+			}
+			return {
+				...state,
+				loadedWorklogEntries: loadedMap,
+				localWorklogEntries: new Map(loadedMap)
+			}
+		}
+
+		case 'worklog.create': {
+			const newEntry: LocalWorklogEntry = {
+				...action.payload,
+				localId: `local-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+				isNew: true
+			}
+			const nextLocal = new Map(state.localWorklogEntries)
+			nextLocal.set(newEntry.localId, newEntry)
+			return {
+				...state,
+				localWorklogEntries: nextLocal
+			}
+		}
+
+		case 'worklog.update': {
+			const nextLocal = new Map(state.localWorklogEntries)
+			nextLocal.set(action.payload.localId, action.payload)
+			return {
+				...state,
+				localWorklogEntries: nextLocal
+			}
+		}
+
+		case 'worklog.delete': {
+			const nextLocal = new Map(state.localWorklogEntries)
+			nextLocal.delete(action.payload)
+			return {
+				...state,
+				localWorklogEntries: nextLocal
+			}
+		}
+
+		case 'worklog.apply': {
+			return {
+				...state,
+				loadedWorklogEntries: new Map(state.localWorklogEntries)
+			}
+		}
+
+		case 'worklog.revert': {
+			return {
+				...state,
+				localWorklogEntries: new Map(state.loadedWorklogEntries)
+			}
+		}
+
 		default:
 			return state
 	}
@@ -96,7 +180,9 @@ const initialState: State = {
 	selectedJiraProjectIds: [],
 	selectedJiraUserIds: [],
 	selectedGitlabProjectIds: [],
-	selectedGitlabContributorIds: []
+	selectedGitlabContributorIds: [],
+	loadedWorklogEntries: new Map(),
+	localWorklogEntries: new Map()
 }
 
 const PAGE_SIZE = 12
@@ -497,6 +583,49 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 		dispatch({ type: 'selectedGitlabContributorIds.select', payload: value })
 	}, [])
 
+	const handleCalendarViewDateRangeChange = useCallback((value: DateRange | undefined) => {
+		dispatch({ type: 'calendarViewDateRange.select', payload: value })
+	}, [])
+
+	const handleWorklogDelete = useCallback((localId: string) => {
+		dispatch({ type: 'worklog.delete', payload: localId })
+	}, [])
+
+	const handleWorklogApply = useCallback(() => {
+		dispatch({ type: 'worklog.apply' })
+	}, [])
+
+	const handleWorklogRevert = useCallback(() => {
+		dispatch({ type: 'worklog.revert' })
+	}, [])
+
+	useEffect(() => {
+		if (!worklogEntriesQuery.data?.pages) {
+			return
+		}
+
+		const loadedEntries: LocalWorklogEntry[] = worklogEntriesQuery.data.pages.flatMap(page =>
+			page.entries.map(entry => ({
+				localId: entry.id,
+				id: entry.id,
+				issueKey: entry.issueKey,
+				summary: entry.summary ?? 'Untitled issue',
+				projectName: entry.project?.name ?? entry.project?.key ?? 'Unknown project',
+				authorName:
+					entry.worklog.author?.displayName ?? entry.worklog.author?.accountId ?? 'Unknown author',
+				started: entry.worklog.started ?? new Date().toISOString(),
+				timeSpentSeconds: entry.worklog.timeSpentSeconds ?? 0
+			}))
+		)
+
+		dispatch({ type: 'worklog.setLoaded', payload: loadedEntries })
+	}, [worklogEntriesQuery.data])
+
+	const worklogChanges = useMemo(
+		() => compareWorklogEntries(state.loadedWorklogEntries, state.localWorklogEntries),
+		[state.loadedWorklogEntries, state.localWorklogEntries]
+	)
+
 	const hasJiraProjectsSelected = state.selectedJiraProjectIds.length > 0
 	const hasGitlabProjectsSelected = state.selectedGitlabProjectIds.length > 0
 	const hasGitlabContributorsSelected = state.selectedGitlabContributorIds.length > 0
@@ -695,17 +824,6 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 	const totalRelevantIssues = jiraIssuesQuery.data?.pages?.[0]?.pageInfo.total ?? 0
 	const totalGitlabCommits = gitlabCommitsQuery.data?.pages?.[0]?.pageInfo.total ?? 0
 	const totalCommitReferencedIssues = commitIssueKeys.length
-	const worklogPages = worklogEntriesQuery.data?.pages ?? []
-	const relevantIssuePages = jiraIssuesQuery.data?.pages ?? []
-	const gitlabCommitPages = gitlabCommitsQuery.data?.pages ?? []
-	const commitIssuePages = commitIssuesFromGitlabQuery.data?.pages ?? []
-	const nextWorklogPageNumber = (worklogPages[worklogPages.length - 1]?.pageInfo.page ?? 0) + 1
-	const nextRelevantIssuesPageNumber =
-		(relevantIssuePages[relevantIssuePages.length - 1]?.pageInfo.page ?? 0) + 1
-	const nextGitlabCommitsPageNumber =
-		(gitlabCommitPages[gitlabCommitPages.length - 1]?.pageInfo.page ?? 0) + 1
-	const nextCommitIssuesPageNumber =
-		(commitIssuePages[commitIssuePages.length - 1]?.pageInfo.page ?? 0) + 1
 
 	return (
 		<div className='flex flex-col gap-6 grow bg-background'>
@@ -1073,21 +1191,153 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 				</section>
 			</div>
 
-			<div className='grow' />
+			<div className='flex flex-col gap-4 rounded-lg border bg-card/30 p-4 shadow-sm'>
+				<div>
+					<h2 className='text-lg font-semibold'>Calendar Worklog Editor (POC)</h2>
+					<p className='text-xs text-muted-foreground'>
+						Quick proof of concept for local worklog editing with apply/revert
+					</p>
+				</div>
 
-			<CollapsibleDebugPanel
-				title='Debug request payload'
-				data={{
-					state,
-					worklogEntries: worklogEntriesQuery.data,
-					relevantIssues: jiraIssuesQuery.data,
-					gitlabCommits: gitlabCommitsQuery.data,
-					commitReferencedIssues: commitIssuesFromGitlabQuery.data,
-					commitIssueKeys,
-					gitlabProjects: gitlabProjectsQuery.data,
-					gitlabContributors: gitlabContributorsQuery.data
-				}}
-			/>
+				<div className='flex flex-wrap gap-3'>
+					<DateRangeFilter
+						value={state.calendarViewDateRange}
+						onChange={handleCalendarViewDateRangeChange}
+					/>
+
+					{worklogChanges.hasChanges && (
+						<div className='flex items-center gap-2'>
+							<Badge variant='outline'>
+								{worklogChanges.changeCount}{' '}
+								{worklogChanges.changeCount === 1 ? 'change' : 'changes'}
+							</Badge>
+							<Button
+								size='sm'
+								variant='default'
+								onClick={handleWorklogApply}
+							>
+								<Save className='h-4 w-4' />
+								Apply Changes (stub)
+							</Button>
+							<Button
+								size='sm'
+								variant='outline'
+								onClick={handleWorklogRevert}
+							>
+								<Undo2 className='h-4 w-4' />
+								Revert
+							</Button>
+						</div>
+					)}
+				</div>
+
+				{worklogChanges.hasChanges && (
+					<div className='flex flex-col gap-2'>
+						<p className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
+							Pending Changes
+						</p>
+						<div className='space-y-1 text-xs'>
+							{worklogChanges.newEntries.length > 0 && (
+								<p className='text-green-600 dark:text-green-400'>
+									+ {worklogChanges.newEntries.length} new{' '}
+									{worklogChanges.newEntries.length === 1 ? 'entry' : 'entries'}
+								</p>
+							)}
+							{worklogChanges.modifiedEntries.length > 0 && (
+								<p className='text-yellow-600 dark:text-yellow-400'>
+									~ {worklogChanges.modifiedEntries.length} modified{' '}
+									{worklogChanges.modifiedEntries.length === 1 ? 'entry' : 'entries'}
+								</p>
+							)}
+							{worklogChanges.deletedEntries.length > 0 && (
+								<p className='text-red-600 dark:text-red-400'>
+									- {worklogChanges.deletedEntries.length} deleted{' '}
+									{worklogChanges.deletedEntries.length === 1 ? 'entry' : 'entries'}
+								</p>
+							)}
+						</div>
+
+						<details className='text-xs'>
+							<summary className='cursor-pointer font-medium'>View detailed changes</summary>
+							<div className='mt-2 space-y-2'>
+								{worklogChanges.newEntries.map(entry => (
+									<div
+										key={entry.localId}
+										className='rounded border border-green-200 bg-green-50 p-2 dark:border-green-900 dark:bg-green-950'
+									>
+										<p className='font-semibold text-green-700 dark:text-green-300'>
+											NEW: {entry.issueKey}
+										</p>
+										<p className='text-muted-foreground'>{entry.summary}</p>
+									</div>
+								))}
+								{worklogChanges.modifiedEntries.map(entry => (
+									<div
+										key={entry.localId}
+										className='rounded border border-yellow-200 bg-yellow-50 p-2 dark:border-yellow-900 dark:bg-yellow-950'
+									>
+										<p className='font-semibold text-yellow-700 dark:text-yellow-300'>
+											MODIFIED: {entry.issueKey}
+										</p>
+										<p className='text-muted-foreground'>{entry.summary}</p>
+									</div>
+								))}
+								{worklogChanges.deletedEntries.map(entry => (
+									<div
+										key={entry.localId}
+										className='rounded border border-red-200 bg-red-50 p-2 dark:border-red-900 dark:bg-red-950'
+									>
+										<p className='font-semibold text-red-700 dark:text-red-300'>
+											DELETED: {entry.issueKey}
+										</p>
+										<p className='text-muted-foreground'>{entry.summary}</p>
+									</div>
+								))}
+							</div>
+						</details>
+					</div>
+				)}
+
+				<div className='flex flex-col gap-2'>
+					<p className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
+						Local Entries ({state.localWorklogEntries.size})
+					</p>
+					{state.localWorklogEntries.size === 0 ? (
+						<p className='text-xs text-muted-foreground'>No worklog entries loaded yet</p>
+					) : (
+						<div className='max-h-64 space-y-1 overflow-y-auto text-xs'>
+							{Array.from(state.localWorklogEntries.values()).map(entry => (
+								<div
+									key={entry.localId}
+									className='flex items-center justify-between rounded border px-2 py-1'
+								>
+									<div className='flex-1'>
+										<span className='font-medium'>{entry.issueKey}</span>
+										<span className='mx-2 text-muted-foreground'>•</span>
+										<span>{formatDurationFromSeconds(entry.timeSpentSeconds)}</span>
+										{entry.isNew && (
+											<Badge
+												variant='outline'
+												className='ml-2 h-4 px-1 text-[10px]'
+											>
+												new
+											</Badge>
+										)}
+									</div>
+									<Button
+										size='sm'
+										variant='ghost'
+										onClick={() => handleWorklogDelete(entry.localId)}
+										className='h-6 px-2'
+									>
+										Delete
+									</Button>
+								</div>
+							))}
+						</div>
+					)}
+				</div>
+			</div>
 		</div>
 	)
 }
@@ -1706,6 +1956,55 @@ function chunkArray<T>(items: T[], size: number): T[][] {
 		chunks.push(items.slice(index, index + size))
 	}
 	return chunks
+}
+
+interface WorklogChanges {
+	newEntries: LocalWorklogEntry[]
+	modifiedEntries: LocalWorklogEntry[]
+	deletedEntries: LocalWorklogEntry[]
+	hasChanges: boolean
+	changeCount: number
+}
+
+function compareWorklogEntries(
+	loaded: Map<string, LocalWorklogEntry>,
+	local: Map<string, LocalWorklogEntry>
+): WorklogChanges {
+	const newEntries: LocalWorklogEntry[] = []
+	const modifiedEntries: LocalWorklogEntry[] = []
+	const deletedEntries: LocalWorklogEntry[] = []
+
+	for (const [localId, localEntry] of local) {
+		const loadedEntry = loaded.get(localId)
+
+		if (loadedEntry) {
+			const isModified =
+				localEntry.issueKey !== loadedEntry.issueKey ||
+				localEntry.started !== loadedEntry.started ||
+				localEntry.timeSpentSeconds !== loadedEntry.timeSpentSeconds ||
+				localEntry.summary !== loadedEntry.summary
+
+			if (isModified) {
+				modifiedEntries.push(localEntry)
+			}
+		} else {
+			newEntries.push(localEntry)
+		}
+	}
+
+	for (const [localId, loadedEntry] of loaded) {
+		if (!local.has(localId)) {
+			deletedEntries.push(loadedEntry)
+		}
+	}
+
+	return {
+		newEntries,
+		modifiedEntries,
+		deletedEntries,
+		hasChanges: newEntries.length > 0 || modifiedEntries.length > 0 || deletedEntries.length > 0,
+		changeCount: newEntries.length + modifiedEntries.length + deletedEntries.length
+	}
 }
 
 interface DateRangeFilterProps {
