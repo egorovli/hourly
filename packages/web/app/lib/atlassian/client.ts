@@ -92,6 +92,23 @@ export interface IssueSummary {
 			key: string
 			name: string
 		}
+		updated?: string
+		created?: string
+		status?: {
+			name?: string
+		}
+		assignee?: {
+			accountId?: string
+			displayName?: string
+		}
+		reporter?: {
+			accountId?: string
+			displayName?: string
+		}
+		creator?: {
+			accountId?: string
+			displayName?: string
+		}
 	}
 }
 
@@ -154,6 +171,14 @@ export interface JiraWorklogsResult {
 		totalIssuesMatched: number
 		totalIssuesFetched: number
 		totalWorklogs: number
+		truncated: boolean
+	}
+}
+
+export interface JiraTouchedIssuesResult {
+	issues: IssueSummary[]
+	summary: {
+		totalIssuesMatched: number
 		truncated: boolean
 	}
 }
@@ -477,6 +502,81 @@ export class AtlassianClient {
 			}
 		}
 	}
+
+	async fetchTouchedIssues({
+		projectIds,
+		userIds,
+		dateRange
+	}: FetchWorklogEntriesOptions): Promise<JiraTouchedIssuesResult> {
+		const uniqueProjectIds = Array.from(
+			new Set(projectIds.map(id => id.trim()).filter((id): id is string => id.length > 0))
+		)
+
+		if (uniqueProjectIds.length === 0) {
+			return emptyTouchedIssuesResult()
+		}
+
+		const uniqueUserIds = Array.from(
+			new Set((userIds ?? []).map(id => id.trim()).filter((id): id is string => id.length > 0))
+		)
+
+		if (uniqueUserIds.length === 0) {
+			return emptyTouchedIssuesResult()
+		}
+
+		const projects = await resolveProjectSelections({
+			client: this,
+			projectIds: uniqueProjectIds
+		})
+
+		if (projects.length === 0) {
+			return emptyTouchedIssuesResult()
+		}
+
+		const projectsByCloud = groupProjectsByCloud(projects)
+		const issuesById = new Map<string, IssueSummary>()
+		let totalIssuesMatched = 0
+		let truncated = false
+
+		for (const [cloudId, selections] of projectsByCloud.entries()) {
+			const jql = buildTouchedIssuesJql(
+				selections.map(project => project.projectKey),
+				dateRange,
+				uniqueUserIds
+			)
+
+			const issueSummaries = await fetchIssuesForJql({
+				client: this,
+				cloudId,
+				jql,
+				fields: [
+					'summary',
+					'project',
+					'updated',
+					'created',
+					'status',
+					'assignee',
+					'reporter',
+					'creator'
+				]
+			})
+
+			totalIssuesMatched += issueSummaries.totalMatched
+			truncated ||= issueSummaries.truncated
+
+			for (const issue of issueSummaries.issues) {
+				issuesById.set(issue.id, issue)
+			}
+		}
+
+		return {
+			issues: Array.from(issuesById.values()),
+			summary: {
+				totalIssuesMatched,
+				truncated
+			}
+		}
+	}
 }
 
 const ISSUE_SEARCH_PAGE_SIZE = 50
@@ -491,6 +591,16 @@ function emptyWorklogResult(): JiraWorklogsResult {
 			totalIssuesMatched: 0,
 			totalIssuesFetched: 0,
 			totalWorklogs: 0,
+			truncated: false
+		}
+	}
+}
+
+function emptyTouchedIssuesResult(): JiraTouchedIssuesResult {
+	return {
+		issues: [],
+		summary: {
+			totalIssuesMatched: 0,
 			truncated: false
 		}
 	}
@@ -581,7 +691,44 @@ function buildWorklogJql(
 		clauses.push(`worklogAuthor in (${authorIds.map(id => `"${escapeJqlString(id)}"`).join(', ')})`)
 	}
 
-	console.log('Built JQL:', clauses.join(' AND '))
+	return clauses.join(' AND ')
+}
+
+function buildTouchedIssuesJql(
+	projectKeys: string[],
+	dateRange: JiraWorklogDateRange,
+	authorIds: string[]
+) {
+	const uniqueKeys = Array.from(
+		new Set(
+			projectKeys.filter((key): key is string => typeof key === 'string' && key.trim().length > 0)
+		)
+	)
+	const [firstKey] = uniqueKeys
+	if (!firstKey) {
+		throw new Error('Unable to build JQL query without project keys')
+	}
+
+	const projectClause =
+		uniqueKeys.length === 1
+			? `project = "${escapeJqlString(firstKey)}"`
+			: `project in (${uniqueKeys.map(key => `"${escapeJqlString(key)}"`).join(', ')})`
+
+	const clauses = [projectClause, `updated >= "${dateRange.from}"`, `updated <= "${dateRange.to}"`]
+
+	if (authorIds.length === 1) {
+		const [author] = authorIds
+		const escaped = `"${escapeJqlString(author!)}"`
+		clauses.push(
+			`(assignee = ${escaped} OR reporter = ${escaped} OR creator = ${escaped} OR worklogAuthor = ${escaped})`
+		)
+	} else if (authorIds.length > 1) {
+		const escapedAuthors = authorIds.map(id => `"${escapeJqlString(id)}"`)
+		const group = `(${escapedAuthors.join(', ')})`
+		clauses.push(
+			`(assignee in ${group} OR reporter in ${group} OR creator in ${group} OR worklogAuthor in ${group})`
+		)
+	}
 
 	return clauses.join(' AND ')
 }
@@ -593,11 +740,13 @@ function escapeJqlString(input: string) {
 async function fetchIssuesForJql({
 	client,
 	cloudId,
-	jql
+	jql,
+	fields
 }: {
 	client: AtlassianClient
 	cloudId: string
 	jql: string
+	fields?: string[]
 }): Promise<{
 	issues: IssueSummary[]
 	totalMatched: number
@@ -613,7 +762,7 @@ async function fetchIssuesForJql({
 			jql,
 			startAt,
 			maxResults: ISSUE_SEARCH_PAGE_SIZE,
-			fields: ['summary', 'project']
+			fields: fields?.length ? fields : ['summary', 'project']
 		})
 
 		if (page === 0 && typeof response.total === 'number') {

@@ -43,6 +43,39 @@ export interface ListProjectsParams {
 	withShared?: boolean
 }
 
+export interface GitLabCommit {
+	id: string
+	short_id?: string
+	created_at?: string
+	parent_ids?: string[]
+	title?: string
+	message?: string
+	author_name?: string
+	author_email?: string
+	author_id?: number
+	committer_name?: string
+	committer_email?: string
+}
+
+export interface ListProjectCommitsParams {
+	page?: number
+	perPage?: number
+	since?: string
+	until?: string
+	refName?: string
+	withStats?: boolean
+}
+
+export interface GitLabContributor {
+	id: string
+	projectIds: number[]
+	name?: string
+	email?: string
+	username?: string
+	commitCount: number
+	lastCommitAt?: string
+}
+
 export interface PaginatedResult<T> {
 	items: T[]
 	nextPage?: number
@@ -166,6 +199,116 @@ export class GitLabClient {
 		}
 	}
 
+	async listProjectCommits(
+		projectId: number,
+		params?: ListProjectCommitsParams
+	): Promise<PaginatedResult<GitLabCommit>> {
+		const url = new URL(
+			`${this.baseUrl}/projects/${encodeURIComponent(projectId)}/repository/commits`
+		)
+
+		const perPage = Math.min(Math.max(params?.perPage ?? 100, 1), 100)
+		url.searchParams.set('per_page', perPage.toString())
+
+		if (params?.page !== undefined) {
+			url.searchParams.set('page', params.page.toString())
+		}
+
+		if (params?.since) {
+			url.searchParams.set('since', params.since)
+		}
+
+		if (params?.until) {
+			url.searchParams.set('until', params.until)
+		}
+
+		if (params?.refName) {
+			url.searchParams.set('ref_name', params.refName)
+		}
+
+		url.searchParams.set('with_stats', (params?.withStats ?? false).toString())
+
+		const response = await this.fetchWithRetry(url.toString(), {
+			headers: {
+				Accept: 'application/json',
+				Authorization: `Bearer ${this.accessToken}`
+			}
+		})
+
+		if (!response.ok) {
+			throw new Error(`Failed to fetch commits for project ${projectId}`)
+		}
+
+		const commits = (await response.json()) as GitLabCommit[]
+		const nextPageHeader = response.headers.get('x-next-page')
+		const totalPagesHeader = response.headers.get('x-total-pages')
+
+		return {
+			items: commits,
+			nextPage: nextPageHeader ? Number(nextPageHeader) : undefined,
+			totalPages: totalPagesHeader ? Number(totalPagesHeader) : undefined
+		}
+	}
+
+	async listContributorsForProjects(
+		projectIds: number[],
+		dateRange: { from: string; to: string }
+	): Promise<GitLabContributor[]> {
+		if (projectIds.length === 0) {
+			return []
+		}
+
+		const sinceIso = startOfDayIso(dateRange.from)
+		const untilIso = endOfDayIso(dateRange.to)
+
+		const contributorMap = new Map<string, GitLabContributor>()
+
+		await Promise.all(
+			projectIds.map(async projectId => {
+				const commits = await this.fetchAllPaginated(page =>
+					this.listProjectCommits(projectId, {
+						page,
+						since: sinceIso,
+						until: untilIso,
+						perPage: 100,
+						withStats: false
+					})
+				)
+
+				for (const commit of commits) {
+					const key =
+						commit.author_email?.toLowerCase() ??
+						(commit.author_id ? `id:${commit.author_id}` : (commit.author_name ?? commit.id))
+
+					const existing = contributorMap.get(key)
+					const commitDate = commit.created_at
+
+					if (existing) {
+						existing.commitCount += 1
+						if (commitDate && (!existing.lastCommitAt || commitDate > existing.lastCommitAt)) {
+							existing.lastCommitAt = commitDate
+						}
+						if (!existing.projectIds.includes(projectId)) {
+							existing.projectIds.push(projectId)
+						}
+						continue
+					}
+
+					contributorMap.set(key, {
+						id: key,
+						projectIds: [projectId],
+						name: commit.author_name,
+						email: commit.author_email,
+						commitCount: 1,
+						lastCommitAt: commitDate
+					})
+				}
+			})
+		)
+
+		return Array.from(contributorMap.values())
+	}
+
 	private async fetchWithRetry(url: string, init?: RequestInit, maxRetries = 2): Promise<Response> {
 		let attempt = 0
 		let lastError: unknown
@@ -194,4 +337,12 @@ export class GitLabClient {
 
 		return url
 	}
+}
+
+function startOfDayIso(date: string) {
+	return new Date(`${date}T00:00:00.000Z`).toISOString()
+}
+
+function endOfDayIso(date: string) {
+	return new Date(`${date}T23:59:59.999Z`).toISOString()
 }
