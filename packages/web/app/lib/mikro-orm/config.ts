@@ -58,7 +58,7 @@ export const config: Options = {
 		: {}),
 
 	dynamicImportProvider: async id => import(id),
-	debug: true
+	debug: false
 }
 
 export default config

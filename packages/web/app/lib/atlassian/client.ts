@@ -197,9 +197,9 @@ export interface FetchWorklogEntriesOptions {
 export class AtlassianClientError extends Error {
 	constructor(
 		message: string,
-		public readonly status: number,
-		public readonly statusText: string,
-		public readonly details?: unknown
+		readonly status: number,
+		readonly statusText: string,
+		readonly details?: unknown
 	) {
 		super(message)
 		this.name = 'AtlassianClientError'
@@ -219,7 +219,72 @@ export class AtlassianClient {
 		return `${this.baseUrl}/ex/jira/${cloudId}${path}`
 	}
 
+	private logJiraRequest(url: URL, init?: RequestInit) {
+		try {
+			const method = (init?.method ?? 'GET').toUpperCase()
+			const jql = url.searchParams.get('jql')
+			const keys = [
+				'startAt',
+				'maxResults',
+				'expand',
+				'fields',
+				'startedAfter',
+				'startedBefore',
+				'since',
+				'until',
+				'includeInactive',
+				'query',
+				'project',
+				'cursor',
+				'nextPageToken'
+			]
+			const entries: string[] = []
+			for (const key of keys) {
+				if (url.searchParams.has(key)) {
+					const all = url.searchParams.getAll(key)
+					entries.push(`${key}=${all.join(',')}`)
+				}
+			}
+
+			let bodyIdsCount: number | null = null
+			if (method === 'POST' && url.pathname.endsWith('/worklog/list')) {
+				try {
+					const raw = init?.body
+					let body: unknown
+					if (typeof raw === 'string') {
+						body = JSON.parse(raw)
+					}
+					if (
+						body &&
+						typeof body === 'object' &&
+						'ids' in body &&
+						Array.isArray((body as { ids: unknown }).ids)
+					) {
+						bodyIdsCount = (body as { ids: unknown[] }).ids.length
+					}
+				} catch {}
+			}
+
+			const lines: string[] = []
+			lines.push(`[Jira] ${method} ${url.pathname}`)
+			if (jql) {
+				lines.push(`  JQL: ${jql}`)
+			}
+			if (entries.length > 0) {
+				lines.push(`  Params: ${entries.join(' ')}`)
+			}
+			if (bodyIdsCount !== null) {
+				lines.push(`  Body ids: ${bodyIdsCount}`)
+			}
+			process.stdout.write(`${lines.join('\n')}\n`)
+		} catch {}
+	}
+
 	private async requestJson<T>(url: string, init?: RequestInit): Promise<T> {
+		const urlObj = new URL(url)
+		// this.logJiraRequest(urlObj, init)
+		const method = (init?.method ?? 'GET').toUpperCase()
+		const startedAt = Date.now()
 		const response = await fetch(url, {
 			...init,
 			headers: {
@@ -228,6 +293,10 @@ export class AtlassianClient {
 				...(init?.headers ?? {})
 			}
 		})
+		const durationMs = Date.now() - startedAt
+		// process.stdout.write(
+		// 	`[Jira] ${method} ${urlObj.pathname} -> ${response.status} (${durationMs} ms)\n`
+		// )
 
 		if (!response.ok) {
 			let details: unknown = null
@@ -340,13 +409,13 @@ export class AtlassianClient {
 		url.searchParams.set('startAt', String(startAt))
 		url.searchParams.set('maxResults', String(maxResults))
 
-		if (fields?.length > 0) {
+		if (Array.isArray(fields) && fields.length > 0) {
 			for (const field of fields) {
 				url.searchParams.append('fields', field)
 			}
 		}
 
-		if (expand?.length > 0) {
+		if (Array.isArray(expand) && expand.length > 0) {
 			for (const item of expand) {
 				url.searchParams.append('expand', item)
 			}
@@ -391,6 +460,66 @@ export class AtlassianClient {
 		}
 
 		return this.requestJson<IssueWorklogResponse>(url.toString())
+	}
+
+	/**
+	 * Get IDs of worklogs updated since a timestamp, paginating until last page or until reaches upper bound.
+	 */
+	async getUpdatedWorklogIds(
+		cloudId: string,
+		params: { since: number; until: number }
+	): Promise<number[]> {
+		let since = params.since
+		const untilUpperBound = params.until
+		const ids: number[] = []
+
+		for (;;) {
+			const url = new URL(this.buildJiraUrl(cloudId, '/rest/api/3/worklog/updated'))
+			url.searchParams.set('since', String(since))
+
+			const page = await this.requestJson<{
+				lastPage: boolean
+				nextPage?: string
+				until: number
+				values: { worklogId: number; updatedTime: number }[]
+			}>(url.toString())
+
+			for (const item of page.values) {
+				if (item.updatedTime <= untilUpperBound) {
+					ids.push(item.worklogId)
+				}
+			}
+
+			if (page.lastPage || page.until >= untilUpperBound) {
+				break
+			}
+
+			since = page.until
+		}
+
+		return ids
+	}
+
+	/**
+	 * Bulk fetch worklog details by IDs (max 1000 per request).
+	 */
+	async getWorklogsByIds(
+		cloudId: string,
+		ids: (number | string)[],
+		expand?: string
+	): Promise<IssueWorklog[]> {
+		if (ids.length === 0) {
+			return []
+		}
+		const url = new URL(this.buildJiraUrl(cloudId, '/rest/api/3/worklog/list'))
+		if (expand) {
+			url.searchParams.set('expand', expand)
+		}
+		return this.requestJson<IssueWorklog[]>(url.toString(), {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ ids })
+		})
 	}
 
 	async fetchWorklogEntries({
@@ -732,6 +861,7 @@ function groupProjectsByCloud(projects: JiraProjectSelection[]) {
 	return map
 }
 
+/* eslint-disable @typescript-eslint/no-unused-vars */
 function buildWorklogJql(
 	projectKeys: string[],
 	dateRange: JiraWorklogDateRange,
@@ -756,13 +886,17 @@ function buildWorklogJql(
 	]
 
 	if (authorIds.length === 1) {
-		clauses.push(`worklogAuthor = "${escapeJqlString(authorIds[0]!)}"`)
+		const [singleAuthor] = authorIds
+		if (singleAuthor) {
+			clauses.push(`worklogAuthor = "${escapeJqlString(singleAuthor)}"`)
+		}
 	} else if (authorIds.length > 1) {
 		clauses.push(`worklogAuthor in (${authorIds.map(id => `"${escapeJqlString(id)}"`).join(', ')})`)
 	}
 
-	return clauses.join(' AND ')
+	return `${clauses.join(' AND ')} ORDER BY created DESC`
 }
+/* eslint-enable @typescript-eslint/no-unused-vars */
 
 function buildTouchedIssuesJql(
 	projectKeys: string[],
@@ -787,11 +921,13 @@ function buildTouchedIssuesJql(
 	const clauses = [projectClause, `updated >= "${dateRange.from}"`, `updated <= "${dateRange.to}"`]
 
 	if (authorIds.length === 1) {
-		const [author] = authorIds
-		const escaped = `"${escapeJqlString(author!)}"`
-		clauses.push(
-			`(assignee = ${escaped} OR reporter = ${escaped} OR creator = ${escaped} OR worklogAuthor = ${escaped})`
-		)
+		const [single] = authorIds
+		if (single) {
+			const escaped = `"${escapeJqlString(single)}"`
+			clauses.push(
+				`(assignee = ${escaped} OR reporter = ${escaped} OR creator = ${escaped} OR worklogAuthor = ${escaped})`
+			)
+		}
 	} else if (authorIds.length > 1) {
 		const escapedAuthors = authorIds.map(id => `"${escapeJqlString(id)}"`)
 		const group = `(${escapedAuthors.join(', ')})`
@@ -800,12 +936,17 @@ function buildTouchedIssuesJql(
 		)
 	}
 
-	return clauses.join(' AND ')
+	return `${clauses.join(' AND ')} ORDER BY created DESC`
 }
 
 function buildIssueKeyJql(issueKeys: string[]) {
 	const clauses = issueKeys.map(key => `"${escapeJqlString(key)}"`)
-	return `issuekey in (${clauses.join(', ')})`
+	return `issuekey in (${clauses.join(', ')}) ORDER BY created DESC`
+}
+
+function buildIssueIdJql(issueIds: string[]) {
+	const clauses = issueIds.map(id => `"${escapeJqlString(id)}"`)
+	return `id in (${clauses.join(', ')}) ORDER BY created DESC`
 }
 
 function escapeJqlString(input: string) {
@@ -837,7 +978,7 @@ async function fetchIssuesForJql({
 			jql,
 			startAt,
 			maxResults: ISSUE_SEARCH_PAGE_SIZE,
-			fields: fields?.length > 0 ? fields : ['summary', 'project']
+			fields: Array.isArray(fields) && fields.length > 0 ? fields : ['summary', 'project']
 		})
 
 		if (page === 0 && typeof response.total === 'number') {
@@ -876,6 +1017,7 @@ async function fetchIssuesForJql({
 	}
 }
 
+/* eslint-disable @typescript-eslint/no-unused-vars */
 async function fetchIssueWorklogs({
 	client,
 	cloudId,
@@ -937,6 +1079,7 @@ async function fetchIssueWorklogs({
 		truncated
 	}
 }
+/* eslint-enable @typescript-eslint/no-unused-vars */
 
 function startOfDayEpochMillis(date: string) {
 	return new Date(`${date}T00:00:00.000Z`).getTime()
@@ -958,3 +1101,20 @@ function chunkArray<T>(items: T[], size: number): T[][] {
 
 	return chunks
 }
+
+/* eslint-disable @typescript-eslint/no-unused-vars */
+function splitIntoDailyWindows(since: number, until: number): { since: number; until: number }[] {
+	if (until <= since) {
+		return []
+	}
+	const windows: { since: number; until: number }[] = []
+	let cursor = since
+	const oneDayMs = 24 * 60 * 60 * 1000
+	while (cursor < until) {
+		const next = Math.min(until, cursor + oneDayMs)
+		windows.push({ since: cursor, until: next })
+		cursor = next
+	}
+	return windows
+}
+/* eslint-enable @typescript-eslint/no-unused-vars */
