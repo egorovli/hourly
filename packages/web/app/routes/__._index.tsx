@@ -1,7 +1,6 @@
 import type { Route } from './+types/__._index.ts'
 
 import type { DateRange } from 'react-day-picker'
-
 import type { loader as jiraProjectsLoader } from './jira.projects.tsx'
 import type { loader as jiraUsersLoader } from './jira.users.tsx'
 import type { loader as jiraWorklogEntriesLoader } from './jira.worklog.entries.tsx'
@@ -13,7 +12,6 @@ import { useQuery } from '@tanstack/react-query'
 import { Check, UsersIcon, CalendarDays, ChevronDown } from 'lucide-react'
 import { useCallback, useMemo, useReducer } from 'react'
 import { endOfMonth, format, startOfMonth, subMonths } from 'date-fns'
-
 import { SiGitlab, SiAtlassian, SiAtlassianHex, SiGitlabHex } from '@icons-pack/react-simple-icons'
 
 import { Button } from '~/components/shadcn/ui/button.tsx'
@@ -26,6 +24,8 @@ import { getSession } from '~/lib/session/storage.ts'
 import { cn, invariant } from '~/lib/util/index.ts'
 
 import { Badge } from '~/components/shadcn/ui/badge.tsx'
+import { Separator } from '~/components/shadcn/ui/separator.tsx'
+
 import {
 	Command,
 	CommandEmpty,
@@ -34,7 +34,6 @@ import {
 	CommandItem,
 	CommandList
 } from '~/components/shadcn/ui/command.tsx'
-import { Separator } from '~/components/shadcn/ui/separator.tsx'
 
 interface State {
 	selectedJiraProjectIds: string[]
