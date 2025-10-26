@@ -577,12 +577,82 @@ export class AtlassianClient {
 			}
 		}
 	}
+
+	async fetchIssuesByKeys(issueKeys: string[]): Promise<JiraTouchedIssuesResult> {
+		const uniqueKeys = Array.from(
+			new Set(
+				issueKeys
+					.map(key => key.trim().toUpperCase())
+					.filter((key): key is string => key.length > 0)
+			)
+		)
+
+		if (uniqueKeys.length === 0) {
+			return emptyTouchedIssuesResult()
+		}
+
+		const resources = await this.getAccessibleResources()
+		if (resources.length === 0) {
+			return emptyTouchedIssuesResult()
+		}
+
+		const issuesById = new Map<string, IssueSummary>()
+		const matchedKeys = new Set<string>()
+		const fields = [
+			'summary',
+			'project',
+			'updated',
+			'created',
+			'status',
+			'assignee',
+			'reporter',
+			'creator'
+		]
+
+		const chunks = chunkArray(uniqueKeys, ISSUE_KEY_QUERY_CHUNK_SIZE)
+
+		for (const chunk of chunks) {
+			for (const resource of resources) {
+				const jql = buildIssueKeyJql(chunk)
+				const issueSummaries = await fetchIssuesForJql({
+					client: this,
+					cloudId: resource.id,
+					jql,
+					fields
+				})
+
+				for (const issue of issueSummaries.issues) {
+					issuesById.set(issue.id, issue)
+					if (issue.key) {
+						matchedKeys.add(issue.key.toUpperCase())
+					}
+				}
+
+				if (matchedKeys.size >= uniqueKeys.length) {
+					break
+				}
+			}
+
+			if (matchedKeys.size >= uniqueKeys.length) {
+				break
+			}
+		}
+
+		return {
+			issues: Array.from(issuesById.values()),
+			summary: {
+				totalIssuesMatched: matchedKeys.size,
+				truncated: matchedKeys.size < uniqueKeys.length
+			}
+		}
+	}
 }
 
 const ISSUE_SEARCH_PAGE_SIZE = 50
 const ISSUE_SEARCH_MAX_RESULTS = 1000
 const ISSUE_WORKLOG_PAGE_SIZE = 100
 const ISSUE_WORKLOG_MAX_RESULTS = 5000
+const ISSUE_KEY_QUERY_CHUNK_SIZE = 40
 
 function emptyWorklogResult(): JiraWorklogsResult {
 	return {
@@ -733,6 +803,11 @@ function buildTouchedIssuesJql(
 	return clauses.join(' AND ')
 }
 
+function buildIssueKeyJql(issueKeys: string[]) {
+	const clauses = issueKeys.map(key => `"${escapeJqlString(key)}"`)
+	return `issuekey in (${clauses.join(', ')})`
+}
+
 function escapeJqlString(input: string) {
 	return input.replace(/\\|"/g, match => `\\${match}`)
 }
@@ -869,4 +944,17 @@ function startOfDayEpochMillis(date: string) {
 
 function endOfDayEpochMillis(date: string) {
 	return new Date(`${date}T23:59:59.999Z`).getTime()
+}
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+	if (size <= 0) {
+		return [items]
+	}
+
+	const chunks: T[][] = []
+	for (let index = 0; index < items.length; index += size) {
+		chunks.push(items.slice(index, index + size))
+	}
+
+	return chunks
 }

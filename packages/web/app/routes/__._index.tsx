@@ -7,6 +7,7 @@ import type { loader as jiraWorklogEntriesLoader } from './jira.worklog.entries.
 import type { loader as jiraIssuesLoader } from './jira.issues.tsx'
 import type { loader as gitlabProjectsLoader } from './gitlab.projects.tsx'
 import type { loader as gitlabContributorsLoader } from './gitlab.contributors.tsx'
+import type { loader as gitlabCommitsLoader } from './gitlab.commits.tsx'
 
 import { useQuery } from '@tanstack/react-query'
 import { Check, UsersIcon, CalendarDays, ChevronDown } from 'lucide-react'
@@ -97,6 +98,7 @@ const initialState: State = {
 }
 
 const MAX_DEBUG_ITEMS = 12
+const MAX_COMMIT_ISSUE_KEYS = 40
 
 interface ErrorPlaceholderProps {
 	message: string
@@ -406,6 +408,65 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 			Boolean(state.dateRange?.to)
 	})
 
+	const gitlabCommitsQuery = useQuery({
+		queryKey: [
+			'gitlab-commits',
+			{
+				projectIds: state.selectedGitlabProjectIds,
+				contributorIds: state.selectedGitlabContributorIds,
+				dateRange: state.dateRange
+					? {
+							from: state.dateRange.from?.toISOString(),
+							to: state.dateRange.to?.toISOString()
+						}
+					: undefined
+			}
+		],
+
+		async queryFn({ queryKey, signal }) {
+			const [, { projectIds, contributorIds, dateRange }] = queryKey as InferQueryKeyParams<
+				typeof queryKey
+			>
+
+			if (!dateRange?.from || !dateRange?.to) {
+				throw new Error('Date range is required to fetch GitLab commits')
+			}
+
+			if (!projectIds.length || !contributorIds.length) {
+				throw new Error('Projects and contributors are required to fetch GitLab commits')
+			}
+
+			const fromDate = format(new Date(dateRange.from), 'yyyy-MM-dd')
+			const toDate = format(new Date(dateRange.to), 'yyyy-MM-dd')
+
+			const searchParams = new URLSearchParams([
+				...projectIds.map(id => ['project-id', id]),
+				...contributorIds.map(id => ['contributor-id', id]),
+				['date-from', fromDate],
+				['date-to', toDate]
+			])
+
+			const response = await fetch(`/gitlab/commits?${searchParams.toString()}`, {
+				method: 'GET',
+				signal
+			})
+
+			if (!response.ok) {
+				throw new Error('Failed to fetch GitLab commits')
+			}
+
+			const data = (await response.json()) as Awaited<ReturnType<typeof gitlabCommitsLoader>>
+			return data
+		},
+
+		enabled:
+			Boolean(loaderData.user.gitlab?.id) &&
+			state.selectedGitlabProjectIds.length > 0 &&
+			state.selectedGitlabContributorIds.length > 0 &&
+			Boolean(state.dateRange?.from) &&
+			Boolean(state.dateRange?.to)
+	})
+
 	const handleJiraProjectIdsChange = useCallback((value: string[]) => {
 		dispatch({ type: 'selectedJiraProjectIds.select', payload: value })
 	}, [])
@@ -428,12 +489,77 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 
 	const hasJiraProjectsSelected = state.selectedJiraProjectIds.length > 0
 	const hasGitlabProjectsSelected = state.selectedGitlabProjectIds.length > 0
+	const hasGitlabContributorsSelected = state.selectedGitlabContributorIds.length > 0
 	const hasCompleteDateRange = Boolean(state.dateRange?.from && state.dateRange?.to)
 	const canLoadWorklogs =
 		state.selectedJiraProjectIds.length > 0 &&
 		state.selectedJiraUserIds.length > 0 &&
 		hasCompleteDateRange
 	const canLoadRelevantIssues = canLoadWorklogs
+	const canLoadGitlabCommits =
+		hasGitlabProjectsSelected && hasGitlabContributorsSelected && hasCompleteDateRange
+
+	const gitlabProjectNameById = useMemo(() => {
+		if (!gitlabProjectsQuery.data) {
+			return new Map<string, string>()
+		}
+
+		return new Map(
+			gitlabProjectsQuery.data.projects.map(project => [
+				String(project.id),
+				project.name_with_namespace ??
+					project.name ??
+					project.path_with_namespace ??
+					String(project.id)
+			])
+		)
+	}, [gitlabProjectsQuery.data])
+
+	const commitIssueKeys = useMemo(() => {
+		if (!gitlabCommitsQuery.data?.issueKeys?.length) {
+			return []
+		}
+
+		return Array.from(new Set(gitlabCommitsQuery.data.issueKeys))
+	}, [gitlabCommitsQuery.data])
+
+	const limitedCommitIssueKeys = useMemo(
+		() => commitIssueKeys.slice(0, MAX_COMMIT_ISSUE_KEYS),
+		[commitIssueKeys]
+	)
+
+	const jiraIssuesFromCommitsQuery = useQuery({
+		queryKey: [
+			'jira-issues-from-commits',
+			{
+				issueKeys: limitedCommitIssueKeys
+			}
+		],
+
+		async queryFn({ queryKey, signal }) {
+			const [, { issueKeys }] = queryKey as InferQueryKeyParams<typeof queryKey>
+
+			if (!issueKeys.length) {
+				throw new Error('Issue keys are required to fetch commit-linked Jira issues')
+			}
+
+			const searchParams = new URLSearchParams(issueKeys.map(key => ['issue-key', key]))
+
+			const response = await fetch(`/jira/issues?${searchParams.toString()}`, {
+				method: 'GET',
+				signal
+			})
+
+			if (!response.ok) {
+				throw new Error('Failed to fetch Jira issues referenced in commits')
+			}
+
+			const data = (await response.json()) as Awaited<ReturnType<typeof jiraIssuesLoader>>
+			return data
+		},
+
+		enabled: limitedCommitIssueKeys.length > 0
+	})
 
 	const worklogDebugEntries = useMemo(() => {
 		if (!worklogEntriesQuery.data) {
@@ -493,6 +619,48 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 
 	const totalWorklogEntries = worklogEntriesQuery.data?.summary.totalWorklogs ?? 0
 	const totalRelevantIssues = jiraIssuesQuery.data?.summary.totalIssuesMatched ?? 0
+	const gitlabCommitsDebugEntries = useMemo(() => {
+		if (!gitlabCommitsQuery.data) {
+			return []
+		}
+
+		return gitlabCommitsQuery.data.commits.slice(0, MAX_DEBUG_ITEMS).map(commit => {
+			return {
+				id: commit.id,
+				shortId: commit.shortId,
+				title: commit.title || commit.message?.split('\n')[0] || commit.id.slice(0, 8),
+				authorLabel: commit.authorEmail
+					? `${commit.authorName ?? 'Unknown'} (${commit.authorEmail})`
+					: (commit.authorName ?? 'Unknown author'),
+				projectName:
+					gitlabProjectNameById.get(String(commit.projectId)) ?? `Project ${commit.projectId}`,
+				createdAt: commit.createdAt ?? undefined,
+				issueKeys: commit.issueKeys ?? []
+			}
+		})
+	}, [gitlabCommitsQuery.data, gitlabProjectNameById])
+
+	const commitIssueDebugEntries = useMemo(() => {
+		if (!jiraIssuesFromCommitsQuery.data) {
+			return []
+		}
+
+		return jiraIssuesFromCommitsQuery.data.issues.slice(0, MAX_DEBUG_ITEMS).map(issue => ({
+			id: issue.id,
+			key: issue.key,
+			summary: issue.fields.summary ?? 'Untitled issue',
+			projectName: issue.fields.project?.name ?? issue.fields.project?.key ?? 'Unknown project',
+			status: issue.fields.status?.name ?? 'Unknown status',
+			assignee:
+				issue.fields.assignee?.displayName ?? issue.fields.assignee?.accountId ?? 'Unassigned',
+			updated: issue.fields.updated ?? issue.fields.created,
+			created: issue.fields.created
+		}))
+	}, [jiraIssuesFromCommitsQuery.data])
+
+	const totalGitlabCommits = gitlabCommitsQuery.data?.summary.totalCommitsMatched ?? 0
+	const totalCommitReferencedIssues =
+		jiraIssuesFromCommitsQuery.data?.summary.totalIssuesMatched ?? 0
 
 	return (
 		<div className='flex flex-col gap-6 grow bg-background'>
@@ -746,6 +914,131 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 				</section>
 			</div>
 
+			<div className='grid gap-4 xl:grid-cols-2'>
+				<section className='flex flex-col gap-3 rounded-lg border bg-card/30 p-4 shadow-sm'>
+					<div className='flex items-center justify-between gap-2'>
+						<div>
+							<p className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
+								GitLab commits
+							</p>
+							<p className='text-xs text-muted-foreground'>
+								Recent commits from selected contributors within the date range
+							</p>
+						</div>
+						{totalGitlabCommits > 0 ? (
+							<Badge
+								variant='secondary'
+								className='rounded-sm px-2 text-[11px] font-semibold uppercase tracking-wide'
+							>
+								{totalGitlabCommits} commits
+							</Badge>
+						) : null}
+					</div>
+
+					{canLoadGitlabCommits ? (
+						gitlabCommitsQuery.isLoading ? (
+							<div className='space-y-2'>
+								<Skeleton className='h-20 w-full rounded-md' />
+								<Skeleton className='h-20 w-full rounded-md' />
+							</div>
+						) : gitlabCommitsQuery.error ? (
+							<ErrorPlaceholder
+								message={`GitLab commits error: ${getErrorMessage(gitlabCommitsQuery.error)}`}
+								className='w-full'
+							/>
+						) : gitlabCommitsDebugEntries.length === 0 ? (
+							<p className='text-xs text-muted-foreground'>
+								No commits matched the current filters.
+							</p>
+						) : (
+							<>
+								<div className='flex max-h-[24rem] flex-col gap-2 overflow-y-auto pr-1'>
+									{gitlabCommitsDebugEntries.map(commit => (
+										<GitlabCommitDebugCard
+											key={commit.id}
+											commit={commit}
+										/>
+									))}
+								</div>
+								{totalGitlabCommits > gitlabCommitsDebugEntries.length ? (
+									<p className='text-[11px] text-muted-foreground'>
+										Showing first {gitlabCommitsDebugEntries.length} of {totalGitlabCommits} commits
+									</p>
+								) : null}
+							</>
+						)
+					) : (
+						<FilterDependencyMessage>
+							Select GitLab projects, contributors, and a date range to load commits
+						</FilterDependencyMessage>
+					)}
+				</section>
+
+				<section className='flex flex-col gap-3 rounded-lg border bg-card/30 p-4 shadow-sm'>
+					<div className='flex items-center justify-between gap-2'>
+						<div>
+							<p className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
+								Issues referenced in commits
+							</p>
+							<p className='text-xs text-muted-foreground'>
+								Jira issues mentioned in commit titles or descriptions
+							</p>
+						</div>
+						{totalCommitReferencedIssues > 0 ? (
+							<Badge
+								variant='secondary'
+								className='rounded-sm px-2 text-[11px] font-semibold uppercase tracking-wide'
+							>
+								{totalCommitReferencedIssues} issues
+							</Badge>
+						) : null}
+					</div>
+
+					{limitedCommitIssueKeys.length === 0 ? (
+						<p className='text-xs text-muted-foreground'>
+							No recognizable Jira issue references were found in the selected commits.
+						</p>
+					) : jiraIssuesFromCommitsQuery.isLoading ? (
+						<div className='space-y-2'>
+							<Skeleton className='h-20 w-full rounded-md' />
+							<Skeleton className='h-20 w-full rounded-md' />
+						</div>
+					) : jiraIssuesFromCommitsQuery.error ? (
+						<ErrorPlaceholder
+							message={`Commit issues error: ${getErrorMessage(jiraIssuesFromCommitsQuery.error)}`}
+							className='w-full'
+						/>
+					) : commitIssueDebugEntries.length === 0 ? (
+						<p className='text-xs text-muted-foreground'>
+							Commit references did not resolve to accessible Jira issues.
+						</p>
+					) : (
+						<>
+							<div className='flex max-h-[24rem] flex-col gap-2 overflow-y-auto pr-1'>
+								{commitIssueDebugEntries.map(issue => (
+									<RelevantIssueDebugCard
+										key={issue.id}
+										issue={issue}
+									/>
+								))}
+							</div>
+							{totalCommitReferencedIssues > commitIssueDebugEntries.length ? (
+								<p className='text-[11px] text-muted-foreground'>
+									Showing first {commitIssueDebugEntries.length} of {totalCommitReferencedIssues}{' '}
+									issues
+								</p>
+							) : null}
+							{commitIssueKeys.length > limitedCommitIssueKeys.length ? (
+								<p className='text-[11px] text-muted-foreground'>
+									Only the first {MAX_COMMIT_ISSUE_KEYS} unique issue references are resolved at a
+									time.
+								</p>
+							) : null}
+						</>
+					)}
+				</section>
+			</div>
+
 			<div className='grow' />
 
 			<CollapsibleDebugPanel
@@ -754,6 +1047,9 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 					state,
 					worklogEntries: worklogEntriesQuery.data,
 					relevantIssues: jiraIssuesQuery.data,
+					gitlabCommits: gitlabCommitsQuery.data,
+					commitReferencedIssues: jiraIssuesFromCommitsQuery.data,
+					commitIssueKeys: limitedCommitIssueKeys,
 					gitlabProjects: gitlabProjectsQuery.data,
 					gitlabContributors: gitlabContributorsQuery.data
 				}}
@@ -1225,6 +1521,38 @@ function GitlabContributors({ data, value, onChange }: GitlabContributorsProps):
 				</Command>
 			</PopoverContent>
 		</Popover>
+	)
+}
+
+interface GitlabCommitDebugEntry {
+	id: string
+	shortId: string
+	title: string
+	authorLabel: string
+	projectName: string
+	createdAt?: string
+	issueKeys: string[]
+}
+
+function GitlabCommitDebugCard({ commit }: { commit: GitlabCommitDebugEntry }): React.ReactNode {
+	return (
+		<article className='rounded-md border bg-background px-3 py-2 shadow-sm'>
+			<div className='flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-muted-foreground'>
+				<span>{commit.shortId}</span>
+				<span>{formatDateTimeLabel(commit.createdAt)}</span>
+			</div>
+			<p className='text-sm font-medium text-foreground'>{commit.title}</p>
+			<p className='text-xs text-muted-foreground'>{commit.projectName}</p>
+			<div className='flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground'>
+				<span>{commit.authorLabel}</span>
+				{commit.issueKeys.length > 0 ? (
+					<>
+						<span>•</span>
+						<span>{commit.issueKeys.join(', ')}</span>
+					</>
+				) : null}
+			</div>
+		</article>
 	)
 }
 

@@ -8,6 +8,7 @@ import * as sessionStorage from '~/lib/session/storage.ts'
 import { invariant } from '~/lib/util/invariant.ts'
 
 const isoDatePattern = /^\d{4}-\d{2}-\d{2}$/
+const jiraIssueKeyPattern = /^[A-Z][A-Z0-9]+-\d+$/i
 const nonEmptyTrimmedString = z.string().trim().min(1)
 
 const isoDateSchema = z
@@ -16,19 +17,55 @@ const isoDateSchema = z
 	.regex(isoDatePattern, 'Date must be in YYYY-MM-DD format')
 	.refine(isValidIsoDate, 'Invalid calendar date')
 
+const issueKeySchema = z
+	.string()
+	.trim()
+	.regex(jiraIssueKeyPattern, 'Issue key must follow the pattern ABC-123')
+
 const querySchema = z
 	.object({
-		projectIds: z.array(nonEmptyTrimmedString).min(1, 'Select at least one project'),
-		userIds: z.array(nonEmptyTrimmedString).min(1, 'Select at least one user'),
-		dateFrom: isoDateSchema,
-		dateTo: isoDateSchema
+		projectIds: z.array(nonEmptyTrimmedString).default([]),
+		userIds: z.array(nonEmptyTrimmedString).default([]),
+		dateFrom: isoDateSchema.optional(),
+		dateTo: isoDateSchema.optional(),
+		issueKeys: z.array(issueKeySchema).default([])
 	})
-	.superRefine(({ dateFrom, dateTo }, ctx) => {
+	.superRefine(({ dateFrom, dateTo, issueKeys, projectIds, userIds }, ctx) => {
+		if (issueKeys.length > 0) {
+			return
+		}
+
+		if (!dateFrom || !dateTo) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: 'date-from and date-to are required unless querying by issue keys',
+				path: ['dateFrom']
+			})
+			return
+		}
+
 		if (parseIsoDate(dateFrom) > parseIsoDate(dateTo)) {
 			ctx.addIssue({
 				code: z.ZodIssueCode.custom,
 				message: 'date-to must be greater than or equal to date-from',
 				path: ['dateTo']
+			})
+			return
+		}
+
+		if (projectIds.length === 0) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: 'Select at least one project',
+				path: ['projectIds']
+			})
+		}
+
+		if (userIds.length === 0) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: 'Select at least one user',
+				path: ['userIds']
 			})
 		}
 	})
@@ -52,7 +89,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 		projectIds: url.searchParams.getAll('project-id'),
 		userIds: url.searchParams.getAll('user-id'),
 		dateFrom: url.searchParams.get('date-from') ?? undefined,
-		dateTo: url.searchParams.get('date-to') ?? undefined
+		dateTo: url.searchParams.get('date-to') ?? undefined,
+		issueKeys: url.searchParams.getAll('issue-key')
 	})
 
 	if (!parsed.success) {
@@ -69,16 +107,24 @@ export async function loader({ request }: Route.LoaderArgs) {
 		refreshToken: token.refreshToken
 	})
 
-	const issues = await client.fetchTouchedIssues({
+	if (parsed.data.issueKeys.length > 0) {
+		return client.fetchIssuesByKeys(parsed.data.issueKeys)
+	}
+
+	const dateFrom = parsed.data.dateFrom
+	const dateTo = parsed.data.dateTo
+
+	invariant(dateFrom, 'date-from is required')
+	invariant(dateTo, 'date-to is required')
+
+	return client.fetchTouchedIssues({
 		projectIds: parsed.data.projectIds,
 		userIds: parsed.data.userIds,
 		dateRange: {
-			from: parsed.data.dateFrom,
-			to: parsed.data.dateTo
+			from: dateFrom,
+			to: dateTo
 		}
 	})
-
-	return issues
 }
 
 function parseIsoDate(value: string) {

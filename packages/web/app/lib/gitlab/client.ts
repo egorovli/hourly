@@ -76,6 +76,17 @@ export interface GitLabContributor {
 	lastCommitAt?: string
 }
 
+export interface GitLabContributorCommit extends GitLabCommit {
+	projectId: number
+}
+
+export interface FetchCommitsForContributorsOptions {
+	projectIds: number[]
+	contributorIds: string[]
+	dateRange: { from: string; to: string }
+	limitPerProject?: number
+}
+
 export interface PaginatedResult<T> {
 	items: T[]
 	nextPage?: number
@@ -276,9 +287,7 @@ export class GitLabClient {
 				)
 
 				for (const commit of commits) {
-					const key =
-						commit.author_email?.toLowerCase() ??
-						(commit.author_id ? `id:${commit.author_id}` : (commit.author_name ?? commit.id))
+					const key = createContributorKey(commit)
 
 					const existing = contributorMap.get(key)
 					const commitDate = commit.created_at
@@ -307,6 +316,58 @@ export class GitLabClient {
 		)
 
 		return Array.from(contributorMap.values())
+	}
+
+	async listCommitsForContributors({
+		projectIds,
+		contributorIds,
+		dateRange,
+		limitPerProject = 1000
+	}: FetchCommitsForContributorsOptions): Promise<GitLabContributorCommit[]> {
+		if (projectIds.length === 0 || contributorIds.length === 0) {
+			return []
+		}
+
+		const sinceIso = startOfDayIso(dateRange.from)
+		const untilIso = endOfDayIso(dateRange.to)
+		const contributorSet = new Set(contributorIds)
+		const commitsWithProjects: GitLabContributorCommit[] = []
+
+		await Promise.all(
+			projectIds.map(async projectId => {
+				const commits = await this.fetchAllPaginated(page =>
+					this.listProjectCommits(projectId, {
+						page,
+						since: sinceIso,
+						until: untilIso,
+						perPage: 100,
+						withStats: false
+					})
+				)
+
+				let collectedForProject = 0
+
+				for (const commit of commits) {
+					if (collectedForProject >= limitPerProject) {
+						break
+					}
+
+					const key = createContributorKey(commit)
+					if (!contributorSet.has(key)) {
+						continue
+					}
+
+					commitsWithProjects.push({
+						...commit,
+						projectId
+					})
+
+					collectedForProject += 1
+				}
+			})
+		)
+
+		return commitsWithProjects
 	}
 
 	private async fetchWithRetry(url: string, init?: RequestInit, maxRetries = 2): Promise<Response> {
@@ -345,4 +406,11 @@ function startOfDayIso(date: string) {
 
 function endOfDayIso(date: string) {
 	return new Date(`${date}T23:59:59.999Z`).toISOString()
+}
+
+export function createContributorKey(commit: GitLabCommit): string {
+	return (
+		commit.author_email?.toLowerCase() ??
+		(commit.author_id ? `id:${commit.author_id}` : (commit.author_name ?? commit.id))
+	)
 }
