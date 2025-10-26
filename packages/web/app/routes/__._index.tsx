@@ -9,7 +9,7 @@ import type { loader as gitlabProjectsLoader } from './gitlab.projects.tsx'
 import type { loader as gitlabContributorsLoader } from './gitlab.contributors.tsx'
 import type { loader as gitlabCommitsLoader } from './gitlab.commits.tsx'
 
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { Check, UsersIcon, CalendarDays, ChevronDown } from 'lucide-react'
 import { useCallback, useMemo, useReducer } from 'react'
 import { endOfMonth, format, startOfMonth, subMonths } from 'date-fns'
@@ -97,8 +97,7 @@ const initialState: State = {
 	selectedGitlabContributorIds: []
 }
 
-const MAX_DEBUG_ITEMS = 12
-const MAX_COMMIT_ISSUE_KEYS = 40
+const PAGE_SIZE = 12
 
 interface ErrorPlaceholderProps {
 	message: string
@@ -222,7 +221,7 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 		enabled: state.selectedJiraProjectIds.length > 0
 	})
 
-	const worklogEntriesQuery = useQuery({
+	const worklogEntriesQuery = useInfiniteQuery({
 		queryKey: [
 			'jira-worklog-entries',
 			{
@@ -237,8 +236,8 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 					: undefined
 			}
 		],
-
-		async queryFn({ queryKey, signal }) {
+		initialPageParam: 1,
+		async queryFn({ queryKey, signal, pageParam }) {
 			const [, { projectIds, userIds, dateRange }] = queryKey as InferQueryKeyParams<
 				typeof queryKey
 			>
@@ -254,7 +253,9 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 				...projectIds.map(id => ['project-id', id]),
 				...userIds.map(id => ['user-id', id]),
 				['date-from', fromDate],
-				['date-to', toDate]
+				['date-to', toDate],
+				['page', String(pageParam)],
+				['size', String(PAGE_SIZE)]
 			])
 
 			const response = await fetch(`/jira/worklog/entries?${searchParams}`, {
@@ -269,7 +270,8 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 			const data = (await response.json()) as Awaited<ReturnType<typeof jiraWorklogEntriesLoader>>
 			return data
 		},
-
+		getNextPageParam: lastPage =>
+			lastPage.pageInfo.hasNextPage ? lastPage.pageInfo.page + 1 : undefined,
 		enabled:
 			state.selectedJiraProjectIds.length > 0 &&
 			state.selectedJiraUserIds.length > 0 &&
@@ -277,7 +279,7 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 			Boolean(state.dateRange?.to)
 	})
 
-	const jiraIssuesQuery = useQuery({
+	const jiraIssuesQuery = useInfiniteQuery({
 		queryKey: [
 			'jira-worklog-issues',
 			{
@@ -292,8 +294,8 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 					: undefined
 			}
 		],
-
-		async queryFn({ queryKey, signal }) {
+		initialPageParam: 1,
+		async queryFn({ queryKey, signal, pageParam }) {
 			const [, { projectIds, userIds, dateRange }] = queryKey as InferQueryKeyParams<
 				typeof queryKey
 			>
@@ -309,7 +311,9 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 				...projectIds.map(id => ['project-id', id]),
 				...userIds.map(id => ['user-id', id]),
 				['date-from', fromDate],
-				['date-to', toDate]
+				['date-to', toDate],
+				['page', String(pageParam)],
+				['size', String(PAGE_SIZE)]
 			])
 
 			const response = await fetch(`/jira/issues?${searchParams}`, {
@@ -324,7 +328,8 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 			const data = (await response.json()) as Awaited<ReturnType<typeof jiraIssuesLoader>>
 			return data
 		},
-
+		getNextPageParam: lastPage =>
+			lastPage.pageInfo.hasNextPage ? lastPage.pageInfo.page + 1 : undefined,
 		enabled:
 			state.selectedJiraProjectIds.length > 0 &&
 			state.selectedJiraUserIds.length > 0 &&
@@ -408,7 +413,7 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 			Boolean(state.dateRange?.to)
 	})
 
-	const gitlabCommitsQuery = useQuery({
+	const gitlabCommitsQuery = useInfiniteQuery({
 		queryKey: [
 			'gitlab-commits',
 			{
@@ -422,8 +427,8 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 					: undefined
 			}
 		],
-
-		async queryFn({ queryKey, signal }) {
+		initialPageParam: 1,
+		async queryFn({ queryKey, signal, pageParam }) {
 			const [, { projectIds, contributorIds, dateRange }] = queryKey as InferQueryKeyParams<
 				typeof queryKey
 			>
@@ -443,7 +448,9 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 				...projectIds.map(id => ['project-id', id]),
 				...contributorIds.map(id => ['contributor-id', id]),
 				['date-from', fromDate],
-				['date-to', toDate]
+				['date-to', toDate],
+				['page', String(pageParam)],
+				['size', String(PAGE_SIZE)]
 			])
 
 			const response = await fetch(`/gitlab/commits?${searchParams.toString()}`, {
@@ -458,7 +465,8 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 			const data = (await response.json()) as Awaited<ReturnType<typeof gitlabCommitsLoader>>
 			return data
 		},
-
+		getNextPageParam: lastPage =>
+			lastPage.pageInfo.hasNextPage ? lastPage.pageInfo.page + 1 : undefined,
 		enabled:
 			Boolean(loaderData.user.gitlab?.id) &&
 			state.selectedGitlabProjectIds.length > 0 &&
@@ -516,34 +524,48 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 	}, [gitlabProjectsQuery.data])
 
 	const commitIssueKeys = useMemo(() => {
-		if (!gitlabCommitsQuery.data?.issueKeys?.length) {
-			return []
+		const keys = new Set<string>()
+		for (const page of gitlabCommitsQuery.data?.pages ?? []) {
+			for (const key of page.issueKeys ?? []) {
+				keys.add(key)
+			}
 		}
-
-		return Array.from(new Set(gitlabCommitsQuery.data.issueKeys))
+		return Array.from(keys)
 	}, [gitlabCommitsQuery.data])
 
-	const limitedCommitIssueKeys = useMemo(
-		() => commitIssueKeys.slice(0, MAX_COMMIT_ISSUE_KEYS),
-		[commitIssueKeys]
-	)
+	const commitIssueKeyChunks = useMemo(() => {
+		if (commitIssueKeys.length === 0) {
+			return []
+		}
+		return chunkArray(commitIssueKeys, PAGE_SIZE)
+	}, [commitIssueKeys])
 
-	const jiraIssuesFromCommitsQuery = useQuery({
-		queryKey: [
-			'jira-issues-from-commits',
-			{
-				issueKeys: limitedCommitIssueKeys
+	const commitIssuesFromGitlabQuery = useInfiniteQuery({
+		queryKey: ['jira-issues-from-commits', commitIssueKeys.join('|')],
+		initialPageParam: 0,
+		enabled: commitIssueKeyChunks.length > 0,
+		async queryFn({ pageParam, signal }) {
+			const chunk = commitIssueKeyChunks[pageParam] ?? []
+			if (chunk.length === 0) {
+				return {
+					issues: [],
+					summary: {
+						totalIssuesMatched: 0,
+						truncated: false
+					},
+					pageInfo: {
+						page: pageParam + 1,
+						size: PAGE_SIZE,
+						total: commitIssueKeys.length,
+						totalPages: Math.ceil(commitIssueKeys.length / PAGE_SIZE),
+						hasNextPage: pageParam + 1 < commitIssueKeyChunks.length
+					}
+				}
 			}
-		],
 
-		async queryFn({ queryKey, signal }) {
-			const [, { issueKeys }] = queryKey as InferQueryKeyParams<typeof queryKey>
-
-			if (!issueKeys.length) {
-				throw new Error('Issue keys are required to fetch commit-linked Jira issues')
-			}
-
-			const searchParams = new URLSearchParams(issueKeys.map(key => ['issue-key', key]))
+			const searchParams = new URLSearchParams(chunk.map(key => ['issue-key', key]))
+			searchParams.set('page', '1')
+			searchParams.set('size', String(chunk.length))
 
 			const response = await fetch(`/jira/issues?${searchParams.toString()}`, {
 				method: 'GET',
@@ -555,77 +577,69 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 			}
 
 			const data = (await response.json()) as Awaited<ReturnType<typeof jiraIssuesLoader>>
-			return data
+			return {
+				...data,
+				pageInfo: {
+					page: pageParam + 1,
+					size: chunk.length,
+					total: commitIssueKeys.length,
+					totalPages: Math.ceil(commitIssueKeys.length / PAGE_SIZE),
+					hasNextPage: pageParam + 1 < commitIssueKeyChunks.length
+				}
+			}
 		},
-
-		enabled: limitedCommitIssueKeys.length > 0
+		getNextPageParam: (_lastPage, _pages, lastPageParam) => {
+			const next = lastPageParam + 1
+			return next < commitIssueKeyChunks.length ? next : undefined
+		}
 	})
 
 	const worklogDebugEntries = useMemo(() => {
-		if (!worklogEntriesQuery.data) {
+		if (!worklogEntriesQuery.data?.pages) {
 			return []
 		}
 
-		const entries: WorklogDebugEntry[] = []
-
-		for (const issue of worklogEntriesQuery.data.issues) {
-			for (const worklog of issue.worklogs) {
-				entries.push({
-					id: `${issue.issueId}-${worklog.id}`,
-					issueKey: issue.issueKey,
-					summary: issue.summary ?? 'Untitled issue',
-					projectName: issue.project?.name ?? issue.project?.key ?? 'Unknown project',
-					authorName: worklog.author?.displayName ?? worklog.author?.accountId ?? 'Unknown author',
-					started: worklog.started,
-					timeSpentSeconds: worklog.timeSpentSeconds ?? 0
-				})
-			}
-		}
-
-		return entries
-			.sort((a, b) => {
-				const aTime = a.started ? new Date(a.started).getTime() : 0
-				const bTime = b.started ? new Date(b.started).getTime() : 0
-				return bTime - aTime
-			})
-			.slice(0, MAX_DEBUG_ITEMS)
+		return worklogEntriesQuery.data.pages.flatMap(page =>
+			page.entries.map(entry => ({
+				id: entry.id,
+				issueKey: entry.issueKey,
+				summary: entry.summary ?? 'Untitled issue',
+				projectName: entry.project?.name ?? entry.project?.key ?? 'Unknown project',
+				authorName:
+					entry.worklog.author?.displayName ?? entry.worklog.author?.accountId ?? 'Unknown author',
+				started: entry.worklog.started,
+				timeSpentSeconds: entry.worklog.timeSpentSeconds ?? 0
+			}))
+		)
 	}, [worklogEntriesQuery.data])
 
 	const relevantIssueDebugEntries = useMemo(() => {
-		if (!jiraIssuesQuery.data) {
+		if (!jiraIssuesQuery.data?.pages) {
 			return []
 		}
 
-		const entries: RelevantIssueDebugEntry[] = jiraIssuesQuery.data.issues.map(issue => ({
-			id: issue.id,
-			key: issue.key,
-			summary: issue.fields.summary ?? 'Untitled issue',
-			projectName: issue.fields.project?.name ?? issue.fields.project?.key ?? 'Unknown project',
-			status: issue.fields.status?.name ?? 'Unknown status',
-			assignee:
-				issue.fields.assignee?.displayName ?? issue.fields.assignee?.accountId ?? 'Unassigned',
-			updated: issue.fields.updated ?? issue.fields.created,
-			created: issue.fields.created
-		}))
-
-		return entries
-			.sort((a, b) => {
-				const aTime = a.updated ? new Date(a.updated).getTime() : 0
-				const bTime = b.updated ? new Date(b.updated).getTime() : 0
-				return bTime - aTime
-			})
-			.slice(0, MAX_DEBUG_ITEMS)
+		return jiraIssuesQuery.data.pages.flatMap(page =>
+			page.issues.map(issue => ({
+				id: issue.id,
+				key: issue.key,
+				summary: issue.fields.summary ?? 'Untitled issue',
+				projectName: issue.fields.project?.name ?? issue.fields.project?.key ?? 'Unknown project',
+				status: issue.fields.status?.name ?? 'Unknown status',
+				assignee:
+					issue.fields.assignee?.displayName ?? issue.fields.assignee?.accountId ?? 'Unassigned',
+				updated: issue.fields.updated ?? issue.fields.created,
+				created: issue.fields.created
+			}))
+		)
 	}, [jiraIssuesQuery.data])
 
-	const totalWorklogEntries = worklogEntriesQuery.data?.summary.totalWorklogs ?? 0
-	const totalRelevantIssues = jiraIssuesQuery.data?.summary.totalIssuesMatched ?? 0
 	const gitlabCommitsDebugEntries = useMemo(() => {
-		if (!gitlabCommitsQuery.data) {
+		if (!gitlabCommitsQuery.data?.pages) {
 			return []
 		}
 
-		return gitlabCommitsQuery.data.commits.slice(0, MAX_DEBUG_ITEMS).map(commit => {
-			return {
+		return gitlabCommitsQuery.data.pages.flatMap(page =>
+			page.commits.map(commit => ({
 				id: commit.id,
 				shortId: commit.shortId,
 				title: commit.title || commit.message?.split('\n')[0] || commit.id.slice(0, 8),
@@ -636,31 +650,45 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 					gitlabProjectNameById.get(String(commit.projectId)) ?? `Project ${commit.projectId}`,
 				createdAt: commit.createdAt ?? undefined,
 				issueKeys: commit.issueKeys ?? []
-			}
-		})
+			}))
+		)
 	}, [gitlabCommitsQuery.data, gitlabProjectNameById])
 
 	const commitIssueDebugEntries = useMemo(() => {
-		if (!jiraIssuesFromCommitsQuery.data) {
+		if (!commitIssuesFromGitlabQuery.data?.pages) {
 			return []
 		}
 
-		return jiraIssuesFromCommitsQuery.data.issues.slice(0, MAX_DEBUG_ITEMS).map(issue => ({
-			id: issue.id,
-			key: issue.key,
-			summary: issue.fields.summary ?? 'Untitled issue',
-			projectName: issue.fields.project?.name ?? issue.fields.project?.key ?? 'Unknown project',
-			status: issue.fields.status?.name ?? 'Unknown status',
-			assignee:
-				issue.fields.assignee?.displayName ?? issue.fields.assignee?.accountId ?? 'Unassigned',
-			updated: issue.fields.updated ?? issue.fields.created,
-			created: issue.fields.created
-		}))
-	}, [jiraIssuesFromCommitsQuery.data])
+		return commitIssuesFromGitlabQuery.data.pages.flatMap(page =>
+			page.issues.map(issue => ({
+				id: issue.id,
+				key: issue.key,
+				summary: issue.fields.summary ?? 'Untitled issue',
+				projectName: issue.fields.project?.name ?? issue.fields.project?.key ?? 'Unknown project',
+				status: issue.fields.status?.name ?? 'Unknown status',
+				assignee:
+					issue.fields.assignee?.displayName ?? issue.fields.assignee?.accountId ?? 'Unassigned',
+				updated: issue.fields.updated ?? issue.fields.created,
+				created: issue.fields.created
+			}))
+		)
+	}, [commitIssuesFromGitlabQuery.data])
 
-	const totalGitlabCommits = gitlabCommitsQuery.data?.summary.totalCommitsMatched ?? 0
-	const totalCommitReferencedIssues =
-		jiraIssuesFromCommitsQuery.data?.summary.totalIssuesMatched ?? 0
+	const totalWorklogEntries = worklogEntriesQuery.data?.pages?.[0]?.pageInfo.total ?? 0
+	const totalRelevantIssues = jiraIssuesQuery.data?.pages?.[0]?.pageInfo.total ?? 0
+	const totalGitlabCommits = gitlabCommitsQuery.data?.pages?.[0]?.pageInfo.total ?? 0
+	const totalCommitReferencedIssues = commitIssueKeys.length
+	const worklogPages = worklogEntriesQuery.data?.pages ?? []
+	const relevantIssuePages = jiraIssuesQuery.data?.pages ?? []
+	const gitlabCommitPages = gitlabCommitsQuery.data?.pages ?? []
+	const commitIssuePages = commitIssuesFromGitlabQuery.data?.pages ?? []
+	const nextWorklogPageNumber = (worklogPages[worklogPages.length - 1]?.pageInfo.page ?? 0) + 1
+	const nextRelevantIssuesPageNumber =
+		(relevantIssuePages[relevantIssuePages.length - 1]?.pageInfo.page ?? 0) + 1
+	const nextGitlabCommitsPageNumber =
+		(gitlabCommitPages[gitlabCommitPages.length - 1]?.pageInfo.page ?? 0) + 1
+	const nextCommitIssuesPageNumber =
+		(commitIssuePages[commitIssuePages.length - 1]?.pageInfo.page ?? 0) + 1
 
 	return (
 		<div className='flex flex-col gap-6 grow bg-background'>
@@ -802,7 +830,7 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 								Jira worklog entries
 							</p>
 							<p className='text-xs text-muted-foreground'>
-								Preview of up to {MAX_DEBUG_ITEMS} worklogs for current filters
+								Loaded {worklogDebugEntries.length} of {totalWorklogEntries} worklogs
 							</p>
 						</div>
 						{totalWorklogEntries > 0 ? (
@@ -816,12 +844,12 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 					</div>
 
 					{canLoadWorklogs ? (
-						worklogEntriesQuery.isLoading ? (
+						worklogEntriesQuery.status === 'pending' ? (
 							<div className='space-y-2'>
 								<Skeleton className='h-20 w-full rounded-md' />
 								<Skeleton className='h-20 w-full rounded-md' />
 							</div>
-						) : worklogEntriesQuery.error ? (
+						) : worklogEntriesQuery.status === 'error' ? (
 							<ErrorPlaceholder
 								message={`Worklogs error: ${getErrorMessage(worklogEntriesQuery.error)}`}
 								className='w-full'
@@ -840,9 +868,23 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 										/>
 									))}
 								</div>
-								{totalWorklogEntries > worklogDebugEntries.length ? (
+								{worklogEntriesQuery.hasNextPage ? (
+									<Button
+										variant='outline'
+										size='sm'
+										onClick={() => {
+											worklogEntriesQuery.fetchNextPage().catch(() => {})
+										}}
+										disabled={worklogEntriesQuery.isFetchingNextPage}
+									>
+										{worklogEntriesQuery.isFetchingNextPage
+											? `Loading page ${nextWorklogPageNumber}...`
+											: 'Load more worklogs'}
+									</Button>
+								) : null}
+								{worklogEntriesQuery.isFetchingNextPage ? (
 									<p className='text-[11px] text-muted-foreground'>
-										Showing first {worklogDebugEntries.length} of {totalWorklogEntries} entries
+										Loading page {nextWorklogPageNumber}...
 									</p>
 								) : null}
 							</>
@@ -861,7 +903,7 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 								Relevant Jira issues
 							</p>
 							<p className='text-xs text-muted-foreground'>
-								Activity touching selected users within the date range
+								Loaded {relevantIssueDebugEntries.length} of {totalRelevantIssues} issues
 							</p>
 						</div>
 						{totalRelevantIssues > 0 ? (
@@ -875,12 +917,12 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 					</div>
 
 					{canLoadRelevantIssues ? (
-						jiraIssuesQuery.isLoading ? (
+						jiraIssuesQuery.status === 'pending' ? (
 							<div className='space-y-2'>
 								<Skeleton className='h-20 w-full rounded-md' />
 								<Skeleton className='h-20 w-full rounded-md' />
 							</div>
-						) : jiraIssuesQuery.error ? (
+						) : jiraIssuesQuery.status === 'error' ? (
 							<ErrorPlaceholder
 								message={`Issues error: ${getErrorMessage(jiraIssuesQuery.error)}`}
 								className='w-full'
@@ -899,9 +941,23 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 										/>
 									))}
 								</div>
-								{totalRelevantIssues > relevantIssueDebugEntries.length ? (
+								{jiraIssuesQuery.hasNextPage ? (
+									<Button
+										variant='outline'
+										size='sm'
+										onClick={() => {
+											jiraIssuesQuery.fetchNextPage().catch(() => {})
+										}}
+										disabled={jiraIssuesQuery.isFetchingNextPage}
+									>
+										{jiraIssuesQuery.isFetchingNextPage
+											? `Loading page ${nextRelevantIssuesPageNumber}...`
+											: 'Load more issues'}
+									</Button>
+								) : null}
+								{jiraIssuesQuery.isFetchingNextPage ? (
 									<p className='text-[11px] text-muted-foreground'>
-										Showing first {relevantIssueDebugEntries.length} of {totalRelevantIssues} issues
+										Loading page {nextRelevantIssuesPageNumber}...
 									</p>
 								) : null}
 							</>
@@ -922,7 +978,7 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 								GitLab commits
 							</p>
 							<p className='text-xs text-muted-foreground'>
-								Recent commits from selected contributors within the date range
+								Loaded {gitlabCommitsDebugEntries.length} of {totalGitlabCommits} commits
 							</p>
 						</div>
 						{totalGitlabCommits > 0 ? (
@@ -936,12 +992,12 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 					</div>
 
 					{canLoadGitlabCommits ? (
-						gitlabCommitsQuery.isLoading ? (
+						gitlabCommitsQuery.status === 'pending' ? (
 							<div className='space-y-2'>
 								<Skeleton className='h-20 w-full rounded-md' />
 								<Skeleton className='h-20 w-full rounded-md' />
 							</div>
-						) : gitlabCommitsQuery.error ? (
+						) : gitlabCommitsQuery.status === 'error' ? (
 							<ErrorPlaceholder
 								message={`GitLab commits error: ${getErrorMessage(gitlabCommitsQuery.error)}`}
 								className='w-full'
@@ -960,9 +1016,23 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 										/>
 									))}
 								</div>
-								{totalGitlabCommits > gitlabCommitsDebugEntries.length ? (
+								{gitlabCommitsQuery.hasNextPage ? (
+									<Button
+										variant='outline'
+										size='sm'
+										onClick={() => {
+											gitlabCommitsQuery.fetchNextPage().catch(() => {})
+										}}
+										disabled={gitlabCommitsQuery.isFetchingNextPage}
+									>
+										{gitlabCommitsQuery.isFetchingNextPage
+											? `Loading page ${nextGitlabCommitsPageNumber}...`
+											: 'Load more commits'}
+									</Button>
+								) : null}
+								{gitlabCommitsQuery.isFetchingNextPage ? (
 									<p className='text-[11px] text-muted-foreground'>
-										Showing first {gitlabCommitsDebugEntries.length} of {totalGitlabCommits} commits
+										Loading page {nextGitlabCommitsPageNumber}...
 									</p>
 								) : null}
 							</>
@@ -981,7 +1051,7 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 								Issues referenced in commits
 							</p>
 							<p className='text-xs text-muted-foreground'>
-								Jira issues mentioned in commit titles or descriptions
+								Loaded {commitIssueDebugEntries.length} of {totalCommitReferencedIssues} references
 							</p>
 						</div>
 						{totalCommitReferencedIssues > 0 ? (
@@ -994,18 +1064,18 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 						) : null}
 					</div>
 
-					{limitedCommitIssueKeys.length === 0 ? (
+					{commitIssueKeys.length === 0 ? (
 						<p className='text-xs text-muted-foreground'>
 							No recognizable Jira issue references were found in the selected commits.
 						</p>
-					) : jiraIssuesFromCommitsQuery.isLoading ? (
+					) : commitIssuesFromGitlabQuery.status === 'pending' ? (
 						<div className='space-y-2'>
 							<Skeleton className='h-20 w-full rounded-md' />
 							<Skeleton className='h-20 w-full rounded-md' />
 						</div>
-					) : jiraIssuesFromCommitsQuery.error ? (
+					) : commitIssuesFromGitlabQuery.status === 'error' ? (
 						<ErrorPlaceholder
-							message={`Commit issues error: ${getErrorMessage(jiraIssuesFromCommitsQuery.error)}`}
+							message={`Commit issues error: ${getErrorMessage(commitIssuesFromGitlabQuery.error)}`}
 							className='w-full'
 						/>
 					) : commitIssueDebugEntries.length === 0 ? (
@@ -1022,16 +1092,23 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 									/>
 								))}
 							</div>
-							{totalCommitReferencedIssues > commitIssueDebugEntries.length ? (
-								<p className='text-[11px] text-muted-foreground'>
-									Showing first {commitIssueDebugEntries.length} of {totalCommitReferencedIssues}{' '}
-									issues
-								</p>
+							{commitIssuesFromGitlabQuery.hasNextPage ? (
+								<Button
+									variant='outline'
+									size='sm'
+									onClick={() => {
+										commitIssuesFromGitlabQuery.fetchNextPage().catch(() => {})
+									}}
+									disabled={commitIssuesFromGitlabQuery.isFetchingNextPage}
+								>
+									{commitIssuesFromGitlabQuery.isFetchingNextPage
+										? `Loading page ${nextCommitIssuesPageNumber}...`
+										: 'Load more referenced issues'}
+								</Button>
 							) : null}
-							{commitIssueKeys.length > limitedCommitIssueKeys.length ? (
+							{commitIssuesFromGitlabQuery.isFetchingNextPage ? (
 								<p className='text-[11px] text-muted-foreground'>
-									Only the first {MAX_COMMIT_ISSUE_KEYS} unique issue references are resolved at a
-									time.
+									Loading page {nextCommitIssuesPageNumber}...
 								</p>
 							) : null}
 						</>
@@ -1048,8 +1125,8 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 					worklogEntries: worklogEntriesQuery.data,
 					relevantIssues: jiraIssuesQuery.data,
 					gitlabCommits: gitlabCommitsQuery.data,
-					commitReferencedIssues: jiraIssuesFromCommitsQuery.data,
-					commitIssueKeys: limitedCommitIssueKeys,
+					commitReferencedIssues: commitIssuesFromGitlabQuery.data,
+					commitIssueKeys,
 					gitlabProjects: gitlabProjectsQuery.data,
 					gitlabContributors: gitlabContributorsQuery.data
 				}}
@@ -1660,6 +1737,18 @@ function getErrorMessage(error: unknown) {
 	}
 
 	return 'Unknown error'
+}
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+	if (size <= 0) {
+		return [items]
+	}
+
+	const chunks: T[][] = []
+	for (let index = 0; index < items.length; index += size) {
+		chunks.push(items.slice(index, index + size))
+	}
+	return chunks
 }
 
 interface DateRangeFilterProps {

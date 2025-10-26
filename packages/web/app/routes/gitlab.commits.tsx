@@ -17,6 +17,17 @@ const isoDateSchema = z
 	.regex(isoDatePattern, 'Date must be in YYYY-MM-DD format')
 	.refine(isValidIsoDate, 'Invalid calendar date')
 
+const paginationSchema = z
+	.object({
+		page: z.coerce.number().int().min(1).default(1),
+		size: z.coerce.number().int().min(1).max(100).default(12)
+	})
+	.transform(data => ({
+		page: data.page,
+		size: data.size,
+		offset: (data.page - 1) * data.size
+	}))
+
 const querySchema = z
 	.object({
 		projectIds: z.array(projectIdSchema).min(1, 'Select at least one GitLab project'),
@@ -24,6 +35,7 @@ const querySchema = z
 		dateFrom: isoDateSchema,
 		dateTo: isoDateSchema
 	})
+	.and(paginationSchema)
 	.superRefine(({ dateFrom, dateTo }, ctx) => {
 		if (parseIsoDate(dateFrom) > parseIsoDate(dateTo)) {
 			ctx.addIssue({
@@ -35,8 +47,6 @@ const querySchema = z
 	})
 
 const ISSUE_KEY_PATTERN = /\b[A-Z][A-Z0-9]+-\d+\b/g
-const MAX_COMMITS_IN_RESPONSE = 200
-const MAX_ISSUE_KEYS = 100
 
 export async function loader({ request }: Route.LoaderArgs) {
 	const session = await sessionStorage.getSession(request.headers.get('Cookie'))
@@ -57,7 +67,9 @@ export async function loader({ request }: Route.LoaderArgs) {
 		projectIds: url.searchParams.getAll('project-id'),
 		contributorIds: url.searchParams.getAll('contributor-id'),
 		dateFrom: url.searchParams.get('date-from') ?? undefined,
-		dateTo: url.searchParams.get('date-to') ?? undefined
+		dateTo: url.searchParams.get('date-to') ?? undefined,
+		page: url.searchParams.get('page') ?? undefined,
+		size: url.searchParams.get('size') ?? undefined
 	})
 
 	if (!parsed.success) {
@@ -68,6 +80,11 @@ export async function loader({ request }: Route.LoaderArgs) {
 			}
 		})
 	}
+
+	const pagination = paginationSchema.parse({
+		page: parsed.data.page,
+		size: parsed.data.size
+	})
 
 	const client = new GitLabClient({
 		accessToken: token.accessToken,
@@ -81,8 +98,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		dateRange: {
 			from: parsed.data.dateFrom,
 			to: parsed.data.dateTo
-		},
-		limitPerProject: MAX_COMMITS_IN_RESPONSE
+		}
 	})
 
 	const sortedCommits = commits.slice().sort((a, b) => {
@@ -91,14 +107,12 @@ export async function loader({ request }: Route.LoaderArgs) {
 		return bTime - aTime
 	})
 
+	const pageCommits = sortedCommits.slice(pagination.offset, pagination.offset + pagination.size)
 	const issueKeySet = new Set<string>()
 
-	const simplifiedCommits = sortedCommits.slice(0, MAX_COMMITS_IN_RESPONSE).map(commit => {
+	const simplifiedCommits = pageCommits.map(commit => {
 		const derivedIssueKeys = extractIssueKeysFromCommit(commit)
 		for (const key of derivedIssueKeys) {
-			if (issueKeySet.size >= MAX_ISSUE_KEYS) {
-				break
-			}
 			issueKeySet.add(key)
 		}
 
@@ -115,14 +129,23 @@ export async function loader({ request }: Route.LoaderArgs) {
 		}
 	})
 
+	const totalCommits = sortedCommits.length
+
 	return {
 		commits: simplifiedCommits,
 		summary: {
-			totalCommitsMatched: commits.length,
+			totalCommitsMatched: totalCommits,
 			projectsScanned: parsed.data.projectIds.length,
 			contributorsFiltered: parsed.data.contributorIds.length
 		},
-		issueKeys: Array.from(issueKeySet)
+		issueKeys: Array.from(issueKeySet),
+		pageInfo: {
+			page: pagination.page,
+			size: pagination.size,
+			total: totalCommits,
+			totalPages: totalCommits === 0 ? 0 : Math.ceil(totalCommits / pagination.size),
+			hasNextPage: pagination.offset + pagination.size < totalCommits
+		}
 	}
 }
 
