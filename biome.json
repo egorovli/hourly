@@ -13,6 +13,7 @@
 			"!.claude/**/*",
 			"!.cursor/**/*",
 			"!.old/**/*",
+			"!.old2/**/*",
 			"!.playwright-mcp/**/*",
 			"!.vscode/**/*",
 			"!.zed/**/*",

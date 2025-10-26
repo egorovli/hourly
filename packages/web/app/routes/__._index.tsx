@@ -5,7 +5,7 @@ import type { DateRange } from 'react-day-picker'
 import type { loader as jiraProjectsLoader } from './jira.projects.tsx'
 import type { loader as jiraUsersLoader } from './jira.users.tsx'
 import type { loader as jiraWorklogEntriesLoader } from './jira.worklog.entries.tsx'
-import type { loader as jiraWorklogIssuesLoader } from './jira.worklog.issues.tsx'
+import type { loader as jiraIssuesLoader } from './jira.issues.tsx'
 import type { loader as gitlabProjectsLoader } from './gitlab.projects.tsx'
 import type { loader as gitlabContributorsLoader } from './gitlab.contributors.tsx'
 
@@ -57,19 +57,14 @@ function reducer(state: State, action: Action): State {
 			return {
 				...state,
 				selectedJiraProjectIds: action.payload,
-				selectedJiraUserIds: [],
-				dateRange: undefined
+				selectedJiraUserIds: []
 			}
 
-		case 'selectedJiraUserIds.select': {
-			const shouldResetDateRange = action.payload.length === 0
-
+		case 'selectedJiraUserIds.select':
 			return {
 				...state,
-				selectedJiraUserIds: action.payload,
-				dateRange: shouldResetDateRange ? undefined : state.dateRange
+				selectedJiraUserIds: action.payload
 			}
-		}
 
 		case 'selectedGitlabProjectIds.select':
 			return {
@@ -102,6 +97,8 @@ const initialState: State = {
 	selectedGitlabContributorIds: []
 }
 
+const MAX_DEBUG_ITEMS = 12
+
 interface ErrorPlaceholderProps {
 	message: string
 	className?: string
@@ -122,9 +119,53 @@ function ErrorPlaceholder({ message, className }: ErrorPlaceholderProps): React.
 	)
 }
 
+interface FilterSectionProps {
+	title: string
+	description?: string
+	dependencyHint?: string
+	children: React.ReactNode
+}
+
+function FilterSection({
+	title,
+	description,
+	dependencyHint,
+	children
+}: FilterSectionProps): React.ReactNode {
+	return (
+		<section className='flex flex-col gap-2'>
+			<div className='flex items-center gap-2'>
+				<span className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
+					{title}
+				</span>
+				{dependencyHint ? (
+					<span className='rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground'>
+						{dependencyHint}
+					</span>
+				) : null}
+			</div>
+			{description ? <p className='text-xs text-muted-foreground'>{description}</p> : null}
+			<div className='flex flex-wrap items-center gap-3'>{children}</div>
+		</section>
+	)
+}
+
+interface FilterDependencyMessageProps {
+	children: React.ReactNode
+}
+
+function FilterDependencyMessage({ children }: FilterDependencyMessageProps): React.ReactNode {
+	return (
+		<span className='rounded-md border border-dashed border-border px-3 py-1 text-xs text-muted-foreground'>
+			{children}
+		</span>
+	)
+}
+
 export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 	// const projectsFetcher = useFetcher()
 	invariant(loaderData.user?.atlassian?.id, 'Atlassian profile ID is required in loader data')
+	invariant(loaderData.user?.gitlab?.id, 'GitLab profile ID is required in loader data')
 
 	const [state, dispatch] = useReducer(reducer, initialState)
 
@@ -235,7 +276,7 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 			Boolean(state.dateRange?.to)
 	})
 
-	const touchedIssuesQuery = useQuery({
+	const jiraIssuesQuery = useQuery({
 		queryKey: [
 			'jira-worklog-issues',
 			{
@@ -270,7 +311,7 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 				['date-to', toDate]
 			])
 
-			const response = await fetch(`/jira/worklog/issues?${searchParams}`, {
+			const response = await fetch(`/jira/issues?${searchParams}`, {
 				method: 'GET',
 				signal
 			})
@@ -279,7 +320,7 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 				throw new Error('Failed to fetch Jira issues')
 			}
 
-			const data = (await response.json()) as Awaited<ReturnType<typeof jiraWorklogIssuesLoader>>
+			const data = (await response.json()) as Awaited<ReturnType<typeof jiraIssuesLoader>>
 			return data
 		},
 
@@ -386,6 +427,74 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 		dispatch({ type: 'selectedGitlabContributorIds.select', payload: value })
 	}, [])
 
+	const hasJiraProjectsSelected = state.selectedJiraProjectIds.length > 0
+	const hasGitlabProjectsSelected = state.selectedGitlabProjectIds.length > 0
+	const hasCompleteDateRange = Boolean(state.dateRange?.from && state.dateRange?.to)
+	const canLoadWorklogs =
+		state.selectedJiraProjectIds.length > 0 &&
+		state.selectedJiraUserIds.length > 0 &&
+		hasCompleteDateRange
+	const canLoadRelevantIssues = canLoadWorklogs
+
+	const worklogDebugEntries = useMemo(() => {
+		if (!worklogEntriesQuery.data) {
+			return []
+		}
+
+		const entries: WorklogDebugEntry[] = []
+
+		for (const issue of worklogEntriesQuery.data.issues) {
+			for (const worklog of issue.worklogs) {
+				entries.push({
+					id: `${issue.issueId}-${worklog.id}`,
+					issueKey: issue.issueKey,
+					summary: issue.summary ?? 'Untitled issue',
+					projectName: issue.project?.name ?? issue.project?.key ?? 'Unknown project',
+					authorName: worklog.author?.displayName ?? worklog.author?.accountId ?? 'Unknown author',
+					started: worklog.started,
+					timeSpentSeconds: worklog.timeSpentSeconds ?? 0
+				})
+			}
+		}
+
+		return entries
+			.sort((a, b) => {
+				const aTime = a.started ? new Date(a.started).getTime() : 0
+				const bTime = b.started ? new Date(b.started).getTime() : 0
+				return bTime - aTime
+			})
+			.slice(0, MAX_DEBUG_ITEMS)
+	}, [worklogEntriesQuery.data])
+
+	const relevantIssueDebugEntries = useMemo(() => {
+		if (!jiraIssuesQuery.data) {
+			return []
+		}
+
+		const entries: RelevantIssueDebugEntry[] = jiraIssuesQuery.data.issues.map(issue => ({
+			id: issue.id,
+			key: issue.key,
+			summary: issue.fields.summary ?? 'Untitled issue',
+			projectName: issue.fields.project?.name ?? issue.fields.project?.key ?? 'Unknown project',
+			status: issue.fields.status?.name ?? 'Unknown status',
+			assignee:
+				issue.fields.assignee?.displayName ?? issue.fields.assignee?.accountId ?? 'Unassigned',
+			updated: issue.fields.updated ?? issue.fields.created,
+			created: issue.fields.created
+		}))
+
+		return entries
+			.sort((a, b) => {
+				const aTime = a.updated ? new Date(a.updated).getTime() : 0
+				const bTime = b.updated ? new Date(b.updated).getTime() : 0
+				return bTime - aTime
+			})
+			.slice(0, MAX_DEBUG_ITEMS)
+	}, [jiraIssuesQuery.data])
+
+	const totalWorklogEntries = worklogEntriesQuery.data?.summary.totalWorklogs ?? 0
+	const totalRelevantIssues = jiraIssuesQuery.data?.summary.totalIssuesMatched ?? 0
+
 	return (
 		<div className='flex flex-col gap-6 grow bg-background'>
 			<div className='flex flex-col gap-4'>
@@ -396,92 +505,246 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 					</p>
 				</div>
 
-				<div className='flex flex-col pb-2 border-b'>
-					<div className='flex flex-wrap items-center gap-3 py-2'>
-						{projectsQuery.isLoading ? (
-							<Skeleton className='h-9 w-32 rounded-md' />
-						) : projectsQuery.error ? (
-							<ErrorPlaceholder
-								message={`Projects error: ${
-									projectsQuery.error instanceof Error
-										? projectsQuery.error.message
-										: 'Unknown error'
-								}`}
-							/>
-						) : projectsQuery.data ? (
-							<JiraProjects
-								data={projectsQuery.data}
-								value={state.selectedJiraProjectIds}
-								onChange={handleJiraProjectIdsChange}
-							/>
-						) : null}
+				<div className='flex flex-col gap-6 pb-4 border-b'>
+					<FilterSection
+						title='Date range'
+						description='Independent range shared by Jira worklogs and GitLab contributors.'
+						dependencyHint='Standalone'
+					>
+						<DateRangeFilter
+							value={state.dateRange}
+							onChange={handleDateRangeChange}
+						/>
+					</FilterSection>
 
-						{usersQuery.isLoading ? (
-							<Skeleton className='h-9 w-32 rounded-md' />
-						) : usersQuery.error ? (
-							<ErrorPlaceholder
-								message={`Users error: ${
-									usersQuery.error instanceof Error ? usersQuery.error.message : 'Unknown error'
-								}`}
-							/>
-						) : usersQuery.data ? (
-							<Users
-								data={usersQuery.data}
-								value={state.selectedJiraUserIds}
-								onChange={handleJiraUserIdsChange}
-							/>
-						) : null}
-
-						{state.selectedJiraUserIds.length > 0 || state.selectedGitlabProjectIds.length > 0 ? (
-							<DateRangeFilter
-								value={state.dateRange}
-								onChange={handleDateRangeChange}
-							/>
-						) : null}
-					</div>
-
-					{loaderData.user.gitlab?.id ? (
-						<div className='flex flex-wrap items-center gap-3 py-2'>
-							{gitlabProjectsQuery.isLoading ? (
-								<Skeleton className='h-9 w-32 rounded-md' />
-							) : gitlabProjectsQuery.error ? (
-								<ErrorPlaceholder
-									message={`GitLab projects error: ${
-										gitlabProjectsQuery.error instanceof Error
-											? gitlabProjectsQuery.error.message
-											: 'Unknown error'
-									}`}
-								/>
-							) : gitlabProjectsQuery.data ? (
-								<GitlabProjects
-									data={gitlabProjectsQuery.data}
-									value={state.selectedGitlabProjectIds}
-									onChange={handleGitlabProjectIdsChange}
-								/>
-							) : null}
-
-							{state.selectedGitlabProjectIds.length > 0 ? (
-								gitlabContributorsQuery.isLoading ? (
-									<Skeleton className='h-9 w-48 rounded-md' />
-								) : gitlabContributorsQuery.error ? (
+					<div className='flex flex-col xl:flex-row gap-6'>
+						<div className='grow basis-2/5'>
+							<FilterSection
+								title='Jira'
+								description='Pick projects first, then load users to pull worklogs.'
+								dependencyHint='Projects -> Users'
+							>
+								{projectsQuery.isLoading ? (
+									<Skeleton className='h-9 w-32 rounded-md' />
+								) : projectsQuery.error ? (
 									<ErrorPlaceholder
-										message={`GitLab contributors error: ${
-											gitlabContributorsQuery.error instanceof Error
-												? gitlabContributorsQuery.error.message
+										message={`Projects error: ${
+											projectsQuery.error instanceof Error
+												? projectsQuery.error.message
 												: 'Unknown error'
 										}`}
 									/>
-								) : gitlabContributorsQuery.data && state.dateRange?.from && state.dateRange?.to ? (
-									<GitlabContributors
-										data={gitlabContributorsQuery.data}
-										value={state.selectedGitlabContributorIds}
-										onChange={handleGitlabContributorIdsChange}
+								) : projectsQuery.data ? (
+									<JiraProjects
+										data={projectsQuery.data}
+										value={state.selectedJiraProjectIds}
+										onChange={handleJiraProjectIdsChange}
 									/>
-								) : null
-							) : null}
+								) : null}
+
+								{hasJiraProjectsSelected ? (
+									usersQuery.isLoading ? (
+										<Skeleton className='h-9 w-32 rounded-md' />
+									) : usersQuery.error ? (
+										<ErrorPlaceholder
+											message={`Users error: ${
+												usersQuery.error instanceof Error
+													? usersQuery.error.message
+													: 'Unknown error'
+											}`}
+										/>
+									) : usersQuery.data ? (
+										<Users
+											data={usersQuery.data}
+											value={state.selectedJiraUserIds}
+											onChange={handleJiraUserIdsChange}
+										/>
+									) : null
+								) : (
+									<FilterDependencyMessage>
+										Select Jira projects to load users
+									</FilterDependencyMessage>
+								)}
+							</FilterSection>
 						</div>
-					) : null}
+
+						<div className='grow basis-3/5'>
+							<FilterSection
+								title='GitLab'
+								description='Contributors become available after selecting projects and a date range.'
+								dependencyHint='Projects + Date range -> Contributors'
+							>
+								{gitlabProjectsQuery.isLoading ? (
+									<Skeleton className='h-9 w-32 rounded-md' />
+								) : gitlabProjectsQuery.error ? (
+									<ErrorPlaceholder
+										message={`GitLab projects error: ${
+											gitlabProjectsQuery.error instanceof Error
+												? gitlabProjectsQuery.error.message
+												: 'Unknown error'
+										}`}
+									/>
+								) : gitlabProjectsQuery.data ? (
+									<GitlabProjects
+										data={gitlabProjectsQuery.data}
+										value={state.selectedGitlabProjectIds}
+										onChange={handleGitlabProjectIdsChange}
+									/>
+								) : null}
+
+								{hasGitlabProjectsSelected ? (
+									hasCompleteDateRange ? (
+										gitlabContributorsQuery.isLoading ? (
+											<Skeleton className='h-9 w-48 rounded-md' />
+										) : gitlabContributorsQuery.error ? (
+											<ErrorPlaceholder
+												message={`GitLab contributors error: ${
+													gitlabContributorsQuery.error instanceof Error
+														? gitlabContributorsQuery.error.message
+														: 'Unknown error'
+												}`}
+											/>
+										) : gitlabContributorsQuery.data ? (
+											<GitlabContributors
+												data={gitlabContributorsQuery.data}
+												value={state.selectedGitlabContributorIds}
+												onChange={handleGitlabContributorIdsChange}
+											/>
+										) : null
+									) : (
+										<FilterDependencyMessage>
+											Select a date range to load contributors
+										</FilterDependencyMessage>
+									)
+								) : (
+									<FilterDependencyMessage>
+										Select GitLab projects to load contributors
+									</FilterDependencyMessage>
+								)}
+							</FilterSection>
+						</div>
+					</div>
 				</div>
+			</div>
+
+			<div className='grid gap-4 xl:grid-cols-2'>
+				<section className='flex flex-col gap-3 rounded-lg border bg-card/30 p-4 shadow-sm'>
+					<div className='flex items-center justify-between gap-2'>
+						<div>
+							<p className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
+								Jira worklog entries
+							</p>
+							<p className='text-xs text-muted-foreground'>
+								Preview of up to {MAX_DEBUG_ITEMS} worklogs for current filters
+							</p>
+						</div>
+						{totalWorklogEntries > 0 ? (
+							<Badge
+								variant='secondary'
+								className='rounded-sm px-2 text-[11px] font-semibold uppercase tracking-wide'
+							>
+								{totalWorklogEntries} logs
+							</Badge>
+						) : null}
+					</div>
+
+					{canLoadWorklogs ? (
+						worklogEntriesQuery.isLoading ? (
+							<div className='space-y-2'>
+								<Skeleton className='h-20 w-full rounded-md' />
+								<Skeleton className='h-20 w-full rounded-md' />
+							</div>
+						) : worklogEntriesQuery.error ? (
+							<ErrorPlaceholder
+								message={`Worklogs error: ${getErrorMessage(worklogEntriesQuery.error)}`}
+								className='w-full'
+							/>
+						) : worklogDebugEntries.length === 0 ? (
+							<p className='text-xs text-muted-foreground'>
+								No worklog entries for the current filters.
+							</p>
+						) : (
+							<>
+								<div className='flex max-h-[24rem] flex-col gap-2 overflow-y-auto pr-1'>
+									{worklogDebugEntries.map(entry => (
+										<WorklogEntryDebugCard
+											key={entry.id}
+											entry={entry}
+										/>
+									))}
+								</div>
+								{totalWorklogEntries > worklogDebugEntries.length ? (
+									<p className='text-[11px] text-muted-foreground'>
+										Showing first {worklogDebugEntries.length} of {totalWorklogEntries} entries
+									</p>
+								) : null}
+							</>
+						)
+					) : (
+						<FilterDependencyMessage>
+							Select Jira projects, users, and a date range to inspect worklog entries
+						</FilterDependencyMessage>
+					)}
+				</section>
+
+				<section className='flex flex-col gap-3 rounded-lg border bg-card/30 p-4 shadow-sm'>
+					<div className='flex items-center justify-between gap-2'>
+						<div>
+							<p className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
+								Relevant Jira issues
+							</p>
+							<p className='text-xs text-muted-foreground'>
+								Activity touching selected users within the date range
+							</p>
+						</div>
+						{totalRelevantIssues > 0 ? (
+							<Badge
+								variant='secondary'
+								className='rounded-sm px-2 text-[11px] font-semibold uppercase tracking-wide'
+							>
+								{totalRelevantIssues} issues
+							</Badge>
+						) : null}
+					</div>
+
+					{canLoadRelevantIssues ? (
+						jiraIssuesQuery.isLoading ? (
+							<div className='space-y-2'>
+								<Skeleton className='h-20 w-full rounded-md' />
+								<Skeleton className='h-20 w-full rounded-md' />
+							</div>
+						) : jiraIssuesQuery.error ? (
+							<ErrorPlaceholder
+								message={`Issues error: ${getErrorMessage(jiraIssuesQuery.error)}`}
+								className='w-full'
+							/>
+						) : relevantIssueDebugEntries.length === 0 ? (
+							<p className='text-xs text-muted-foreground'>
+								No issues matched the current filters.
+							</p>
+						) : (
+							<>
+								<div className='flex max-h-[24rem] flex-col gap-2 overflow-y-auto pr-1'>
+									{relevantIssueDebugEntries.map(issue => (
+										<RelevantIssueDebugCard
+											key={issue.id}
+											issue={issue}
+										/>
+									))}
+								</div>
+								{totalRelevantIssues > relevantIssueDebugEntries.length ? (
+									<p className='text-[11px] text-muted-foreground'>
+										Showing first {relevantIssueDebugEntries.length} of {totalRelevantIssues} issues
+									</p>
+								) : null}
+							</>
+						)
+					) : (
+						<FilterDependencyMessage>
+							Select Jira projects, users, and a date range to load relevant issues
+						</FilterDependencyMessage>
+					)}
+				</section>
 			</div>
 
 			<div className='grow' />
@@ -491,7 +754,7 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 				data={{
 					state,
 					worklogEntries: worklogEntriesQuery.data,
-					touchedIssues: touchedIssuesQuery.data,
+					relevantIssues: jiraIssuesQuery.data,
 					gitlabProjects: gitlabProjectsQuery.data,
 					gitlabContributors: gitlabContributorsQuery.data
 				}}
@@ -964,6 +1227,112 @@ function GitlabContributors({ data, value, onChange }: GitlabContributorsProps):
 			</PopoverContent>
 		</Popover>
 	)
+}
+
+interface WorklogDebugEntry {
+	id: string
+	issueKey: string
+	summary: string
+	projectName: string
+	authorName: string
+	started?: string
+	timeSpentSeconds: number
+}
+
+function WorklogEntryDebugCard({ entry }: { entry: WorklogDebugEntry }): React.ReactNode {
+	return (
+		<article className='rounded-md border bg-background px-3 py-2 shadow-sm'>
+			<div className='flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-muted-foreground'>
+				<span>{entry.issueKey}</span>
+				<span>{formatDurationFromSeconds(entry.timeSpentSeconds)}</span>
+			</div>
+			<p className='text-sm font-medium text-foreground'>{entry.summary}</p>
+			<p className='text-xs text-muted-foreground'>{entry.projectName}</p>
+			<div className='flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground'>
+				<span>{entry.authorName}</span>
+				<span>•</span>
+				<span>{formatDateTimeLabel(entry.started)}</span>
+			</div>
+		</article>
+	)
+}
+
+interface RelevantIssueDebugEntry {
+	id: string
+	key: string
+	summary: string
+	projectName: string
+	status: string
+	assignee: string
+	updated?: string
+	created?: string
+}
+
+function RelevantIssueDebugCard({ issue }: { issue: RelevantIssueDebugEntry }): React.ReactNode {
+	return (
+		<article className='rounded-md border bg-background px-3 py-2 shadow-sm'>
+			<div className='flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-muted-foreground'>
+				<span>{issue.key}</span>
+				<span>{issue.status}</span>
+			</div>
+			<p className='text-sm font-medium text-foreground'>{issue.summary}</p>
+			<p className='text-xs text-muted-foreground'>{issue.projectName}</p>
+			<div className='flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground'>
+				<span>{issue.assignee}</span>
+				<span>•</span>
+				<span>{formatDateTimeLabel(issue.updated ?? issue.created)}</span>
+			</div>
+		</article>
+	)
+}
+
+function formatDurationFromSeconds(seconds?: number) {
+	if (!seconds || Number.isNaN(seconds)) {
+		return '0m'
+	}
+
+	const minutesTotal = Math.max(1, Math.round(seconds / 60))
+	if (minutesTotal < 60) {
+		return `${minutesTotal}m`
+	}
+
+	const hours = Math.floor(minutesTotal / 60)
+	const minutes = minutesTotal % 60
+
+	if (minutes === 0) {
+		return `${hours}h`
+	}
+
+	return `${hours}h ${minutes}m`
+}
+
+function formatDateTimeLabel(value?: string) {
+	if (!value) {
+		return 'Unknown date'
+	}
+
+	const date = new Date(value)
+	if (Number.isNaN(date.getTime())) {
+		return value
+	}
+
+	try {
+		return format(date, 'PP p')
+	} catch {
+		return date.toISOString()
+	}
+}
+
+function getErrorMessage(error: unknown) {
+	if (error instanceof Error) {
+		return error.message
+	}
+
+	if (typeof error === 'string') {
+		return error
+	}
+
+	return 'Unknown error'
 }
 
 interface DateRangeFilterProps {
