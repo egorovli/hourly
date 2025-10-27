@@ -24,7 +24,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
 import { endOfMonth, format, startOfMonth, subMonths } from 'date-fns'
 import { SiGitlab, SiAtlassian, SiAtlassianHex, SiGitlabHex } from '@icons-pack/react-simple-icons'
-import { Calendar as RBCalendar, Views, luxonLocalizer } from 'react-big-calendar'
+import { Calendar as ReactBigCalendar, Views, luxonLocalizer } from 'react-big-calendar'
 import { DateTime } from 'luxon'
 
 import {
@@ -49,6 +49,7 @@ import { Badge } from '~/components/shadcn/ui/badge.tsx'
 import { Separator } from '~/components/shadcn/ui/separator.tsx'
 import { AutoLoadProgress } from '~/components/ui/auto-load-progress.tsx'
 import { useAutoLoadInfiniteQuery } from '~/hooks/use-auto-load-infinite-query.ts'
+import { DragAndDropCalendar } from '~/lib/calendar/drag-and-drop-calendar.client.tsx'
 
 import {
 	Command,
@@ -222,7 +223,6 @@ const initialState: State = {
 }
 
 const PAGE_SIZE = 12
-
 const localizer = luxonLocalizer(DateTime)
 
 const VIEW_LABELS: Partial<Record<View, string>> = {
@@ -753,6 +753,23 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 		[handleCalendarViewDateRangeChange]
 	)
 
+	// Drag and drop handlers (no logic for now)
+	const handleEventDrop = useCallback(
+		({ event, start, end }: { event: WorklogCalendarEvent; start: Date; end: Date }) => {
+			// TODO: Implement event drop logic
+			console.log('Event dropped:', { event, start, end })
+		},
+		[]
+	)
+
+	const handleEventResize = useCallback(
+		({ event, start, end }: { event: WorklogCalendarEvent; start: Date; end: Date }) => {
+			// TODO: Implement event resize logic
+			console.log('Event resized:', { event, start, end })
+		},
+		[]
+	)
+
 	useEffect(() => {
 		if (state.dateRange?.from) {
 			setCalendarDate(state.dateRange.from)
@@ -1020,10 +1037,8 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 			className: 'worklog-calendar__event',
 			style: {
 				backgroundColor: colors.backgroundColor,
-				borderColor: colors.borderColor,
 				color: colors.textColor,
-				borderWidth: '2px',
-				borderStyle: 'solid'
+				border: 'none'
 			}
 		}
 	}, [])
@@ -1288,7 +1303,7 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 								className='rounded-lg border bg-card shadow-sm overflow-hidden'
 								style={{ height: '700px' }}
 							>
-								<RBCalendar<WorklogCalendarEvent>
+								<DragAndDropCalendar
 									className='worklog-calendar'
 									date={calendarDate}
 									defaultView={Views.WEEK}
@@ -1310,7 +1325,12 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 									min={calendarBusinessHours.start}
 									max={calendarBusinessHours.end}
 									tooltipAccessor={event => event.title}
+									onEventDrop={handleEventDrop}
+									onEventResize={handleEventResize}
+									resizable
+									draggableAccessor={() => true}
 								/>
+								)
 							</div>
 						</>
 					)
@@ -2417,8 +2437,39 @@ function RelevantIssueDebugCard({ issue }: { issue: RelevantIssueDebugEntry }): 
 }
 
 /**
- * Generate a consistent color for a given string (project name, user name, etc.)
- * Returns HSL color values for background and text
+ * Predefined pastel color palette for calendar events
+ * Each color has background, text, and border variants for good contrast
+ */
+const PASTEL_COLORS = [
+	// Soft blue
+	{ bg: 'hsl(210, 70%, 85%)', text: 'hsl(210, 50%, 25%)', border: 'hsl(210, 60%, 70%)' },
+	// Soft pink
+	{ bg: 'hsl(330, 70%, 85%)', text: 'hsl(330, 50%, 30%)', border: 'hsl(330, 60%, 70%)' },
+	// Soft green
+	{ bg: 'hsl(150, 60%, 85%)', text: 'hsl(150, 50%, 25%)', border: 'hsl(150, 50%, 70%)' },
+	// Soft purple
+	{ bg: 'hsl(270, 65%, 85%)', text: 'hsl(270, 50%, 30%)', border: 'hsl(270, 55%, 70%)' },
+	// Soft orange
+	{ bg: 'hsl(30, 75%, 85%)', text: 'hsl(30, 60%, 30%)', border: 'hsl(30, 65%, 70%)' },
+	// Soft cyan
+	{ bg: 'hsl(180, 65%, 85%)', text: 'hsl(180, 50%, 25%)', border: 'hsl(180, 55%, 70%)' },
+	// Soft rose
+	{ bg: 'hsl(350, 70%, 85%)', text: 'hsl(350, 50%, 30%)', border: 'hsl(350, 60%, 70%)' },
+	// Soft lime
+	{ bg: 'hsl(90, 60%, 85%)', text: 'hsl(90, 50%, 25%)', border: 'hsl(90, 50%, 70%)' },
+	// Soft violet
+	{ bg: 'hsl(250, 65%, 85%)', text: 'hsl(250, 50%, 30%)', border: 'hsl(250, 55%, 70%)' },
+	// Soft amber
+	{ bg: 'hsl(45, 75%, 85%)', text: 'hsl(45, 60%, 30%)', border: 'hsl(45, 65%, 70%)' },
+	// Soft teal
+	{ bg: 'hsl(170, 60%, 85%)', text: 'hsl(170, 50%, 25%)', border: 'hsl(170, 50%, 70%)' },
+	// Soft magenta
+	{ bg: 'hsl(310, 65%, 85%)', text: 'hsl(310, 50%, 30%)', border: 'hsl(310, 55%, 70%)' }
+]
+
+/**
+ * Generate a consistent pastel color for a given string (project name, user name, etc.)
+ * Uses predefined palette for consistent, pleasant colors
  */
 function generateColorFromString(str: string): {
 	backgroundColor: string
@@ -2432,24 +2483,15 @@ function generateColorFromString(str: string): {
 		hash = hash & hash // Convert to 32bit integer
 	}
 
-	// Generate hue from hash (0-360 degrees)
-	const hue = Math.abs(hash % 360)
+	// Select color from palette based on hash
+	const colorIndex = Math.abs(hash) % PASTEL_COLORS.length
+	const color = PASTEL_COLORS[colorIndex]
 
-	// Use different saturation and lightness for better visibility
-	// Higher saturation for vibrant colors, medium lightness for good contrast
-	const saturation = 70 + (Math.abs(hash) % 15) // 70-85%
-	const lightness = 50 + (Math.abs(hash >> 8) % 15) // 50-65%
-
-	// Background color with good saturation
-	const backgroundColor = `hsl(${hue}, ${saturation}%, ${lightness}%)`
-
-	// Border color (slightly darker)
-	const borderColor = `hsl(${hue}, ${saturation}%, ${Math.max(lightness - 15, 35)}%)`
-
-	// Text color: use white for dark backgrounds, dark for light backgrounds
-	const textColor = lightness < 60 ? '#ffffff' : '#1a1a1a'
-
-	return { backgroundColor, textColor, borderColor }
+	return {
+		backgroundColor: color.bg,
+		textColor: color.text,
+		borderColor: color.border
+	}
 }
 
 function formatDurationFromSeconds(seconds?: number) {
