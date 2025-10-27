@@ -1,55 +1,58 @@
 import type { Route } from './+types/__._index.ts'
 
 import type { DateRange } from 'react-day-picker'
+import type { Preferences } from '~/domain/preferences.ts'
+import type { loader as gitlabCommitsLoader } from './gitlab.commits.tsx'
+import type { loader as gitlabContributorsLoader } from './gitlab.contributors.tsx'
+import type { loader as gitlabProjectsLoader } from './gitlab.projects.tsx'
+import type { loader as jiraIssuesLoader } from './jira.issues.tsx'
 import type { loader as jiraProjectsLoader } from './jira.projects.tsx'
 import type { loader as jiraUsersLoader } from './jira.users.tsx'
 import type { loader as jiraWorklogEntriesLoader } from './jira.worklog.entries.tsx'
-import type { loader as jiraIssuesLoader } from './jira.issues.tsx'
-import type { loader as gitlabProjectsLoader } from './gitlab.projects.tsx'
-import type { loader as gitlabContributorsLoader } from './gitlab.contributors.tsx'
-import type { loader as gitlabCommitsLoader } from './gitlab.commits.tsx'
 
 import type {
+	CalendarProps,
 	DayPropGetter,
-	EventProps,
 	EventPropGetter,
+	EventProps,
 	NavigateAction,
 	SlotPropGetter,
 	ToolbarProps,
-	View,
-	CalendarProps
+	View
 } from 'react-big-calendar'
 
+import { SiAtlassian, SiAtlassianHex, SiGitlab, SiGitlabHex } from '@icons-pack/react-simple-icons'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
-import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
 import { endOfMonth, format, startOfMonth, subMonths } from 'date-fns'
-import { SiGitlab, SiAtlassian, SiAtlassianHex, SiGitlabHex } from '@icons-pack/react-simple-icons'
-import { Calendar as ReactBigCalendar, Views, luxonLocalizer } from 'react-big-calendar'
 import { DateTime } from 'luxon'
+import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
+import { luxonLocalizer, Views } from 'react-big-calendar'
 
 import {
-	Check,
-	UsersIcon,
+	BugIcon,
 	CalendarDays,
+	Check,
 	ChevronDown,
 	ChevronLeft,
 	ChevronRight,
 	Save,
-	Undo2
+	Undo2,
+	UsersIcon
 } from 'lucide-react'
 
+import { Badge } from '~/components/shadcn/ui/badge.tsx'
 import { Button } from '~/components/shadcn/ui/button.tsx'
 import { Calendar } from '~/components/shadcn/ui/calendar.tsx'
 import { Popover, PopoverContent, PopoverTrigger } from '~/components/shadcn/ui/popover.tsx'
-import { Skeleton } from '~/components/shadcn/ui/skeleton.tsx'
-import { orm, Token } from '~/lib/mikro-orm/index.ts'
-import { getSession } from '~/lib/session/storage.ts'
-import { cn, invariant } from '~/lib/util/index.ts'
-import { Badge } from '~/components/shadcn/ui/badge.tsx'
 import { Separator } from '~/components/shadcn/ui/separator.tsx'
+import { Skeleton } from '~/components/shadcn/ui/skeleton.tsx'
 import { AutoLoadProgress } from '~/components/ui/auto-load-progress.tsx'
 import { useAutoLoadInfiniteQuery } from '~/hooks/use-auto-load-infinite-query.ts'
 import { DragAndDropCalendar } from '~/lib/calendar/drag-and-drop-calendar.client.tsx'
+import * as cookies from '~/lib/cookies/index.ts'
+import { orm, Token } from '~/lib/mikro-orm/index.ts'
+import { getSession } from '~/lib/session/storage.ts'
+import { cn, invariant } from '~/lib/util/index.ts'
 
 import {
 	Command,
@@ -225,7 +228,6 @@ const initialState: State = {
 }
 
 const PAGE_SIZE = 12
-const localizer = luxonLocalizer(DateTime)
 
 const VIEW_LABELS: Partial<Record<View, string>> = {
 	month: 'Month',
@@ -313,6 +315,24 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 	// const projectsFetcher = useFetcher()
 	invariant(loaderData.user?.atlassian?.id, 'Atlassian profile ID is required in loader data')
 	invariant(loaderData.user?.gitlab?.id, 'GitLab profile ID is required in loader data')
+
+	// Extract user preferences
+	const preferences = loaderData.preferences ?? {}
+	const timezone = preferences.timezone ?? 'UTC'
+	const weekStartsOn = preferences.weekStartsOn ?? 0 // Default to Sunday
+	const workingDayStartTime = preferences.workingDayStartTime ?? '09:00'
+	const workingDayEndTime = preferences.workingDayEndTime ?? '18:00'
+
+	console.log('User preferences:', preferences)
+
+	// Create localizer with user's timezone and week start day
+	// Convert weekStartsOn from JS (0=Sunday, 1-6=Mon-Sat) to Luxon (1=Monday, 7=Sunday)
+	const luxonFirstDayOfWeek = weekStartsOn === 0 ? 7 : weekStartsOn
+	const localizer = useMemo(() => {
+		return luxonLocalizer(DateTime, {
+			firstDayOfWeek: luxonFirstDayOfWeek
+		})
+	}, [luxonFirstDayOfWeek])
 
 	const [state, dispatch] = useReducer(reducer, initialState)
 	const [isDebugOpen, setIsDebugOpen] = useState(false)
@@ -1082,9 +1102,18 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 	const calendarBusinessHours = useMemo(() => {
 		const base = calendarDate ?? new Date()
 
-		// Default business hours: 07:00 - 19:00
-		let minHour = 7
-		let maxHour = 19
+		// Parse working day times from preferences (format HH:MM)
+		const [startHourStr, startMinStr] = workingDayStartTime.split(':').map(Number)
+		const [endHourStr, endMinStr] = workingDayEndTime.split(':').map(Number)
+
+		// Calculate default bounds with -30min buffer before start, +30min buffer after end
+		const startMinutes = startHourStr * 60 + startMinStr - 30
+		const endMinutes = endHourStr * 60 + endMinStr + 30
+
+		let minHour = Math.floor(Math.max(0, startMinutes) / 60)
+		let minMinutes = Math.max(0, startMinutes) % 60
+		let maxHour = Math.floor(Math.min(24 * 60, endMinutes) / 60)
+		let maxMinutes = Math.min(24 * 60, endMinutes) % 60
 
 		// Filter events to only those in the current view range
 		const viewRange = state.calendarViewDateRange
@@ -1097,30 +1126,41 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 		// Check if any visible events extend beyond default hours
 		if (visibleEvents.length > 0) {
 			for (const event of visibleEvents) {
-				const startHour = event.start.getHours()
-				const endHour = event.end.getHours()
+				const eventStartMinutes = event.start.getHours() * 60 + event.start.getMinutes()
+				const eventEndMinutes = event.end.getHours() * 60 + event.end.getMinutes()
 
-				if (startHour < minHour) {
-					minHour = startHour
+				const defaultStartMinutes = minHour * 60 + minMinutes
+				const defaultEndMinutes = maxHour * 60 + maxMinutes
+
+				if (eventStartMinutes < defaultStartMinutes) {
+					minHour = event.start.getHours()
+					minMinutes = 0
 				}
 
-				if (endHour > maxHour) {
-					maxHour = endHour
-				}
-
-				if (event.end.getMinutes() > 0 && endHour >= maxHour) {
-					maxHour = endHour + 1
+				if (eventEndMinutes > defaultEndMinutes) {
+					maxHour = event.end.getHours()
+					maxMinutes = 0
+					// If event ends with minutes, include the next hour
+					if (event.end.getMinutes() > 0) {
+						maxHour += 1
+					}
 				}
 			}
 		}
 
 		const start = new Date(base)
-		start.setHours(minHour, 0, 0, 0)
+		start.setHours(minHour, minMinutes, 0, 0)
 		const end = new Date(base)
-		end.setHours(maxHour, 0, 0, 0)
+		end.setHours(maxHour, maxMinutes, 0, 0)
 
 		return { start, end }
-	}, [calendarDate, calendarEvents, state.calendarViewDateRange])
+	}, [
+		calendarDate,
+		calendarEvents,
+		state.calendarViewDateRange,
+		workingDayStartTime,
+		workingDayEndTime
+	])
 
 	const isAnyQueryLoading =
 		projectsQuery.isLoading ||
@@ -1160,6 +1200,7 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 							size='sm'
 							onClick={handleApplyDebugPreset}
 						>
+							<BugIcon />
 							Load Debug Preset
 						</Button>
 					) : null}
@@ -1399,7 +1440,7 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 									showMultiDayTimes
 									// allDayMaxRows={0}
 									// allDayAccessor={() => false}
-									popup
+									// popup
 									min={calendarBusinessHours.start}
 									max={calendarBusinessHours.end}
 									tooltipAccessor={event => event.title}
@@ -2836,7 +2877,12 @@ export async function loader({ request }: Route.LoaderArgs) {
 		throw new Error('Atlassian access token not found. Please reconnect your account.')
 	}
 
+	// Load user preferences from cookie
+	const header = request.headers.get('Cookie')
+	const preferences: Partial<Preferences> = (await cookies.preferences.parse(header)) ?? {}
+
 	return {
-		user
+		user,
+		preferences
 	}
 }
