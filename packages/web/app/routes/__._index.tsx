@@ -1012,12 +1012,21 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 			})
 	}, [worklogDebugEntries])
 
-	const calendarEventPropGetter = useCallback<EventPropGetter<WorklogCalendarEvent>>(
-		() => ({
-			className: 'worklog-calendar__event'
-		}),
-		[]
-	)
+	const calendarEventPropGetter = useCallback<EventPropGetter<WorklogCalendarEvent>>(event => {
+		// Generate color based on project name for consistent coloring
+		const colors = generateColorFromString(event.resource.projectName)
+
+		return {
+			className: 'worklog-calendar__event',
+			style: {
+				backgroundColor: colors.backgroundColor,
+				borderColor: colors.borderColor,
+				color: colors.textColor,
+				borderWidth: '2px',
+				borderStyle: 'solid'
+			}
+		}
+	}, [])
 
 	const calendarDayPropGetter = useCallback<DayPropGetter>(date => {
 		const isWeekend = date.getDay() === 0 || date.getDay() === 6
@@ -2249,14 +2258,17 @@ function GitlabCommitDebugCard({ commit }: { commit: GitlabCommitDebugEntry }): 
 
 function WorklogCalendarEventContent({ event }: EventProps<WorklogCalendarEvent>): React.ReactNode {
 	return (
-		<div className='flex h-full flex-col justify-center gap-1 text-xs leading-snug'>
-			<span className='text-[11px] font-semibold uppercase tracking-wide opacity-80'>
-				{event.resource.projectName}
-			</span>
-			<span className='text-sm font-semibold leading-tight'>{event.resource.issueKey}</span>
-			<span className='text-[11px] font-medium opacity-80'>
-				{formatDurationFromSeconds(event.resource.timeSpentSeconds)} · {event.resource.authorName}
-			</span>
+		<div className='flex h-full flex-col justify-center gap-0.5 px-0.5 text-xs leading-snug'>
+			<div className='flex items-center justify-between gap-1'>
+				<span className='text-[10px] font-bold uppercase tracking-wider'>
+					{event.resource.projectName}
+				</span>
+				<span className='text-[10px] font-medium tabular-nums'>
+					{formatDurationFromSeconds(event.resource.timeSpentSeconds)}
+				</span>
+			</div>
+			<span className='text-sm font-bold leading-tight truncate'>{event.resource.issueKey}</span>
+			<span className='text-[10px] font-medium truncate'>{event.resource.authorName}</span>
 		</div>
 	)
 }
@@ -2402,6 +2414,42 @@ function RelevantIssueDebugCard({ issue }: { issue: RelevantIssueDebugEntry }): 
 			</div>
 		</article>
 	)
+}
+
+/**
+ * Generate a consistent color for a given string (project name, user name, etc.)
+ * Returns HSL color values for background and text
+ */
+function generateColorFromString(str: string): {
+	backgroundColor: string
+	textColor: string
+	borderColor: string
+} {
+	// Simple hash function to generate a number from a string
+	let hash = 0
+	for (let i = 0; i < str.length; i++) {
+		hash = str.charCodeAt(i) + ((hash << 5) - hash)
+		hash = hash & hash // Convert to 32bit integer
+	}
+
+	// Generate hue from hash (0-360 degrees)
+	const hue = Math.abs(hash % 360)
+
+	// Use different saturation and lightness for better visibility
+	// Higher saturation for vibrant colors, medium lightness for good contrast
+	const saturation = 70 + (Math.abs(hash) % 15) // 70-85%
+	const lightness = 50 + (Math.abs(hash >> 8) % 15) // 50-65%
+
+	// Background color with good saturation
+	const backgroundColor = `hsl(${hue}, ${saturation}%, ${lightness}%)`
+
+	// Border color (slightly darker)
+	const borderColor = `hsl(${hue}, ${saturation}%, ${Math.max(lightness - 15, 35)}%)`
+
+	// Text color: use white for dark backgrounds, dark for light backgrounds
+	const textColor = lightness < 60 ? '#ffffff' : '#1a1a1a'
+
+	return { backgroundColor, textColor, borderColor }
 }
 
 function formatDurationFromSeconds(seconds?: number) {
