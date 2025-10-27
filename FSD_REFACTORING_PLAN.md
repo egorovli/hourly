@@ -713,6 +713,507 @@ export function AppProviders({ children }) {
 
 ---
 
+## 🔨 Implementation Plan - Chunked Approach
+
+The 5 phases above are broken down into **13 manageable chunks**, each 0.5-2 days. This granular approach allows for:
+
+- ✅ **Incremental progress** with clear completion criteria
+- ✅ **Non-breaking changes** - old route continues working until Chunk 12
+- ✅ **Parallel work opportunities** - some chunks can be done simultaneously
+- ✅ **Daily verification** - each chunk is testable independently
+
+**Total Duration:** 15.5 days (can be reduced to ~12 days with parallel execution)
+
+---
+
+### Chunk 1: Shared Utilities (1 day)
+
+**Phase:** Foundation (Phase 1)
+
+**Tasks:**
+1. Create `shared/lib/formats/` directory
+   - Move `formatDurationFromSeconds` → `format-duration.ts`
+   - Move `formatDateTimeLabel` → `format-date-time.ts`
+   - Move `getErrorMessage` → `format-error.ts`
+2. Create `shared/lib/array/`
+   - Move `chunkArray` → `chunk-array.ts`
+3. Create `shared/lib/colors/`
+   - Move `PASTEL_COLORS` array → `pastel-palette.ts`
+   - Move `generateColorFromString` → `generate-color-from-string.ts`
+4. Create `shared/config/`
+   - Move `PAGE_SIZE` constant → `pagination.ts`
+5. Create `shared/ui/`
+   - Move `ErrorPlaceholder` component → `error-placeholder.tsx`
+6. Create barrel exports (`index.ts`) for each subdirectory
+7. Update route file to import from new locations
+
+**Completion Criteria:**
+- [ ] All 5 utility functions moved to `shared/lib/` with proper exports
+- [ ] PASTEL_COLORS array accessible from `shared/lib/colors/`
+- [ ] PAGE_SIZE constant accessible from `shared/config/`
+- [ ] ErrorPlaceholder component accessible from `shared/ui/`
+- [ ] All utilities can be imported from new locations: `import { formatDurationFromSeconds } from '~/shared/lib/formats/format-duration.ts'`
+- [ ] Old route file updated to import from new locations
+- [ ] Application runs without errors (`bun run dev`)
+- [ ] Unit tests exist for all utilities (or add them)
+- [ ] TypeScript compilation succeeds with no errors
+
+**Entry Requirements:** None (foundational chunk)
+
+**Non-Breaking Guarantee:** Old route file still works, just imports moved
+
+---
+
+### Chunk 2: Entity Type Definitions (1 day)
+
+**Phase:** Foundation (Phase 1)
+
+**Tasks:**
+1. Create entity directories and type files:
+   - `entities/worklog/model/types.ts` → LocalWorklogEntry, WorklogCalendarEvent, WorklogDebugEntry, WorklogChanges
+   - `entities/jira-project/model/types.ts` → JiraProjectDebugEntry and related types
+   - `entities/jira-user/model/types.ts` → JiraUserDebugEntry and related types
+   - `entities/jira-issue/model/types.ts` → RelevantIssueDebugEntry and related types
+   - `entities/gitlab-project/model/types.ts` → GitlabProjectDebugEntry and related types
+   - `entities/gitlab-contributor/model/types.ts` → GitlabContributorDebugEntry and related types
+   - `entities/gitlab-commit/model/types.ts` → GitlabCommitDebugEntry and related types
+   - `entities/calendar-event/model/types.ts` → Calendar-specific types if needed
+2. Create barrel exports for each entity: `entities/{domain}/index.ts`
+3. Update route file to import types from entity paths
+
+**Completion Criteria:**
+- [ ] All entity types moved to `entities/{domain}/model/types.ts`
+- [ ] Each entity has `index.ts` barrel export: `export * from './model/types.ts'`
+- [ ] Route file imports updated to use new entity paths
+- [ ] TypeScript compilation succeeds with no errors
+- [ ] All type references resolved correctly across the codebase
+- [ ] No duplicate type definitions remain in route file
+- [ ] Application runs without errors
+
+**Entry Requirements:** Chunk 1 completed (shared utilities in place)
+
+**Non-Breaking Guarantee:** Old route still works, types just moved to better locations
+
+---
+
+### Chunk 3: Data Loading Features (2 days)
+
+**Phase:** Features Extraction (Phase 2)
+
+**Tasks:**
+1. Create data loading feature slices with TanStack Query hooks:
+   - `features/load-worklog-entries/api/use-worklog-query.ts`
+   - `features/load-jira-projects/api/use-jira-projects-query.ts`
+   - `features/load-jira-users/api/use-jira-users-query.ts`
+   - `features/load-jira-issues/api/use-jira-issues-query.ts`
+   - `features/load-gitlab-projects/api/use-gitlab-projects-query.ts`
+   - `features/load-gitlab-contributors/api/use-gitlab-contributors-query.ts`
+   - `features/load-gitlab-commits/api/use-gitlab-commits-query.ts`
+   - `features/load-commit-referenced-issues/api/use-commit-referenced-issues-query.ts`
+2. Create query key generators: `features/{domain}/model/query-keys.ts`
+3. Create barrel exports: `features/{domain}/index.ts`
+4. Update route file to import hooks from feature paths
+
+**Completion Criteria:**
+- [ ] All 8 TanStack Query hooks moved to `features/{domain}/api/`
+- [ ] Each feature has `model/query-keys.ts` for stable query key generation
+- [ ] Each feature has `index.ts` exporting the hooks
+- [ ] All 8 queries successfully fetch data when imported from new locations
+- [ ] No regressions in data loading behavior (pagination, auto-loading still work)
+- [ ] Query dependencies properly typed (e.g., worklog depends on project/user selections)
+- [ ] Route file updated to import hooks from feature paths
+- [ ] Application loads data correctly with no console errors
+
+**Entry Requirements:** Chunks 1 & 2 completed (utilities and types available)
+
+**Non-Breaking Guarantee:** Route still functional, just imports moved
+
+---
+
+### Chunk 4: Selector Features Part 1 - Jira (1.5 days)
+
+**Phase:** Features Extraction (Phase 2)
+
+**Tasks:**
+1. Create JiraProjectSelector feature:
+   - `features/jira-project-selector/ui/jira-project-selector.tsx` (rename from JiraProjects)
+   - `features/jira-project-selector/model/types.ts` (ProjectsProps type)
+   - `features/jira-project-selector/index.ts`
+2. Create JiraUserSelector feature:
+   - `features/jira-user-selector/ui/jira-user-selector.tsx` (rename from Users)
+   - `features/jira-user-selector/model/types.ts` (UsersProps type)
+   - `features/jira-user-selector/index.ts`
+3. Update route imports to use new feature paths
+
+**Completion Criteria:**
+- [ ] JiraProjectSelector feature fully created and exported
+- [ ] JiraUserSelector feature fully created and exported
+- [ ] Both selectors render correctly with multi-select functionality
+- [ ] Selection state properly updates parent state
+- [ ] Popover positioning works correctly
+- [ ] Loading states display properly
+- [ ] Empty states show appropriate messages
+- [ ] Route imports updated to use new feature paths
+- [ ] No visual regressions in selector UI
+- [ ] TypeScript compilation succeeds
+
+**Entry Requirements:** Chunks 1-3 completed (types, utilities, data hooks available)
+
+**Non-Breaking Guarantee:** Selectors work identically to before, just reorganized
+
+---
+
+### Chunk 5: Selector Features Part 2 - GitLab & Date (1.5 days)
+
+**Phase:** Features Extraction (Phase 2)
+
+**Tasks:**
+1. Create GitlabProjectSelector feature:
+   - `features/gitlab-project-selector/ui/gitlab-project-selector.tsx`
+   - `features/gitlab-project-selector/model/types.ts`
+   - `features/gitlab-project-selector/index.ts`
+2. Create GitlabContributorSelector feature:
+   - `features/gitlab-contributor-selector/ui/gitlab-contributor-selector.tsx`
+   - `features/gitlab-contributor-selector/model/types.ts`
+   - `features/gitlab-contributor-selector/index.ts`
+3. Create DateRangeFilter feature:
+   - `features/date-range-filter/ui/date-range-filter.tsx`
+   - `features/date-range-filter/model/types.ts`
+   - `features/date-range-filter/lib/date-utils.ts` (if any date manipulation needed)
+   - `features/date-range-filter/index.ts`
+4. Update route imports
+
+**Completion Criteria:**
+- [ ] GitlabProjectSelector feature fully created
+- [ ] GitlabContributorSelector feature fully created
+- [ ] DateRangeFilter feature fully created
+- [ ] All three selectors function correctly
+- [ ] Date picker calendar displays and allows range selection
+- [ ] GitLab selectors properly filter data based on selections
+- [ ] Route imports updated for all three features
+- [ ] No UI/UX regressions
+- [ ] All filter interactions work as expected
+
+**Entry Requirements:** Chunk 4 completed (Jira selectors pattern established)
+
+**Non-Breaking Guarantee:** All filters work as before
+
+**Parallel Opportunity:** Can be done in parallel with Chunk 6 if multiple developers available
+
+---
+
+### Chunk 6: Worklog Management Feature (2 days)
+
+**Phase:** Features Extraction (Phase 2)
+
+**Tasks:**
+1. Create state management in `features/worklog-management/model/`:
+   - `model/state.ts` (State interface)
+   - `model/actions.ts` (Action types)
+   - `model/reducer.ts` (reducer function)
+   - `model/use-worklog-state.ts` (hook wrapping useReducer)
+2. Create worklog operations in `features/worklog-management/lib/`:
+   - `lib/compare-worklogs.ts` (compareWorklogEntries function)
+   - `lib/worklog-helpers.ts` (any other worklog utility functions)
+3. Create SaveWorklogButton UI component:
+   - `ui/save-worklog-button.tsx`
+4. Create feature exports via `index.ts`
+5. Update route to use new useWorklogState hook
+
+**Completion Criteria:**
+- [ ] State management fully moved to feature slice
+- [ ] Reducer handles all action types properly
+- [ ] useWorklogState hook works correctly
+- [ ] compareWorklogEntries logic identifies new/changed entries correctly
+- [ ] SaveWorklogButton triggers correct mutations
+- [ ] State updates work correctly (selections, date range, worklog entries)
+- [ ] Route file uses the new useWorklogState hook
+- [ ] All worklog CRUD operations functional
+- [ ] No state-related regressions
+
+**Entry Requirements:** Chunks 1-5 completed (all dependencies available)
+
+**Non-Breaking Guarantee:** Worklog state management works identically
+
+**Parallel Opportunity:** Can be done in parallel with Chunks 4-5 if multiple developers available
+
+---
+
+### Chunk 7: Calendar Widget (2 days)
+
+**Phase:** Widgets Assembly (Phase 3)
+
+**Tasks:**
+1. Create WorklogCalendar widget in `widgets/worklog-calendar/`:
+   - `ui/worklog-calendar.tsx` (main calendar component using react-big-calendar)
+   - `ui/worklog-calendar-event.tsx` (WorklogCalendarEventContent component)
+   - `ui/worklog-calendar-toolbar.tsx` (WorklogCalendarToolbar component)
+   - `model/types.ts` (calendar-specific types if not in entities)
+   - `model/use-calendar-state.ts` (calendar view state)
+   - `model/use-business-hours.ts` (business hours logic)
+   - `lib/calendar-helpers.ts` (event transformation, prop getters)
+   - `config/calendar-config.ts` (localizer, default view settings)
+   - `index.ts`
+2. Update route to import and use WorklogCalendar widget
+
+**Completion Criteria:**
+- [ ] Calendar widget fully created with all sub-components
+- [ ] Calendar renders all worklog events correctly
+- [ ] Custom event styling applies (colors, borders)
+- [ ] Custom toolbar displays with correct date navigation
+- [ ] Calendar view switching works (month/week/day)
+- [ ] Event details display on click/hover
+- [ ] Calendar responsive on different screen sizes
+- [ ] Business hours configuration applied
+- [ ] Route file imports and uses WorklogCalendar widget
+- [ ] No visual or functional regressions
+
+**Entry Requirements:** Chunk 6 completed (worklog state and data available)
+
+**Non-Breaking Guarantee:** Calendar displays and interacts as before
+
+**Parallel Opportunity:** Can be done in parallel with Chunks 8-9 if multiple developers available
+
+---
+
+### Chunk 8: Filters Panel Widget (1 day)
+
+**Phase:** Widgets Assembly (Phase 3)
+
+**Tasks:**
+1. Create FiltersPanel widget in `widgets/filters-panel/`:
+   - `ui/filters-panel.tsx` (orchestrates all filter components)
+   - `ui/filters-panel-section.tsx` (reusable section wrapper if needed)
+   - `model/types.ts` (panel-specific props)
+   - `index.ts`
+2. Integrate all 5 filter features into panel
+3. Update route to use FiltersPanel widget
+
+**Completion Criteria:**
+- [ ] FiltersPanel widget created
+- [ ] Panel integrates all 5 filter features (Jira Projects, Jira Users, GitLab Projects, GitLab Contributors, Date Range)
+- [ ] Panel layout matches original design (sections, spacing, labels)
+- [ ] All filters display and function correctly within panel
+- [ ] Filter state changes propagate to parent correctly
+- [ ] Panel is responsive and scrollable if needed
+- [ ] Loading states for all filters handled gracefully
+- [ ] Route file uses FiltersPanel widget
+- [ ] No layout or interaction regressions
+
+**Entry Requirements:** Chunks 4-5 completed (all filter features available)
+
+**Non-Breaking Guarantee:** Filters panel works exactly as before
+
+**Parallel Opportunity:** Can be done in parallel with Chunks 7 and 9
+
+---
+
+### Chunk 9: Debug Panel Widget (1 day)
+
+**Phase:** Widgets Assembly (Phase 3)
+
+**Tasks:**
+1. Create DebugPanel widget in `widgets/debug-panel/`:
+   - `ui/debug-panel.tsx` (main container with sections)
+   - `ui/worklog-entry-debug-card.tsx` (WorklogEntryDebugCard)
+   - `ui/gitlab-commit-debug-card.tsx` (GitlabCommitDebugCard)
+   - `ui/relevant-issue-debug-card.tsx` (RelevantIssueDebugCard)
+   - `ui/jira-project-debug-card.tsx` (if exists)
+   - `ui/jira-user-debug-card.tsx` (if exists)
+   - `lib/debug-helpers.ts` (any debug-specific utilities)
+   - `index.ts`
+2. Integrate with existing CollapsibleDebugPanel component
+3. Update route to use DebugPanel widget
+
+**Completion Criteria:**
+- [ ] DebugPanel widget fully created
+- [ ] All debug card components render correctly
+- [ ] CollapsibleDebugPanel integration works (from `components/worklogs/`)
+- [ ] Debug data displays in proper sections
+- [ ] Syntax highlighting works for JSON data
+- [ ] Debug panel can be collapsed/expanded
+- [ ] Performance acceptable with large debug datasets
+- [ ] Route file uses DebugPanel widget
+- [ ] Debug panel only renders in development mode (if applicable)
+
+**Entry Requirements:** Chunks 1-3 completed (entity types and data available)
+
+**Non-Breaking Guarantee:** Debug panels display identical information
+
+**Parallel Opportunity:** Can be done in parallel with Chunks 7-8
+
+---
+
+### Chunk 10: Page Layer Composition (1.5 days)
+
+**Phase:** Page Composition (Phase 4)
+
+**Tasks:**
+1. Create `pages/worklogs/` structure:
+   - `ui/worklogs-page.tsx` (thin composition layer)
+   - `model/types.ts` (page props, loader data types)
+   - `model/use-worklogs-page-state.ts` (page-level state coordination if needed)
+   - `index.ts`
+2. Import and compose all widgets (FiltersPanel, WorklogCalendar, DebugPanel)
+3. Wire up worklog-management state hook
+4. Connect all data queries
+5. Handle loader data correctly
+6. Ensure page layout matches original
+
+**Completion Criteria:**
+- [ ] WorklogsPage created in `pages/worklogs/`
+- [ ] Page imports and composes all widgets correctly
+- [ ] Page uses worklog-management state hook
+- [ ] Page wires up all data queries
+- [ ] Page handles loader data correctly
+- [ ] Page layout matches original (grid, spacing, responsive)
+- [ ] All interactions between widgets work correctly
+- [ ] Page is under 300 lines (thin orchestration only)
+- [ ] Error boundaries in place if needed
+- [ ] Loading states handled at page level
+- [ ] TypeScript compilation succeeds
+
+**Entry Requirements:** Chunks 6-9 completed (all widgets and features available)
+
+**Non-Breaking Guarantee:** Page functionality identical to original route
+
+---
+
+### Chunk 11: App Providers Setup (0.5 days)
+
+**Phase:** App Layer & Testing (Phase 5)
+
+**Tasks:**
+1. Create app providers in `app/providers/`:
+   - `providers/query-provider.tsx` (TanStack Query setup)
+   - `providers/theme-provider.tsx` (if needed)
+   - `providers/index.ts` (exports all providers)
+2. Create root layout in `app/layouts/`:
+   - `layouts/root-layout.tsx` (wraps providers)
+   - `layouts/index.ts`
+3. Configure QueryClient with proper defaults
+
+**Completion Criteria:**
+- [ ] App providers configuration created
+- [ ] Providers properly wrap application at root level
+- [ ] QueryClient configured with correct defaults (staleTime, cacheTime, refetchOnWindowFocus)
+- [ ] All queries across the app work with new provider setup
+- [ ] No hydration mismatches or SSR issues
+- [ ] DevTools available in development mode
+- [ ] Provider hierarchy correct (outermost to innermost)
+- [ ] Application renders and functions normally
+
+**Entry Requirements:** All chunks 1-10 completed (pages and features ready to use)
+
+**Non-Breaking Guarantee:** App still renders and functions normally
+
+---
+
+### Chunk 12: Route Migration & Integration (1 day)
+
+**Phase:** App Layer & Testing (Phase 5)
+
+**Tasks:**
+1. Simplify original route file (`__._index.tsx`) to:
+   - Import WorklogsPage from `pages/worklogs`
+   - Export WorklogsPage as default
+   - Keep loader function (or move to page if appropriate)
+   - File should be under 50 lines
+2. Verify all imports point to FSD structure
+3. Remove unused imports and dead code
+4. Run full application test suite
+5. Perform end-to-end manual testing
+
+**Completion Criteria:**
+- [ ] Original route file simplified to under 50 lines
+- [ ] Route file imports WorklogsPage from `pages/worklogs`
+- [ ] Route exports WorklogsPage as default
+- [ ] No unused imports or dead code in route file
+- [ ] Application builds successfully (`bun run build`)
+- [ ] Type checking passes (`bun run check-types`)
+- [ ] No runtime errors on page load
+- [ ] All features work end-to-end:
+  - Filters can be changed
+  - Calendar displays worklogs
+  - Data loads correctly
+  - Save button works
+  - Debug panels show data
+- [ ] Hot reload works in development
+- [ ] No console errors or warnings
+- [ ] Performance metrics unchanged or improved
+
+**Entry Requirements:** Chunks 1-11 completed (all FSD structure in place)
+
+**Non-Breaking Guarantee:** Route delegates to page layer, zero functional changes
+
+**Critical Milestone:** This is where the old route is finally replaced - most important testing point!
+
+---
+
+### Chunk 13: Documentation & Cleanup (0.5 days)
+
+**Phase:** App Layer & Testing (Phase 5)
+
+**Tasks:**
+1. Update CLAUDE.md with FSD structure:
+   - Add FSD layer descriptions
+   - Update architecture section
+   - Add import patterns and examples
+   - Document new folder structure
+2. Create/update README sections:
+   - Architecture overview
+   - Folder structure explanation
+   - How to add new features
+   - FSD layer guidelines
+3. Add JSDoc comments to public APIs
+4. Create feature-level README.md files for complex features
+5. Remove all TODOs and commented-out code
+6. Final verification pass
+
+**Completion Criteria:**
+- [ ] CLAUDE.md updated with FSD structure and patterns
+- [ ] README.md updated with architecture overview
+- [ ] JSDoc comments added to public feature APIs (exported hooks, components)
+- [ ] Feature-level README.md files created for complex features
+- [ ] All TODOs and commented-out code removed
+- [ ] All barrel exports (`index.ts`) verified correct
+- [ ] Check for circular dependencies (none should exist)
+- [ ] Verify no cross-layer violations
+- [ ] Final smoke test of all user journeys passed
+- [ ] Git commit with descriptive message about FSD refactoring
+
+**Entry Requirements:** Chunk 12 completed (migration successful)
+
+**Non-Breaking Guarantee:** Documentation only, no code changes
+
+---
+
+### Implementation Strategy Summary
+
+**Execution Approach:**
+1. **Bottom-up:** Start with shared (layer 6), move up to app (layer 1)
+2. **Incremental:** Each chunk is independently verifiable
+3. **Non-breaking:** Old route continues to work until Chunk 12
+4. **Parallel-ready:**
+   - Chunks 4-5 can be done in parallel (selector features)
+   - Chunks 7-9 can be done in parallel (widgets)
+5. **Test-friendly:** Each chunk has clear "done" criteria
+
+**Key Success Factors:**
+- Never break the main route until Chunk 12
+- Use barrel exports consistently (`index.ts`)
+- Test after each chunk (run dev server, click around)
+- Keep types and utilities in shared/entities before moving up
+- Page layer (Chunk 10) should be very thin - just composition
+- Follow strict FSD dependency rules throughout all chunks
+
+**Timeline Optimization:**
+- **Sequential execution:** 15.5 days
+- **With parallel work (2 devs):** ~12 days
+- **With parallel work (3 devs):** ~10 days
+
+---
+
 ## 📊 Migration Checklist
 
 ### Code Organization
