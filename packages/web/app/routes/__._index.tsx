@@ -9,7 +9,24 @@ import type { loader as gitlabProjectsLoader } from './gitlab.projects.tsx'
 import type { loader as gitlabContributorsLoader } from './gitlab.contributors.tsx'
 import type { loader as gitlabCommitsLoader } from './gitlab.commits.tsx'
 
+import type {
+	DayPropGetter,
+	EventProps,
+	EventPropGetter,
+	NavigateAction,
+	SlotPropGetter,
+	ToolbarProps,
+	View,
+	CalendarProps
+} from 'react-big-calendar'
+
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
+import { endOfMonth, format, startOfMonth, subMonths } from 'date-fns'
+import { SiGitlab, SiAtlassian, SiAtlassianHex, SiGitlabHex } from '@icons-pack/react-simple-icons'
+import { Calendar as RBCalendar, Views, luxonLocalizer } from 'react-big-calendar'
+import { DateTime } from 'luxon'
+
 import {
 	Check,
 	UsersIcon,
@@ -20,23 +37,6 @@ import {
 	Save,
 	Undo2
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
-import { endOfMonth, format, startOfMonth, subMonths } from 'date-fns'
-import { SiGitlab, SiAtlassian, SiAtlassianHex, SiGitlabHex } from '@icons-pack/react-simple-icons'
-import {
-	Calendar as RBCalendar,
-	Views,
-	luxonLocalizer,
-	type DayPropGetter,
-	type EventProps,
-	type EventPropGetter,
-	type NavigateAction,
-	type SlotPropGetter,
-	type ToolbarProps,
-	type View,
-	type CalendarProps
-} from 'react-big-calendar'
-import { DateTime } from 'luxon'
 
 import { Button } from '~/components/shadcn/ui/button.tsx'
 import { Calendar } from '~/components/shadcn/ui/calendar.tsx'
