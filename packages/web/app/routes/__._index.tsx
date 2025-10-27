@@ -4,8 +4,6 @@ import type { DateRange } from 'react-day-picker'
 import type { Preferences } from '~/domain/preferences.ts'
 import type { loader as gitlabContributorsLoader } from './gitlab.contributors.tsx'
 import type { loader as gitlabProjectsLoader } from './gitlab.projects.tsx'
-import type { loader as jiraProjectsLoader } from './jira.projects.tsx'
-import type { loader as jiraUsersLoader } from './jira.users.tsx'
 
 // FSD entities layer imports
 import type {
@@ -28,7 +26,7 @@ import type {
 	View
 } from 'react-big-calendar'
 
-import { SiAtlassian, SiAtlassianHex, SiGitlab, SiGitlabHex } from '@icons-pack/react-simple-icons'
+import { SiGitlab, SiGitlabHex } from '@icons-pack/react-simple-icons'
 import { endOfMonth, format, startOfMonth, subMonths } from 'date-fns'
 import { DateTime } from 'luxon'
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
@@ -69,6 +67,8 @@ import { useGitlabProjectsQuery } from '~/features/load-gitlab-projects/index.ts
 import { useGitlabContributorsQuery } from '~/features/load-gitlab-contributors/index.ts'
 import { useGitlabCommitsQuery } from '~/features/load-gitlab-commits/index.ts'
 import { useCommitIssuesQuery } from '~/features/load-commit-issues/index.ts'
+import { JiraProjectsSelector } from '~/features/select-jira-projects/index.ts'
+import { JiraUsersSelector } from '~/features/select-jira-users/index.ts'
 
 // FSD shared layer imports
 import {
@@ -882,7 +882,7 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 										}`}
 									/>
 								) : projectsQuery.data ? (
-									<JiraProjects
+									<JiraProjectsSelector
 										data={projectsQuery.data}
 										value={state.selectedJiraProjectIds}
 										onChange={handleJiraProjectIdsChange}
@@ -901,7 +901,7 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 											}`}
 										/>
 									) : usersQuery.data ? (
-										<Users
+										<JiraUsersSelector
 											data={usersQuery.data}
 											value={state.selectedJiraUserIds}
 											onChange={handleJiraUserIdsChange}
@@ -1544,20 +1544,12 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 	)
 }
 
-interface ProjectsProps {
-	data: Awaited<ReturnType<typeof jiraProjectsLoader>>
+const projects = useMemo(() => {
+	const projects = data.resources.flatMap(resource => data.byResource[resource.id] ?? [])
+	return Object.fromEntries(projects.map(project => [project.id, project]))
+}, [data])
 
-	value: string[]
-	onChange: (value: string[]) => void
-}
-
-function JiraProjects({ data, value, onChange }: ProjectsProps): React.ReactNode {
-	const projects = useMemo(() => {
-		const projects = data.resources.flatMap(resource => data.byResource[resource.id] ?? [])
-		return Object.fromEntries(projects.map(project => [project.id, project]))
-	}, [data])
-
-	return (
+return (
 		<Popover>
 			<PopoverTrigger asChild>
 				<Button
@@ -1683,20 +1675,12 @@ function JiraProjects({ data, value, onChange }: ProjectsProps): React.ReactNode
 	)
 }
 
-interface UsersProps {
-	data: Awaited<ReturnType<typeof jiraUsersLoader>>
+const users = useMemo(() => {
+	const users = data.users.filter(user => user.active ?? false)
+	return Object.fromEntries(users.map(user => [user.accountId, user]))
+}, [data])
 
-	value: string[]
-	onChange: (value: string[]) => void
-}
-
-function Users({ data, value, onChange }: UsersProps): React.ReactNode {
-	const users = useMemo(() => {
-		const users = data.users.filter(user => user.active ?? false)
-		return Object.fromEntries(users.map(user => [user.accountId, user]))
-	}, [data])
-
-	return (
+return (
 		<Popover>
 			<PopoverTrigger asChild>
 				<Button
