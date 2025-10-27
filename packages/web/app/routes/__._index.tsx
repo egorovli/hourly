@@ -324,7 +324,9 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 					: undefined
 			}
 		],
+
 		initialPageParam: 1,
+
 		async queryFn({ queryKey, signal, pageParam }) {
 			const [, { projectIds, userIds, dateRange }] = queryKey as InferQueryKeyParams<
 				typeof queryKey
@@ -358,8 +360,10 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 			const data = (await response.json()) as Awaited<ReturnType<typeof jiraWorklogEntriesLoader>>
 			return data
 		},
+
 		getNextPageParam: lastPage =>
 			lastPage.pageInfo.hasNextPage ? lastPage.pageInfo.page + 1 : undefined,
+
 		enabled:
 			state.selectedJiraProjectIds.length > 0 &&
 			state.selectedJiraUserIds.length > 0 &&
@@ -382,7 +386,9 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 					: undefined
 			}
 		],
+
 		initialPageParam: 1,
+
 		async queryFn({ queryKey, signal, pageParam }) {
 			const [, { projectIds, userIds, dateRange }] = queryKey as InferQueryKeyParams<
 				typeof queryKey
@@ -416,8 +422,10 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 			const data = (await response.json()) as Awaited<ReturnType<typeof jiraIssuesLoader>>
 			return data
 		},
+
 		getNextPageParam: lastPage =>
 			lastPage.pageInfo.hasNextPage ? lastPage.pageInfo.page + 1 : undefined,
+
 		enabled:
 			state.selectedJiraProjectIds.length > 0 &&
 			state.selectedJiraUserIds.length > 0 &&
@@ -515,7 +523,9 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 					: undefined
 			}
 		],
+
 		initialPageParam: 1,
+
 		async queryFn({ queryKey, signal, pageParam }) {
 			const [, { projectIds, contributorIds, dateRange }] = queryKey as InferQueryKeyParams<
 				typeof queryKey
@@ -553,8 +563,10 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 			const data = (await response.json()) as Awaited<ReturnType<typeof gitlabCommitsLoader>>
 			return data
 		},
+
 		getNextPageParam: lastPage =>
 			lastPage.pageInfo.hasNextPage ? lastPage.pageInfo.page + 1 : undefined,
+
 		enabled:
 			Boolean(loaderData.user.gitlab?.id) &&
 			state.selectedGitlabProjectIds.length > 0 &&
