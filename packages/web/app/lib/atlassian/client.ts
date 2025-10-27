@@ -219,67 +219,6 @@ export class AtlassianClient {
 		return `${this.baseUrl}/ex/jira/${cloudId}${path}`
 	}
 
-	private logJiraRequest(url: URL, init?: RequestInit) {
-		try {
-			const method = (init?.method ?? 'GET').toUpperCase()
-			const jql = url.searchParams.get('jql')
-			const keys = [
-				'startAt',
-				'maxResults',
-				'expand',
-				'fields',
-				'startedAfter',
-				'startedBefore',
-				'since',
-				'until',
-				'includeInactive',
-				'query',
-				'project',
-				'cursor',
-				'nextPageToken'
-			]
-			const entries: string[] = []
-			for (const key of keys) {
-				if (url.searchParams.has(key)) {
-					const all = url.searchParams.getAll(key)
-					entries.push(`${key}=${all.join(',')}`)
-				}
-			}
-
-			let bodyIdsCount: number | null = null
-			if (method === 'POST' && url.pathname.endsWith('/worklog/list')) {
-				try {
-					const raw = init?.body
-					let body: unknown
-					if (typeof raw === 'string') {
-						body = JSON.parse(raw)
-					}
-					if (
-						body &&
-						typeof body === 'object' &&
-						'ids' in body &&
-						Array.isArray((body as { ids: unknown }).ids)
-					) {
-						bodyIdsCount = (body as { ids: unknown[] }).ids.length
-					}
-				} catch {}
-			}
-
-			const lines: string[] = []
-			lines.push(`[Jira] ${method} ${url.pathname}`)
-			if (jql) {
-				lines.push(`  JQL: ${jql}`)
-			}
-			if (entries.length > 0) {
-				lines.push(`  Params: ${entries.join(' ')}`)
-			}
-			if (bodyIdsCount !== null) {
-				lines.push(`  Body ids: ${bodyIdsCount}`)
-			}
-			process.stdout.write(`${lines.join('\n')}\n`)
-		} catch {}
-	}
-
 	private async requestJson<T>(url: string, init?: RequestInit): Promise<T> {
 		const urlObj = new URL(url)
 		// this.logJiraRequest(urlObj, init)

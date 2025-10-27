@@ -684,7 +684,7 @@ button.rbc-input::-moz-focus-inner {
    ============================================ */
 .rbc-current-time-indicator {
 	background-color: hsl(var(--destructive));
-	border-top: 2px solid hsl(var(--destructive)) !important;
+	border-top: 2px solid hsl(var(--destructive));
 	height: 2px;
 	width: 100%;
 	z-index: 10;

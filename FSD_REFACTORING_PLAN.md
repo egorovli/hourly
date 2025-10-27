@@ -728,17 +728,17 @@ The 5 phases above are broken down into **13 manageable chunks**, each 0.5-2 day
 
 ### 📊 Overall Progress
 
-**Chunks Completed:** 3/13 (23.1%)
+**Chunks Completed:** 6/13 (46.1%)
 
 **Phase 1 - Foundation:** 2/2 ✅ **COMPLETE**
 - ✅ Chunk 1: Shared Utilities (1 day) - DONE
 - ✅ Chunk 2: Entity Type Definitions (1 day) - DONE
 
-**Phase 2 - Features Extraction:** 1/4
+**Phase 2 - Features Extraction:** 4/4 ✅ **COMPLETE**
 - ✅ Chunk 3: Data Loading Features (2 days) - DONE
-- ⏳ Chunk 4: Selector Features Part 1 - Jira (1.5 days) - NEXT
-- ⏳ Chunk 5: Selector Features Part 2 - GitLab & Date (1.5 days)
-- ⏳ Chunk 6: Worklog Management Feature (2 days)
+- ✅ Chunk 4: Selector Features Part 1 - Jira (1.5 days) - DONE
+- ✅ Chunk 5: Selector Features Part 2 - GitLab & Date (1.5 days) - DONE
+- ⏳ Chunk 6: Worklog Management Feature (2 days) - NEXT
 
 **Phase 3 - Widgets Assembly:** 0/3
 - ⏳ Chunk 7: Calendar Widget (2 days)
@@ -754,8 +754,8 @@ The 5 phases above are broken down into **13 manageable chunks**, each 0.5-2 day
 - ⏳ Chunk 13: Documentation & Cleanup (0.5 days)
 
 **Metrics:**
-- **Lines removed from route file:** ~690 lines (from 2,895 lines)
-- **New FSD structure created:** `shared/` layer (15 files), `entities/` layer (17 files), `features/` layer (24 files)
+- **Lines removed from route file:** ~1,200 lines (from 2,895 lines)
+- **New FSD structure created:** `shared/` layer (15 files), `entities/` layer (17 files), `features/` layer (40 files)
 - **No breaking changes:** Application still runs without issues
 
 ---
@@ -892,26 +892,37 @@ Created `shared/lib/query/types.ts` for `InferQueryKeyParams` type utility. All 
 
 **Tasks:**
 1. Create JiraProjectSelector feature:
-   - `features/jira-project-selector/ui/jira-project-selector.tsx` (rename from JiraProjects)
-   - `features/jira-project-selector/model/types.ts` (ProjectsProps type)
-   - `features/jira-project-selector/index.ts`
+   - `features/select-jira-projects/ui/jira-projects-selector.tsx` (rename from JiraProjects)
+   - `features/select-jira-projects/model/types.ts` (ProjectsProps type)
+   - `features/select-jira-projects/index.ts`
 2. Create JiraUserSelector feature:
-   - `features/jira-user-selector/ui/jira-user-selector.tsx` (rename from Users)
-   - `features/jira-user-selector/model/types.ts` (UsersProps type)
-   - `features/jira-user-selector/index.ts`
+   - `features/select-jira-users/ui/jira-users-selector.tsx` (rename from Users)
+   - `features/select-jira-users/model/types.ts` (UsersProps type)
+   - `features/select-jira-users/index.ts`
 3. Update route imports to use new feature paths
 
 **Completion Criteria:**
-- [ ] JiraProjectSelector feature fully created and exported
-- [ ] JiraUserSelector feature fully created and exported
-- [ ] Both selectors render correctly with multi-select functionality
-- [ ] Selection state properly updates parent state
-- [ ] Popover positioning works correctly
-- [ ] Loading states display properly
-- [ ] Empty states show appropriate messages
-- [ ] Route imports updated to use new feature paths
-- [ ] No visual regressions in selector UI
-- [ ] TypeScript compilation succeeds
+- [x] JiraProjectSelector feature fully created and exported
+- [x] JiraUserSelector feature fully created and exported
+- [x] Both selectors render correctly with multi-select functionality
+- [x] Selection state properly updates parent state
+- [x] Popover positioning works correctly
+- [x] Loading states display properly
+- [x] Empty states show appropriate messages
+- [x] Route imports updated to use new feature paths
+- [x] No visual regressions in selector UI
+- [x] TypeScript compilation succeeds
+
+**Status:** ✅ **COMPLETED** (Chunk 4 of 13)
+**Completed:** 2025-01-27
+**Notes:** Successfully extracted Jira selector components:
+- Created `features/select-jira-projects/` with JiraProjectsSelector component
+- Created `features/select-jira-users/` with JiraUsersSelector component
+- Both selectors use Popover + Command pattern for multi-select functionality
+- Maintained original UI/UX with badges, icons (SiAtlassian, UsersIcon), and separators
+- Updated route file to import and use new feature components
+- Reduced route file by ~140 lines
+- All type checking passes with no errors
 
 **Entry Requirements:** Chunks 1-3 completed (types, utilities, data hooks available)
 
@@ -925,30 +936,44 @@ Created `shared/lib/query/types.ts` for `InferQueryKeyParams` type utility. All 
 
 **Tasks:**
 1. Create GitlabProjectSelector feature:
-   - `features/gitlab-project-selector/ui/gitlab-project-selector.tsx`
-   - `features/gitlab-project-selector/model/types.ts`
-   - `features/gitlab-project-selector/index.ts`
+   - `features/select-gitlab-projects/ui/gitlab-projects-selector.tsx`
+   - `features/select-gitlab-projects/model/types.ts`
+   - `features/select-gitlab-projects/index.ts`
 2. Create GitlabContributorSelector feature:
-   - `features/gitlab-contributor-selector/ui/gitlab-contributor-selector.tsx`
-   - `features/gitlab-contributor-selector/model/types.ts`
-   - `features/gitlab-contributor-selector/index.ts`
+   - `features/select-gitlab-contributors/ui/gitlab-contributors-selector.tsx`
+   - `features/select-gitlab-contributors/model/types.ts`
+   - `features/select-gitlab-contributors/index.ts`
 3. Create DateRangeFilter feature:
-   - `features/date-range-filter/ui/date-range-filter.tsx`
-   - `features/date-range-filter/model/types.ts`
-   - `features/date-range-filter/lib/date-utils.ts` (if any date manipulation needed)
-   - `features/date-range-filter/index.ts`
+   - `features/select-date-range/ui/date-range-filter.tsx`
+   - `features/select-date-range/model/types.ts`
+   - `features/select-date-range/lib/date-utils.ts` (if any date manipulation needed)
+   - `features/select-date-range/index.ts`
 4. Update route imports
 
 **Completion Criteria:**
-- [ ] GitlabProjectSelector feature fully created
-- [ ] GitlabContributorSelector feature fully created
-- [ ] DateRangeFilter feature fully created
-- [ ] All three selectors function correctly
-- [ ] Date picker calendar displays and allows range selection
-- [ ] GitLab selectors properly filter data based on selections
-- [ ] Route imports updated for all three features
-- [ ] No UI/UX regressions
-- [ ] All filter interactions work as expected
+- [x] GitlabProjectSelector feature fully created
+- [x] GitlabContributorSelector feature fully created
+- [x] DateRangeFilter feature fully created
+- [x] All three selectors function correctly
+- [x] Date picker calendar displays and allows range selection
+- [x] GitLab selectors properly filter data based on selections
+- [x] Route imports updated for all three features
+- [x] No UI/UX regressions
+- [x] All filter interactions work as expected
+
+**Status:** ✅ **COMPLETED** (Chunk 5 of 13)
+**Completed:** 2025-01-27
+**Notes:** Successfully extracted GitLab and date range selector components:
+- Created `features/select-gitlab-projects/` with GitlabProjectsSelector component
+- Created `features/select-gitlab-contributors/` with GitlabContributorsSelector component
+- Created `features/select-date-range/` with DateRangeFilter component
+- All three selectors use Popover + Command pattern consistent with Jira selectors
+- GitLab selectors use SiGitlab icon and maintain original styling
+- DateRangeFilter includes calendar component with range selection and preset options (This Month, Last Month)
+- Date range filter uses date-fns for date manipulation (format, startOfMonth, endOfMonth, subMonths)
+- Updated route file to import and use all new feature components
+- Reduced route file by ~370 lines
+- All type checking passes with no errors
 
 **Entry Requirements:** Chunk 4 completed (Jira selectors pattern established)
 
@@ -977,17 +1002,30 @@ Created `shared/lib/query/types.ts` for `InferQueryKeyParams` type utility. All 
 5. Update route to use new useWorklogState hook
 
 **Completion Criteria:**
-- [ ] State management fully moved to feature slice
-- [ ] Reducer handles all action types properly
-- [ ] useWorklogState hook works correctly
-- [ ] compareWorklogEntries logic identifies new/changed entries correctly
-- [ ] SaveWorklogButton triggers correct mutations
-- [ ] State updates work correctly (selections, date range, worklog entries)
-- [ ] Route file uses the new useWorklogState hook
-- [ ] All worklog CRUD operations functional
+- [x] State management fully moved to feature slice
+- [x] Reducer handles all action types properly
+- [x] useWorklogState hook works correctly
+- [x] compareWorklogEntries logic identifies new/changed entries correctly
+- [ ] SaveWorklogButton triggers correct mutations (stub present; mutations pending)
+- [x] State updates work correctly (selections, date range, worklog entries)
+- [x] Route file uses the new useWorklogState hook
+- [ ] All worklog CRUD operations functional (apply/revert stubbed; persistence to be added)
 - [ ] No state-related regressions
 
 **Entry Requirements:** Chunks 1-5 completed (all dependencies available)
+
+**Status:** ⏳ IN PROGRESS (Chunk 6 of 13)
+
+**Completed so far:**
+- Created `features/manage-worklogs/` with `model/state.ts`, `model/actions.ts`, `model/reducer.ts`, `model/use-worklog-state.ts`
+- Moved `compareWorklogEntries` to `features/manage-worklogs/lib/compare-worklog-entries.ts`
+- Added `ui/save-worklog-button.tsx` (stub)
+- Updated route `__._index.tsx` to use `useWorklogState` and imported `compareWorklogEntries`
+- Removed duplicate local implementations: `DateRangeFilter`, GitLab and Jira selector UIs in the route
+
+**Next:**
+- Implement real save/apply mutations and wire `SaveWorklogButton`
+- Finalize CRUD flows (create/update/delete persistence)
 
 **Non-Breaking Guarantee:** Worklog state management works identically
 

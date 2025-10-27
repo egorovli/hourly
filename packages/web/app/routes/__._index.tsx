@@ -2,8 +2,7 @@ import type { Route } from './+types/__._index.ts'
 
 import type { DateRange } from 'react-day-picker'
 import type { Preferences } from '~/domain/preferences.ts'
-import type { loader as gitlabContributorsLoader } from './gitlab.contributors.tsx'
-import type { loader as gitlabProjectsLoader } from './gitlab.projects.tsx'
+// Local loader types not needed here anymore
 
 // FSD entities layer imports
 import type {
@@ -11,7 +10,6 @@ import type {
 	LocalWorklogEntry,
 	RelevantIssueDebugEntry,
 	WorklogCalendarEvent,
-	WorklogChanges,
 	WorklogDebugEntry
 } from '~/entities/index.ts'
 
@@ -26,29 +24,26 @@ import type {
 	View
 } from 'react-big-calendar'
 
-import { SiGitlab, SiGitlabHex } from '@icons-pack/react-simple-icons'
-import { endOfMonth, format, startOfMonth, subMonths } from 'date-fns'
+// Removed local selector UIs that used simple-icons
+// date-fns used only in removed local DateRangeFilter
 import { DateTime } from 'luxon'
-import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { luxonLocalizer, Views } from 'react-big-calendar'
 
 import {
 	BugIcon,
 	CalendarDays,
-	Check,
 	ChevronDown,
 	ChevronLeft,
 	ChevronRight,
 	Save,
-	Undo2,
-	UsersIcon
+	Undo2
 } from 'lucide-react'
 
 import { Badge } from '~/components/shadcn/ui/badge.tsx'
 import { Button } from '~/components/shadcn/ui/button.tsx'
-import { Calendar } from '~/components/shadcn/ui/calendar.tsx'
-import { Popover, PopoverContent, PopoverTrigger } from '~/components/shadcn/ui/popover.tsx'
-import { Separator } from '~/components/shadcn/ui/separator.tsx'
+// Local DateRangeFilter implementation removed
+// Separator not used directly here
 import { Skeleton } from '~/components/shadcn/ui/skeleton.tsx'
 import { AutoLoadProgress } from '~/components/ui/auto-load-progress.tsx'
 import { useAutoLoadInfiniteQuery } from '~/hooks/use-auto-load-infinite-query.ts'
@@ -69,6 +64,9 @@ import { useGitlabCommitsQuery } from '~/features/load-gitlab-commits/index.ts'
 import { useCommitIssuesQuery } from '~/features/load-commit-issues/index.ts'
 import { JiraProjectsSelector } from '~/features/select-jira-projects/index.ts'
 import { JiraUsersSelector } from '~/features/select-jira-users/index.ts'
+import { GitlabProjectsSelector } from '~/features/select-gitlab-projects/index.ts'
+import { GitlabContributorsSelector } from '~/features/select-gitlab-contributors/index.ts'
+import { DateRangeFilter } from '~/features/select-date-range/index.ts'
 
 // FSD shared layer imports
 import {
@@ -79,151 +77,17 @@ import {
 	getErrorMessage
 } from '~/shared/index.ts'
 
-import {
-	Command,
-	CommandEmpty,
-	CommandGroup,
-	CommandInput,
-	CommandItem,
-	CommandList
-} from '~/components/shadcn/ui/command.tsx'
+// FSD manage-worklogs feature
+import { compareWorklogEntries, useWorklogState } from '~/features/manage-worklogs/index.ts'
+// Local Command-based selector UIs were removed in favor of feature components
 
-interface State {
-	selectedJiraProjectIds: string[]
-	selectedJiraUserIds: string[]
-	selectedGitlabProjectIds: string[]
-	selectedGitlabContributorIds: string[]
-	dateRange?: DateRange
-	calendarViewDateRange?: DateRange
-	loadedWorklogEntries: Map<string, LocalWorklogEntry>
-	localWorklogEntries: Map<string, LocalWorklogEntry>
-}
+// State type moved to features/manage-worklogs
 
-type Action =
-	| { type: 'selectedJiraProjectIds.select'; payload: string[] }
-	| { type: 'selectedJiraUserIds.select'; payload: string[] }
-	| { type: 'selectedGitlabProjectIds.select'; payload: string[] }
-	| { type: 'selectedGitlabContributorIds.select'; payload: string[] }
-	| { type: 'dateRange.select'; payload: DateRange | undefined }
-	| { type: 'calendarViewDateRange.select'; payload: DateRange | undefined }
-	| { type: 'worklog.setLoaded'; payload: LocalWorklogEntry[] }
-	| { type: 'worklog.create'; payload: Omit<LocalWorklogEntry, 'localId'> }
-	| { type: 'worklog.update'; payload: LocalWorklogEntry }
-	| { type: 'worklog.delete'; payload: string }
-	| { type: 'worklog.apply' }
-	| { type: 'worklog.revert' }
+// Action type moved to features/manage-worklogs
 
-function reducer(state: State, action: Action): State {
-	switch (action.type) {
-		case 'selectedJiraProjectIds.select':
-			return {
-				...state,
-				selectedJiraProjectIds: action.payload,
-				selectedJiraUserIds: []
-			}
+// Reducer moved to features/manage-worklogs
 
-		case 'selectedJiraUserIds.select':
-			return {
-				...state,
-				selectedJiraUserIds: action.payload
-			}
-
-		case 'selectedGitlabProjectIds.select':
-			return {
-				...state,
-				selectedGitlabProjectIds: action.payload,
-				selectedGitlabContributorIds: []
-			}
-
-		case 'selectedGitlabContributorIds.select':
-			return {
-				...state,
-				selectedGitlabContributorIds: action.payload
-			}
-
-		case 'dateRange.select':
-			return {
-				...state,
-				dateRange: action.payload
-			}
-
-		case 'calendarViewDateRange.select':
-			return {
-				...state,
-				calendarViewDateRange: action.payload
-			}
-
-		case 'worklog.setLoaded': {
-			const loadedMap = new Map<string, LocalWorklogEntry>()
-			for (const entry of action.payload) {
-				loadedMap.set(entry.localId, entry)
-			}
-			return {
-				...state,
-				loadedWorklogEntries: loadedMap,
-				localWorklogEntries: new Map(loadedMap)
-			}
-		}
-
-		case 'worklog.create': {
-			const newEntry: LocalWorklogEntry = {
-				...action.payload,
-				localId: `local-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-				isNew: true
-			}
-			const nextLocal = new Map(state.localWorklogEntries)
-			nextLocal.set(newEntry.localId, newEntry)
-			return {
-				...state,
-				localWorklogEntries: nextLocal
-			}
-		}
-
-		case 'worklog.update': {
-			const nextLocal = new Map(state.localWorklogEntries)
-			nextLocal.set(action.payload.localId, action.payload)
-			return {
-				...state,
-				localWorklogEntries: nextLocal
-			}
-		}
-
-		case 'worklog.delete': {
-			const nextLocal = new Map(state.localWorklogEntries)
-			nextLocal.delete(action.payload)
-			return {
-				...state,
-				localWorklogEntries: nextLocal
-			}
-		}
-
-		case 'worklog.apply': {
-			return {
-				...state,
-				loadedWorklogEntries: new Map(state.localWorklogEntries)
-			}
-		}
-
-		case 'worklog.revert': {
-			return {
-				...state,
-				localWorklogEntries: new Map(state.loadedWorklogEntries)
-			}
-		}
-
-		default:
-			return state
-	}
-}
-
-const initialState: State = {
-	selectedJiraProjectIds: [],
-	selectedJiraUserIds: [],
-	selectedGitlabProjectIds: [],
-	selectedGitlabContributorIds: [],
-	loadedWorklogEntries: new Map(),
-	localWorklogEntries: new Map()
-}
+// initialState moved to features/manage-worklogs
 
 const VIEW_LABELS: Partial<Record<View, string>> = {
 	month: 'Month',
@@ -299,12 +163,9 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 
 	// Extract user preferences
 	const preferences = loaderData.preferences ?? {}
-	const timezone = preferences.timezone ?? 'UTC'
 	const weekStartsOn = preferences.weekStartsOn ?? 0 // Default to Sunday
 	const workingDayStartTime = preferences.workingDayStartTime ?? '09:00'
 	const workingDayEndTime = preferences.workingDayEndTime ?? '18:00'
-
-	console.log('User preferences:', preferences)
 
 	// Create localizer with user's timezone and week start day
 	// Convert weekStartsOn from JS (0=Sunday, 1-6=Mon-Sat) to Luxon (1=Monday, 7=Sunday)
@@ -315,7 +176,7 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 		})
 	}, [luxonFirstDayOfWeek])
 
-	const [state, dispatch] = useReducer(reducer, initialState)
+	const [state, dispatch] = useWorklogState()
 	const [isDebugOpen, setIsDebugOpen] = useState(false)
 	const [calendarView, setCalendarView] = useState<View>(Views.WEEK)
 	const [calendarDate, setCalendarDate] = useState<Date>(() => state.dateRange?.from ?? new Date())
@@ -361,29 +222,47 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 		dateRange: state.dateRange
 	})
 
-	const handleJiraProjectIdsChange = useCallback((value: string[]) => {
-		dispatch({ type: 'selectedJiraProjectIds.select', payload: value })
-	}, [])
+	const handleJiraProjectIdsChange = useCallback(
+		(value: string[]) => {
+			dispatch({ type: 'selectedJiraProjectIds.select', payload: value })
+		},
+		[dispatch]
+	)
 
-	const handleJiraUserIdsChange = useCallback((value: string[]) => {
-		dispatch({ type: 'selectedJiraUserIds.select', payload: value })
-	}, [])
+	const handleJiraUserIdsChange = useCallback(
+		(value: string[]) => {
+			dispatch({ type: 'selectedJiraUserIds.select', payload: value })
+		},
+		[dispatch]
+	)
 
-	const handleDateRangeChange = useCallback((value: DateRange | undefined) => {
-		dispatch({ type: 'dateRange.select', payload: value })
-	}, [])
+	const handleDateRangeChange = useCallback(
+		(value: DateRange | undefined) => {
+			dispatch({ type: 'dateRange.select', payload: value })
+		},
+		[dispatch]
+	)
 
-	const handleGitlabProjectIdsChange = useCallback((value: string[]) => {
-		dispatch({ type: 'selectedGitlabProjectIds.select', payload: value })
-	}, [])
+	const handleGitlabProjectIdsChange = useCallback(
+		(value: string[]) => {
+			dispatch({ type: 'selectedGitlabProjectIds.select', payload: value })
+		},
+		[dispatch]
+	)
 
-	const handleGitlabContributorIdsChange = useCallback((value: string[]) => {
-		dispatch({ type: 'selectedGitlabContributorIds.select', payload: value })
-	}, [])
+	const handleGitlabContributorIdsChange = useCallback(
+		(value: string[]) => {
+			dispatch({ type: 'selectedGitlabContributorIds.select', payload: value })
+		},
+		[dispatch]
+	)
 
-	const handleCalendarViewDateRangeChange = useCallback((value: DateRange | undefined) => {
-		dispatch({ type: 'calendarViewDateRange.select', payload: value })
-	}, [])
+	const handleCalendarViewDateRangeChange = useCallback(
+		(value: DateRange | undefined) => {
+			dispatch({ type: 'calendarViewDateRange.select', payload: value })
+		},
+		[dispatch]
+	)
 
 	const handleApplyDebugPreset = useCallback(() => {
 		if (!isDebugPresetAvailable) {
@@ -418,17 +297,20 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 		handleJiraUserIdsChange
 	])
 
-	const handleWorklogDelete = useCallback((localId: string) => {
-		dispatch({ type: 'worklog.delete', payload: localId })
-	}, [])
+	const handleWorklogDelete = useCallback(
+		(localId: string) => {
+			dispatch({ type: 'worklog.delete', payload: localId })
+		},
+		[dispatch]
+	)
 
 	const handleWorklogApply = useCallback(() => {
 		dispatch({ type: 'worklog.apply' })
-	}, [])
+	}, [dispatch])
 
 	const handleWorklogRevert = useCallback(() => {
 		dispatch({ type: 'worklog.revert' })
-	}, [])
+	}, [dispatch])
 
 	const handleControlledCalendarViewChange = useCallback((nextView: View) => {
 		setCalendarView(nextView)
@@ -479,21 +361,13 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 	)
 
 	// Drag and drop handlers (no logic for now)
-	const handleEventDrop = useCallback(
-		({ event, start, end }: { event: WorklogCalendarEvent; start: Date; end: Date }) => {
-			// TODO: Implement event drop logic
-			console.log('Event dropped:', { event, start, end })
-		},
-		[]
-	)
+	const handleEventDrop = useCallback(() => {
+		/* no-op for now */
+	}, [])
 
-	const handleEventResize = useCallback(
-		({ event, start, end }: { event: WorklogCalendarEvent; start: Date; end: Date }) => {
-			// TODO: Implement event resize logic
-			console.log('Event resized:', { event, start, end })
-		},
-		[]
-	)
+	const handleEventResize = useCallback(() => {
+		/* no-op for now */
+	}, [])
 
 	useEffect(() => {
 		if (state.dateRange?.from) {
@@ -521,7 +395,7 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 		)
 
 		dispatch({ type: 'worklog.setLoaded', payload: loadedEntries })
-	}, [worklogEntriesQuery.data])
+	}, [dispatch, worklogEntriesQuery.data])
 
 	const worklogChanges = useMemo(
 		() => compareWorklogEntries(state.loadedWorklogEntries, state.localWorklogEntries),
@@ -749,12 +623,24 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 		const base = calendarDate ?? new Date()
 
 		// Parse working day times from preferences (format HH:MM)
-		const [startHourStr, startMinStr] = workingDayStartTime.split(':').map(Number)
-		const [endHourStr, endMinStr] = workingDayEndTime.split(':').map(Number)
+		const [startHourStr, startMinStr] = (workingDayStartTime ?? '09:00').split(':').map(Number)
+		const [endHourStr, endMinStr] = (workingDayEndTime ?? '18:00').split(':').map(Number)
+		const isInvalid =
+			Number.isNaN(startHourStr) ||
+			Number.isNaN(startMinStr) ||
+			Number.isNaN(endHourStr) ||
+			Number.isNaN(endMinStr)
+		const defaultStart = new Date(base)
+		defaultStart.setHours(8, 0, 0, 0)
+		const defaultEnd = new Date(base)
+		defaultEnd.setHours(18, 0, 0, 0)
+		if (isInvalid) {
+			return { start: defaultStart, end: defaultEnd }
+		}
 
 		// Calculate default bounds with -30min buffer before start, +30min buffer after end
-		const startMinutes = startHourStr * 60 + startMinStr - 30
-		const endMinutes = endHourStr * 60 + endMinStr + 30
+		const startMinutes = (startHourStr ?? 9) * 60 + (startMinStr ?? 0) - 30
+		const endMinutes = (endHourStr ?? 18) * 60 + (endMinStr ?? 0) + 30
 
 		let minHour = Math.floor(Math.max(0, startMinutes) / 60)
 		let minMinutes = Math.max(0, startMinutes) % 60
@@ -763,11 +649,16 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 
 		// Filter events to only those in the current view range
 		const viewRange = state.calendarViewDateRange
-		const visibleEvents = viewRange
-			? calendarEvents.filter(event => {
-					return event.start <= viewRange.to && event.end >= viewRange.from
-				})
-			: calendarEvents
+		const visibleEvents =
+			viewRange?.from && viewRange?.to
+				? calendarEvents.filter(
+						event =>
+							viewRange.to &&
+							viewRange.from &&
+							event.start <= viewRange.to &&
+							event.end >= viewRange.from
+					)
+				: calendarEvents
 
 		// Check if any visible events extend beyond default hours
 		if (visibleEvents.length > 0) {
@@ -932,7 +823,7 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 										}`}
 									/>
 								) : gitlabProjectsQuery.data ? (
-									<GitlabProjects
+									<GitlabProjectsSelector
 										data={gitlabProjectsQuery.data}
 										value={state.selectedGitlabProjectIds}
 										onChange={handleGitlabProjectIdsChange}
@@ -952,7 +843,7 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 												}`}
 											/>
 										) : gitlabContributorsQuery.data ? (
-											<GitlabContributors
+											<GitlabContributorsSelector
 												data={gitlabContributorsQuery.data}
 												value={state.selectedGitlabContributorIds}
 												onChange={handleGitlabContributorIdsChange}
@@ -1544,455 +1435,9 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 	)
 }
 
-const projects = useMemo(() => {
-	const projects = data.resources.flatMap(resource => data.byResource[resource.id] ?? [])
-	return Object.fromEntries(projects.map(project => [project.id, project]))
-}, [data])
+// Local Jira selector implementations moved to features/select-jira-*
 
-return (
-		<Popover>
-			<PopoverTrigger asChild>
-				<Button
-					variant='outline'
-					role='combobox'
-				>
-					<SiAtlassian
-						aria-hidden
-						color={SiAtlassianHex}
-					/>
-					Jira projects
-					{value?.length > 0 && (
-						<>
-							<Separator
-								orientation='vertical'
-								className='mx-1 h-4'
-							/>
-							<Badge
-								variant='secondary'
-								className='rounded-sm px-1 font-normal lg:hidden'
-							>
-								{value.length}
-							</Badge>
-							<div className='hidden space-x-1 lg:flex'>
-								{value.length > 2 ? (
-									<Badge
-										variant='secondary'
-										className='rounded-sm px-1 font-normal'
-									>
-										{value.length} selected
-									</Badge>
-								) : (
-									value.map(id => {
-										return (
-											<Badge
-												variant='secondary'
-												key={id}
-												className='rounded-sm px-1 font-normal'
-											>
-												{projects[id]?.name ?? 'Unknown project'}
-											</Badge>
-										)
-									})
-								)}
-							</div>
-						</>
-					)}
-				</Button>
-			</PopoverTrigger>
-			<PopoverContent
-				className='p-0'
-				align='start'
-			>
-				<Command>
-					<CommandInput
-						placeholder='Search projects...'
-						className='h-9'
-					/>
-					<CommandList>
-						<CommandEmpty>No projects found.</CommandEmpty>
-
-						{data.resources.map(resource => {
-							const resourceProjects = data.byResource[resource.id] ?? []
-							if (resourceProjects.length === 0) {
-								return null
-							}
-
-							return (
-								<CommandGroup
-									key={resource.id}
-									heading={
-										<div className='flex items-center gap-2'>
-											{resource.avatarUrl ? (
-												<img
-													src={resource.avatarUrl}
-													alt={`${resource.name} avatar`}
-													className='h-4 w-4 rounded-sm'
-												/>
-											) : null}
-
-											<span>{resource.name}</span>
-										</div>
-									}
-								>
-									{resourceProjects.map(project => (
-										<CommandItem
-											key={project.id}
-											value={project.id}
-											onSelect={id => {
-												const next = value.includes(id)
-													? value.filter(v => v !== id)
-													: [...value, id]
-												onChange(next)
-											}}
-										>
-											{project.avatarUrls?.['48x48'] ? (
-												<img
-													src={project.avatarUrls['48x48']}
-													alt={`${project.name} avatar`}
-													className='h-6 w-6 rounded-sm'
-												/>
-											) : null}
-
-											<div className='flex flex-col text-left'>
-												<span className='text-sm font-medium'>{project.name}</span>
-												<span className='text-xs text-muted-foreground'>{project.key}</span>
-											</div>
-											<Check
-												className={cn('ml-auto h-4 w-4', {
-													'opacity-0': !value.includes(project.id),
-													'opacity-100': value.includes(project.id)
-												})}
-											/>
-										</CommandItem>
-									))}
-								</CommandGroup>
-							)
-						})}
-					</CommandList>
-				</Command>
-			</PopoverContent>
-		</Popover>
-	)
-}
-
-const users = useMemo(() => {
-	const users = data.users.filter(user => user.active ?? false)
-	return Object.fromEntries(users.map(user => [user.accountId, user]))
-}, [data])
-
-return (
-		<Popover>
-			<PopoverTrigger asChild>
-				<Button
-					variant='outline'
-					role='combobox'
-				>
-					<UsersIcon />
-					Users
-					{value?.length > 0 && (
-						<>
-							<Separator
-								orientation='vertical'
-								className='mx-1 h-4'
-							/>
-							<Badge
-								variant='secondary'
-								className='rounded-sm px-1 font-normal lg:hidden'
-							>
-								{value.length}
-							</Badge>
-							<div className='hidden space-x-1 lg:flex'>
-								{value.length > 2 ? (
-									<Badge
-										variant='secondary'
-										className='rounded-sm px-1 font-normal'
-									>
-										{value.length} selected
-									</Badge>
-								) : (
-									value.map(id => {
-										return (
-											<Badge
-												variant='secondary'
-												key={id}
-												className='rounded-sm px-1 font-normal'
-											>
-												{users[id]?.displayName ?? 'Unknown user'}
-											</Badge>
-										)
-									})
-								)}
-							</div>
-						</>
-					)}
-				</Button>
-			</PopoverTrigger>
-			<PopoverContent
-				className='p-0'
-				align='start'
-			>
-				<Command>
-					<CommandInput
-						placeholder='Search users...'
-						className='h-9'
-					/>
-					<CommandList>
-						<CommandEmpty>No users found.</CommandEmpty>
-
-						<CommandGroup>
-							{data.users.map(user => (
-								<CommandItem
-									key={user.accountId}
-									value={user.accountId}
-									onSelect={id => {
-										const next = value.includes(id) ? value.filter(v => v !== id) : [...value, id]
-										onChange(next)
-									}}
-								>
-									{user.avatarUrls?.['48x48'] ? (
-										<img
-											src={user.avatarUrls['48x48']}
-											alt={`${user.displayName} avatar`}
-											className='h-6 w-6 rounded-sm'
-										/>
-									) : null}
-
-									<span className='flex flex-col text-left'>
-										<span className='text-sm font-medium'>{user.displayName}</span>
-
-										{typeof user.emailAddress === 'string' && (
-											<span className='text-xs text-muted-foreground'>{user.emailAddress}</span>
-										)}
-									</span>
-									<Check
-										className={cn('ml-auto h-4 w-4', {
-											'opacity-0': !value.includes(user.accountId),
-											'opacity-100': value.includes(user.accountId)
-										})}
-									/>
-								</CommandItem>
-							))}
-						</CommandGroup>
-					</CommandList>
-				</Command>
-			</PopoverContent>
-		</Popover>
-	)
-}
-
-interface GitlabProjectsProps {
-	data: Awaited<ReturnType<typeof gitlabProjectsLoader>>
-
-	value: string[]
-	onChange: (value: string[]) => void
-}
-
-function GitlabProjects({ data, value, onChange }: GitlabProjectsProps): React.ReactNode {
-	return (
-		<Popover>
-			<PopoverTrigger asChild>
-				<Button
-					variant='outline'
-					role='combobox'
-				>
-					<SiGitlab color={SiGitlabHex} />
-					GitLab projects
-					{value?.length > 0 && (
-						<>
-							<Separator
-								orientation='vertical'
-								className='mx-1 h-4'
-							/>
-							<Badge
-								variant='secondary'
-								className='rounded-sm px-1 font-normal lg:hidden'
-							>
-								{value.length}
-							</Badge>
-							<div className='hidden space-x-1 lg:flex'>
-								{value.length > 2 ? (
-									<Badge
-										variant='secondary'
-										className='rounded-sm px-1 font-normal'
-									>
-										{value.length} selected
-									</Badge>
-								) : (
-									value.map(id => {
-										const project = data.projects.find(project => String(project.id) === id)
-										return (
-											<Badge
-												variant='secondary'
-												className='rounded-sm px-1 font-normal'
-												key={id}
-											>
-												{project?.name_with_namespace ?? project?.path_with_namespace ?? 'Project'}
-											</Badge>
-										)
-									})
-								)}
-							</div>
-						</>
-					)}
-				</Button>
-			</PopoverTrigger>
-			<PopoverContent
-				className='p-0'
-				align='start'
-			>
-				<Command>
-					<CommandInput
-						placeholder='Search GitLab projects...'
-						className='h-9'
-					/>
-					<CommandList>
-						<CommandEmpty>No GitLab projects found.</CommandEmpty>
-
-						<CommandGroup>
-							{data.projects.map(project => (
-								<CommandItem
-									key={project.id}
-									value={String(project.id)}
-									onSelect={id => {
-										const next = value.includes(id)
-											? value.filter(item => item !== id)
-											: [...value, id]
-										onChange(next)
-									}}
-								>
-									<div className='flex flex-col text-left'>
-										<span className='text-sm font-medium'>{project.name}</span>
-										<span className='text-xs text-muted-foreground'>
-											{project.path_with_namespace}
-										</span>
-									</div>
-									<Check
-										className={cn('ml-auto h-4 w-4', {
-											'opacity-0': !value.includes(String(project.id)),
-											'opacity-100': value.includes(String(project.id))
-										})}
-									/>
-								</CommandItem>
-							))}
-						</CommandGroup>
-					</CommandList>
-				</Command>
-			</PopoverContent>
-		</Popover>
-	)
-}
-
-interface GitlabContributorsProps {
-	data: Awaited<ReturnType<typeof gitlabContributorsLoader>>
-
-	value: string[]
-	onChange: (value: string[]) => void
-}
-
-function GitlabContributors({ data, value, onChange }: GitlabContributorsProps): React.ReactNode {
-	const contributors = data.contributors
-
-	return (
-		<Popover>
-			<PopoverTrigger asChild>
-				<Button
-					variant='outline'
-					role='combobox'
-				>
-					<UsersIcon />
-					GitLab contributors
-					{value?.length > 0 && (
-						<>
-							<Separator
-								orientation='vertical'
-								className='mx-1 h-4'
-							/>
-							<Badge
-								variant='secondary'
-								className='rounded-sm px-1 font-normal lg:hidden'
-							>
-								{value.length}
-							</Badge>
-							<div className='hidden space-x-1 lg:flex'>
-								{value.length > 2 ? (
-									<Badge
-										variant='secondary'
-										className='rounded-sm px-1 font-normal'
-									>
-										{value.length} selected
-									</Badge>
-								) : (
-									value.map(id => {
-										const contributor = contributors.find(item => item.id === id)
-										return (
-											<Badge
-												variant='secondary'
-												className='rounded-sm px-1 font-normal'
-												key={id}
-											>
-												{contributor?.name ?? contributor?.email ?? 'Contributor'}
-											</Badge>
-										)
-									})
-								)}
-							</div>
-						</>
-					)}
-				</Button>
-			</PopoverTrigger>
-			<PopoverContent
-				className='p-0'
-				align='start'
-			>
-				<Command>
-					<CommandInput
-						placeholder='Search contributors...'
-						className='h-9'
-					/>
-					<CommandList>
-						<CommandEmpty>No contributors found.</CommandEmpty>
-
-						<CommandGroup>
-							{contributors.map(contributor => (
-								<CommandItem
-									key={contributor.id}
-									value={contributor.id}
-									onSelect={id => {
-										const next = value.includes(id)
-											? value.filter(item => item !== id)
-											: [...value, id]
-										onChange(next)
-									}}
-								>
-									<div className='flex flex-col text-left'>
-										<span className='text-sm font-medium'>
-											{contributor.name ?? contributor.email ?? 'Unknown contributor'}
-										</span>
-										<span className='text-xs text-muted-foreground'>
-											{contributor.email ?? 'No email available'}
-										</span>
-									</div>
-									<div
-										className='ml-auto text-xs text-muted-foreground line-clamp-1 shrink-0 font-mono'
-										title={`${contributor.commitCount} commits`}
-									>
-										{contributor.commitCount}
-									</div>
-									<Check
-										className={cn('ml-2 h-4 w-4', {
-											'opacity-0': !value.includes(contributor.id),
-											'opacity-100': value.includes(contributor.id)
-										})}
-									/>
-								</CommandItem>
-							))}
-						</CommandGroup>
-					</CommandList>
-				</Command>
-			</PopoverContent>
-		</Popover>
-	)
-}
+// Local GitLab selector implementations moved to features/select-gitlab-*
 
 function GitlabCommitDebugCard({ commit }: { commit: GitlabCommitDebugEntry }): React.ReactNode {
 	return (
@@ -2171,163 +1616,9 @@ function RelevantIssueDebugCard({ issue }: { issue: RelevantIssueDebugEntry }): 
 	)
 }
 
-function compareWorklogEntries(
-	loaded: Map<string, LocalWorklogEntry>,
-	local: Map<string, LocalWorklogEntry>
-): WorklogChanges {
-	const newEntries: LocalWorklogEntry[] = []
-	const modifiedEntries: LocalWorklogEntry[] = []
-	const deletedEntries: LocalWorklogEntry[] = []
+// Local compareWorklogEntries moved to features/manage-worklogs
 
-	for (const [localId, localEntry] of local) {
-		const loadedEntry = loaded.get(localId)
-
-		if (loadedEntry) {
-			const isModified =
-				localEntry.issueKey !== loadedEntry.issueKey ||
-				localEntry.started !== loadedEntry.started ||
-				localEntry.timeSpentSeconds !== loadedEntry.timeSpentSeconds ||
-				localEntry.summary !== loadedEntry.summary
-
-			if (isModified) {
-				modifiedEntries.push(localEntry)
-			}
-		} else {
-			newEntries.push(localEntry)
-		}
-	}
-
-	for (const [localId, loadedEntry] of loaded) {
-		if (!local.has(localId)) {
-			deletedEntries.push(loadedEntry)
-		}
-	}
-
-	return {
-		newEntries,
-		modifiedEntries,
-		deletedEntries,
-		hasChanges: newEntries.length > 0 || modifiedEntries.length > 0 || deletedEntries.length > 0,
-		changeCount: newEntries.length + modifiedEntries.length + deletedEntries.length
-	}
-}
-
-interface DateRangeFilterProps {
-	value?: DateRange
-	onChange: (value: DateRange | undefined) => void
-}
-
-function DateRangeFilter({ value, onChange }: DateRangeFilterProps): React.ReactNode {
-	const label = useMemo(() => {
-		if (value?.from && value?.to) {
-			return `${format(value.from, 'MMM d, yyyy')} – ${format(value.to, 'MMM d, yyyy')}`
-		}
-
-		if (value?.from) {
-			return `${format(value.from, 'MMM d, yyyy')} – …`
-		}
-
-		return 'Select date range'
-	}, [value])
-
-	const defaultMonth = value?.from ?? value?.to ?? new Date()
-
-	const handleSelect = useCallback(
-		(nextValue: DateRange | undefined) => {
-			onChange(nextValue)
-		},
-		[onChange]
-	)
-
-	const handlePreset = useCallback(
-		(preset: 'this-month' | 'previous-month') => {
-			const baseDate = preset === 'this-month' ? new Date() : subMonths(new Date(), 1)
-			const from = startOfMonth(baseDate)
-			const to = endOfMonth(baseDate)
-
-			onChange({
-				from,
-				to
-			})
-		},
-		[onChange]
-	)
-
-	return (
-		<Popover>
-			<PopoverTrigger asChild>
-				<Button
-					variant='outline'
-					className='flex min-w-60 items-center justify-between gap-2 font-normal'
-				>
-					<span className='flex items-center gap-2'>
-						<CalendarDays
-							className='h-4 w-4'
-							aria-hidden
-						/>
-						<span
-							className={cn('text-sm', {
-								'text-muted-foreground': !value?.from
-							})}
-						>
-							{label}
-						</span>
-					</span>
-					<ChevronDown
-						className='h-4 w-4 opacity-60'
-						aria-hidden
-					/>
-				</Button>
-			</PopoverTrigger>
-			<PopoverContent
-				className='w-auto p-0'
-				align='start'
-			>
-				<div className='flex flex-col gap-3 p-3'>
-					<Calendar
-						mode='range'
-						numberOfMonths={2}
-						defaultMonth={defaultMonth}
-						selected={value}
-						onSelect={handleSelect}
-						initialFocus
-						className='rounded-lg border'
-					/>
-
-					<div className='flex flex-col gap-2 border-t pt-3'>
-						<span className='text-xs font-medium uppercase tracking-wide text-muted-foreground'>
-							Presets
-						</span>
-						<div className='flex flex-wrap gap-2'>
-							<Button
-								type='button'
-								variant='outline'
-								size='sm'
-								className='flex-1'
-								onClick={() => {
-									handlePreset('this-month')
-								}}
-							>
-								This month
-							</Button>
-							<Button
-								type='button'
-								variant='outline'
-								size='sm'
-								className='flex-1'
-								onClick={() => {
-									handlePreset('previous-month')
-								}}
-							>
-								Previous month
-							</Button>
-						</div>
-					</div>
-				</div>
-			</PopoverContent>
-		</Popover>
-	)
-}
+// Local DateRangeFilter moved to features/select-date-range
 
 export async function loader({ request }: Route.LoaderArgs) {
 	const session = await getSession(request.headers.get('Cookie'))
