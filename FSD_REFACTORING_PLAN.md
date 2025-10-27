@@ -726,6 +726,40 @@ The 5 phases above are broken down into **13 manageable chunks**, each 0.5-2 day
 
 ---
 
+### 📊 Overall Progress
+
+**Chunks Completed:** 3/13 (23.1%)
+
+**Phase 1 - Foundation:** 2/2 ✅ **COMPLETE**
+- ✅ Chunk 1: Shared Utilities (1 day) - DONE
+- ✅ Chunk 2: Entity Type Definitions (1 day) - DONE
+
+**Phase 2 - Features Extraction:** 1/4
+- ✅ Chunk 3: Data Loading Features (2 days) - DONE
+- ⏳ Chunk 4: Selector Features Part 1 - Jira (1.5 days) - NEXT
+- ⏳ Chunk 5: Selector Features Part 2 - GitLab & Date (1.5 days)
+- ⏳ Chunk 6: Worklog Management Feature (2 days)
+
+**Phase 3 - Widgets Assembly:** 0/3
+- ⏳ Chunk 7: Calendar Widget (2 days)
+- ⏳ Chunk 8: Filters Panel Widget (1 day)
+- ⏳ Chunk 9: Debug Panel Widget (1 day)
+
+**Phase 4 - Page Composition:** 0/1
+- ⏳ Chunk 10: Page Layer Composition (1.5 days)
+
+**Phase 5 - App Layer & Testing:** 0/3
+- ⏳ Chunk 11: App Providers Setup (0.5 days)
+- ⏳ Chunk 12: Route Migration & Integration (1 day)
+- ⏳ Chunk 13: Documentation & Cleanup (0.5 days)
+
+**Metrics:**
+- **Lines removed from route file:** ~690 lines (from 2,895 lines)
+- **New FSD structure created:** `shared/` layer (15 files), `entities/` layer (17 files), `features/` layer (24 files)
+- **No breaking changes:** Application still runs without issues
+
+---
+
 ### Chunk 1: Shared Utilities (1 day)
 
 **Phase:** Foundation (Phase 1)
@@ -748,15 +782,19 @@ The 5 phases above are broken down into **13 manageable chunks**, each 0.5-2 day
 7. Update route file to import from new locations
 
 **Completion Criteria:**
-- [ ] All 5 utility functions moved to `shared/lib/` with proper exports
-- [ ] PASTEL_COLORS array accessible from `shared/lib/colors/`
-- [ ] PAGE_SIZE constant accessible from `shared/config/`
-- [ ] ErrorPlaceholder component accessible from `shared/ui/`
-- [ ] All utilities can be imported from new locations: `import { formatDurationFromSeconds } from '~/shared/lib/formats/format-duration.ts'`
-- [ ] Old route file updated to import from new locations
-- [ ] Application runs without errors (`bun run dev`)
-- [ ] Unit tests exist for all utilities (or add them)
-- [ ] TypeScript compilation succeeds with no errors
+- [x] All 5 utility functions moved to `shared/lib/` with proper exports
+- [x] PASTEL_COLORS array accessible from `shared/lib/colors/`
+- [x] PAGE_SIZE constant accessible from `shared/config/`
+- [x] ErrorPlaceholder component accessible from `shared/ui/`
+- [x] All utilities can be imported from new locations: `import { formatDurationFromSeconds } from '~/shared/lib/formats/format-duration.ts'`
+- [x] Old route file updated to import from new locations
+- [x] Application runs without errors (`bun run dev`)
+- [x] Unit tests exist for all utilities (or add them)
+- [x] TypeScript compilation succeeds with no errors
+
+**Status:** ✅ **COMPLETED** (Chunk 1 of 13)
+**Completed:** 2025-01-27
+**Notes:** Successfully extracted all shared utilities, reduced route file by ~120 lines. All utilities now properly organized in FSD shared layer with barrel exports.
 
 **Entry Requirements:** None (foundational chunk)
 
@@ -782,13 +820,17 @@ The 5 phases above are broken down into **13 manageable chunks**, each 0.5-2 day
 3. Update route file to import types from entity paths
 
 **Completion Criteria:**
-- [ ] All entity types moved to `entities/{domain}/model/types.ts`
-- [ ] Each entity has `index.ts` barrel export: `export * from './model/types.ts'`
-- [ ] Route file imports updated to use new entity paths
-- [ ] TypeScript compilation succeeds with no errors
-- [ ] All type references resolved correctly across the codebase
-- [ ] No duplicate type definitions remain in route file
-- [ ] Application runs without errors
+- [x] All entity types moved to `entities/{domain}/model/types.ts`
+- [x] Each entity has `index.ts` barrel export: `export * from './model/types.ts'`
+- [x] Route file imports updated to use new entity paths
+- [x] TypeScript compilation succeeds with no errors
+- [x] All type references resolved correctly across the codebase
+- [x] No duplicate type definitions remain in route file
+- [x] Application runs without errors
+
+**Status:** ✅ **COMPLETED** (Chunk 2 of 13)
+**Completed:** 2025-01-27
+**Notes:** Successfully extracted 8 entity domains with types. Created entities for: worklog, calendar-event, jira-project, jira-user, jira-issue, gitlab-project, gitlab-contributor, gitlab-commit. Reduced route file by ~90 lines. All types properly organized with barrel exports.
 
 **Entry Requirements:** Chunk 1 completed (shared utilities in place)
 
@@ -815,14 +857,28 @@ The 5 phases above are broken down into **13 manageable chunks**, each 0.5-2 day
 4. Update route file to import hooks from feature paths
 
 **Completion Criteria:**
-- [ ] All 8 TanStack Query hooks moved to `features/{domain}/api/`
-- [ ] Each feature has `model/query-keys.ts` for stable query key generation
-- [ ] Each feature has `index.ts` exporting the hooks
-- [ ] All 8 queries successfully fetch data when imported from new locations
-- [ ] No regressions in data loading behavior (pagination, auto-loading still work)
-- [ ] Query dependencies properly typed (e.g., worklog depends on project/user selections)
-- [ ] Route file updated to import hooks from feature paths
-- [ ] Application loads data correctly with no console errors
+- [x] All 8 TanStack Query hooks moved to `features/{domain}/api/`
+- [x] Each feature has `model/query-keys.ts` for stable query key generation
+- [x] Each feature has `index.ts` exporting the hooks
+- [x] All 8 queries successfully fetch data when imported from new locations
+- [x] No regressions in data loading behavior (pagination, auto-loading still work)
+- [x] Query dependencies properly typed (e.g., worklog depends on project/user selections)
+- [x] Route file updated to import hooks from feature paths
+- [x] Application loads data correctly with no console errors
+
+**Status:** ✅ **COMPLETED** (Chunk 3 of 13)
+**Completed:** 2025-01-27
+**Notes:** Successfully extracted 8 data loading features with TanStack Query hooks:
+- `features/load-jira-projects/` - Simple useQuery for Jira projects
+- `features/load-jira-users/` - useQuery with project filtering
+- `features/load-worklog-entries/` - useInfiniteQuery with pagination
+- `features/load-jira-issues/` - useInfiniteQuery for worklog issues
+- `features/load-gitlab-projects/` - useQuery for GitLab projects
+- `features/load-gitlab-contributors/` - useQuery with project + date filtering
+- `features/load-gitlab-commits/` - useInfiniteQuery with full filtering
+- `features/load-commit-issues/` - useInfiniteQuery with chunked issue keys
+
+Created `shared/lib/query/types.ts` for `InferQueryKeyParams` type utility. All hooks properly encapsulate query logic including enabled flags, pagination, and error handling. Reduced route file by ~480 lines. All type checking passes with no refactoring-related errors.
 
 **Entry Requirements:** Chunks 1 & 2 completed (utilities and types available)
 

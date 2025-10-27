@@ -2,13 +2,10 @@ import type { Route } from './+types/__._index.ts'
 
 import type { DateRange } from 'react-day-picker'
 import type { Preferences } from '~/domain/preferences.ts'
-import type { loader as gitlabCommitsLoader } from './gitlab.commits.tsx'
 import type { loader as gitlabContributorsLoader } from './gitlab.contributors.tsx'
 import type { loader as gitlabProjectsLoader } from './gitlab.projects.tsx'
-import type { loader as jiraIssuesLoader } from './jira.issues.tsx'
 import type { loader as jiraProjectsLoader } from './jira.projects.tsx'
 import type { loader as jiraUsersLoader } from './jira.users.tsx'
-import type { loader as jiraWorklogEntriesLoader } from './jira.worklog.entries.tsx'
 
 import type {
 	CalendarProps,
@@ -22,7 +19,6 @@ import type {
 } from 'react-big-calendar'
 
 import { SiAtlassian, SiAtlassianHex, SiGitlab, SiGitlabHex } from '@icons-pack/react-simple-icons'
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { endOfMonth, format, startOfMonth, subMonths } from 'date-fns'
 import { DateTime } from 'luxon'
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
@@ -54,6 +50,35 @@ import { orm, Token } from '~/lib/mikro-orm/index.ts'
 import { getSession } from '~/lib/session/storage.ts'
 import { cn, invariant } from '~/lib/util/index.ts'
 
+// FSD shared layer imports
+import {
+	ErrorPlaceholder,
+	formatDateTimeLabel,
+	formatDurationFromSeconds,
+	generateColorFromString,
+	getErrorMessage
+} from '~/shared/index.ts'
+
+// FSD entities layer imports
+import type {
+	GitlabCommitDebugEntry,
+	LocalWorklogEntry,
+	RelevantIssueDebugEntry,
+	WorklogCalendarEvent,
+	WorklogChanges,
+	WorklogDebugEntry
+} from '~/entities/index.ts'
+
+// FSD features layer imports
+import { useJiraProjectsQuery } from '~/features/load-jira-projects/index.ts'
+import { useJiraUsersQuery } from '~/features/load-jira-users/index.ts'
+import { useWorklogEntriesQuery } from '~/features/load-worklog-entries/index.ts'
+import { useJiraIssuesQuery } from '~/features/load-jira-issues/index.ts'
+import { useGitlabProjectsQuery } from '~/features/load-gitlab-projects/index.ts'
+import { useGitlabContributorsQuery } from '~/features/load-gitlab-contributors/index.ts'
+import { useGitlabCommitsQuery } from '~/features/load-gitlab-commits/index.ts'
+import { useCommitIssuesQuery } from '~/features/load-commit-issues/index.ts'
+
 import {
 	Command,
 	CommandEmpty,
@@ -62,33 +87,6 @@ import {
 	CommandItem,
 	CommandList
 } from '~/components/shadcn/ui/command.tsx'
-
-interface LocalWorklogEntry {
-	localId: string
-	id?: string
-	issueKey: string
-	summary: string
-	projectName: string
-	authorName: string
-	started: string
-	timeSpentSeconds: number
-	isNew?: boolean
-}
-
-interface WorklogCalendarEvent {
-	id: string
-	title: string
-	start: Date
-	end: Date
-	resource: {
-		issueKey: string
-		issueSummary: string
-		projectName: string
-		authorName: string
-		timeSpentSeconds: number
-		started: string
-	}
-}
 
 interface State {
 	selectedJiraProjectIds: string[]
@@ -227,8 +225,6 @@ const initialState: State = {
 	localWorklogEntries: new Map()
 }
 
-const PAGE_SIZE = 12
-
 const VIEW_LABELS: Partial<Record<View, string>> = {
 	month: 'Month',
 	week: 'Week',
@@ -251,26 +247,6 @@ const DEBUG_FILTER_PRESET = {
 const FORMATS: CalendarProps<WorklogCalendarEvent>['formats'] = {
 	dayFormat: 'EEE, MMM d',
 	timeGutterFormat: 'HH:mm'
-}
-
-interface ErrorPlaceholderProps {
-	message: string
-	className?: string
-}
-
-function ErrorPlaceholder({ message, className }: ErrorPlaceholderProps): React.ReactNode {
-	return (
-		<output
-			className={cn(
-				'flex h-10 min-w-32 items-center justify-center rounded-md border border-destructive/50 bg-destructive/10 px-3 text-sm font-medium text-destructive',
-				className
-			)}
-			aria-label={`Error: ${message}`}
-			title={message}
-		>
-			Error
-		</output>
-	)
 }
 
 interface FilterSectionProps {
@@ -345,322 +321,44 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 	const [calendarDate, setCalendarDate] = useState<Date>(() => state.dateRange?.from ?? new Date())
 	const isDebugPresetAvailable = import.meta.env.DEV
 
-	const projectsQuery = useQuery({
-		queryKey: [
-			'jira-projects',
-			{
-				userId: loaderData.user.atlassian.id
-			}
-		],
-
-		async queryFn({ queryKey, signal, pageParam }) {
-			const response = await fetch('/jira/projects', {
-				method: 'GET',
-				signal
-			})
-
-			if (!response.ok) {
-				throw new Error('Failed to fetch Jira projects')
-			}
-
-			const data = (await response.json()) as Awaited<ReturnType<typeof jiraProjectsLoader>>
-			return data
-		}
+	const projectsQuery = useJiraProjectsQuery({
+		userId: loaderData.user.atlassian.id
 	})
 
-	const usersQuery = useQuery({
-		queryKey: [
-			'jira-users',
-			{
-				userId: loaderData.user.atlassian.id,
-				projectIds: state.selectedJiraProjectIds
-			}
-		],
-
-		async queryFn({ queryKey, signal }) {
-			const [, { projectIds }] = queryKey as InferQueryKeyParams<typeof queryKey>
-			const searchParams = new URLSearchParams([...projectIds.map(id => ['project-id', id])])
-
-			const response = await fetch(`/jira/users?${searchParams}`, {
-				method: 'GET',
-				signal
-			})
-
-			if (!response.ok) {
-				throw new Error('Failed to fetch Jira users')
-			}
-
-			const data = (await response.json()) as Awaited<ReturnType<typeof jiraUsersLoader>>
-			return data
-		},
-
-		enabled: state.selectedJiraProjectIds.length > 0
+	const usersQuery = useJiraUsersQuery({
+		userId: loaderData.user.atlassian.id,
+		projectIds: state.selectedJiraProjectIds
 	})
 
-	const worklogEntriesQuery = useInfiniteQuery({
-		queryKey: [
-			'jira-worklog-entries',
-			{
-				userId: loaderData.user.atlassian.id,
-				projectIds: state.selectedJiraProjectIds,
-				userIds: state.selectedJiraUserIds,
-				dateRange: state.dateRange
-					? {
-							from: state.dateRange.from?.toISOString(),
-							to: state.dateRange.to?.toISOString()
-						}
-					: undefined
-			}
-		],
-
-		initialPageParam: 1,
-
-		async queryFn({ queryKey, signal, pageParam }) {
-			const [, { projectIds, userIds, dateRange }] = queryKey as InferQueryKeyParams<
-				typeof queryKey
-			>
-
-			if (!dateRange?.from || !dateRange?.to) {
-				throw new Error('Date range is required to fetch worklog entries')
-			}
-
-			const fromDate = format(new Date(dateRange.from), 'yyyy-MM-dd')
-			const toDate = format(new Date(dateRange.to), 'yyyy-MM-dd')
-
-			const searchParams = new URLSearchParams([
-				...projectIds.map(id => ['project-id', id]),
-				...userIds.map(id => ['user-id', id]),
-				['date-from', fromDate],
-				['date-to', toDate],
-				['page', String(pageParam)],
-				['size', String(PAGE_SIZE)]
-			])
-
-			const response = await fetch(`/jira/worklog/entries?${searchParams}`, {
-				method: 'GET',
-				signal
-			})
-
-			if (!response.ok) {
-				throw new Error('Failed to fetch Jira worklog entries')
-			}
-
-			const data = (await response.json()) as Awaited<ReturnType<typeof jiraWorklogEntriesLoader>>
-			return data
-		},
-
-		getNextPageParam: lastPage =>
-			lastPage.pageInfo.hasNextPage ? lastPage.pageInfo.page + 1 : undefined,
-
-		enabled:
-			state.selectedJiraProjectIds.length > 0 &&
-			state.selectedJiraUserIds.length > 0 &&
-			Boolean(state.dateRange?.from) &&
-			Boolean(state.dateRange?.to)
+	const worklogEntriesQuery = useWorklogEntriesQuery({
+		userId: loaderData.user.atlassian.id,
+		projectIds: state.selectedJiraProjectIds,
+		userIds: state.selectedJiraUserIds,
+		dateRange: state.dateRange
 	})
 
-	const jiraIssuesQuery = useInfiniteQuery({
-		queryKey: [
-			'jira-worklog-issues',
-			{
-				userId: loaderData.user.atlassian.id,
-				projectIds: state.selectedJiraProjectIds,
-				userIds: state.selectedJiraUserIds,
-				dateRange: state.dateRange
-					? {
-							from: state.dateRange.from?.toISOString(),
-							to: state.dateRange.to?.toISOString()
-						}
-					: undefined
-			}
-		],
-
-		initialPageParam: 1,
-
-		async queryFn({ queryKey, signal, pageParam }) {
-			const [, { projectIds, userIds, dateRange }] = queryKey as InferQueryKeyParams<
-				typeof queryKey
-			>
-
-			if (!dateRange?.from || !dateRange?.to) {
-				throw new Error('Date range is required to fetch touched issues')
-			}
-
-			const fromDate = format(new Date(dateRange.from), 'yyyy-MM-dd')
-			const toDate = format(new Date(dateRange.to), 'yyyy-MM-dd')
-
-			const searchParams = new URLSearchParams([
-				...projectIds.map(id => ['project-id', id]),
-				...userIds.map(id => ['user-id', id]),
-				['date-from', fromDate],
-				['date-to', toDate],
-				['page', String(pageParam)],
-				['size', String(PAGE_SIZE)]
-			])
-
-			const response = await fetch(`/jira/issues?${searchParams}`, {
-				method: 'GET',
-				signal
-			})
-
-			if (!response.ok) {
-				throw new Error('Failed to fetch Jira issues')
-			}
-
-			const data = (await response.json()) as Awaited<ReturnType<typeof jiraIssuesLoader>>
-			return data
-		},
-
-		getNextPageParam: lastPage =>
-			lastPage.pageInfo.hasNextPage ? lastPage.pageInfo.page + 1 : undefined,
-
-		enabled:
-			state.selectedJiraProjectIds.length > 0 &&
-			state.selectedJiraUserIds.length > 0 &&
-			Boolean(state.dateRange?.from) &&
-			Boolean(state.dateRange?.to)
+	const jiraIssuesQuery = useJiraIssuesQuery({
+		userId: loaderData.user.atlassian.id,
+		projectIds: state.selectedJiraProjectIds,
+		userIds: state.selectedJiraUserIds,
+		dateRange: state.dateRange
 	})
 
-	const gitlabProjectsQuery = useQuery({
-		queryKey: [
-			'gitlab-projects',
-			{
-				userId: loaderData.user.gitlab?.id
-			}
-		],
-
-		async queryFn({ signal }) {
-			const response = await fetch('/gitlab/projects', {
-				method: 'GET',
-				signal
-			})
-
-			if (!response.ok) {
-				throw new Error('Failed to fetch GitLab projects')
-			}
-
-			const data = (await response.json()) as Awaited<ReturnType<typeof gitlabProjectsLoader>>
-			return data
-		},
-
-		enabled: Boolean(loaderData.user.gitlab?.id)
+	const gitlabProjectsQuery = useGitlabProjectsQuery({
+		userId: loaderData.user.gitlab?.id
 	})
 
-	const gitlabContributorsQuery = useQuery({
-		queryKey: [
-			'gitlab-contributors',
-			{
-				userId: loaderData.user.gitlab?.id,
-				projectIds: state.selectedGitlabProjectIds,
-				dateRange: state.dateRange
-					? {
-							from: state.dateRange.from?.toISOString(),
-							to: state.dateRange.to?.toISOString()
-						}
-					: undefined
-			}
-		],
-
-		async queryFn({ queryKey, signal }) {
-			const [, { projectIds, dateRange }] = queryKey as InferQueryKeyParams<typeof queryKey>
-
-			if (!dateRange?.from || !dateRange?.to) {
-				throw new Error('Date range is required to fetch GitLab contributors')
-			}
-
-			const fromDate = format(new Date(dateRange.from), 'yyyy-MM-dd')
-			const toDate = format(new Date(dateRange.to), 'yyyy-MM-dd')
-
-			const searchParams = new URLSearchParams([
-				...projectIds.map(id => ['project-id', id]),
-				['date-from', fromDate],
-				['date-to', toDate]
-			])
-
-			const response = await fetch(`/gitlab/contributors?${searchParams}`, {
-				method: 'GET',
-				signal
-			})
-
-			if (!response.ok) {
-				throw new Error('Failed to fetch GitLab contributors')
-			}
-
-			const data = (await response.json()) as Awaited<ReturnType<typeof gitlabContributorsLoader>>
-			return data
-		},
-
-		enabled:
-			Boolean(loaderData.user.gitlab?.id) &&
-			state.selectedGitlabProjectIds.length > 0 &&
-			Boolean(state.dateRange?.from) &&
-			Boolean(state.dateRange?.to)
+	const gitlabContributorsQuery = useGitlabContributorsQuery({
+		userId: loaderData.user.gitlab?.id,
+		projectIds: state.selectedGitlabProjectIds,
+		dateRange: state.dateRange
 	})
 
-	const gitlabCommitsQuery = useInfiniteQuery({
-		queryKey: [
-			'gitlab-commits',
-			{
-				projectIds: state.selectedGitlabProjectIds,
-				contributorIds: state.selectedGitlabContributorIds,
-				dateRange: state.dateRange
-					? {
-							from: state.dateRange.from?.toISOString(),
-							to: state.dateRange.to?.toISOString()
-						}
-					: undefined
-			}
-		],
-
-		initialPageParam: 1,
-
-		async queryFn({ queryKey, signal, pageParam }) {
-			const [, { projectIds, contributorIds, dateRange }] = queryKey as InferQueryKeyParams<
-				typeof queryKey
-			>
-
-			if (!dateRange?.from || !dateRange?.to) {
-				throw new Error('Date range is required to fetch GitLab commits')
-			}
-
-			if (projectIds.length === 0 || contributorIds.length === 0) {
-				throw new Error('Projects and contributors are required to fetch GitLab commits')
-			}
-
-			const fromDate = format(new Date(dateRange.from), 'yyyy-MM-dd')
-			const toDate = format(new Date(dateRange.to), 'yyyy-MM-dd')
-
-			const searchParams = new URLSearchParams([
-				...projectIds.map(id => ['project-id', id]),
-				...contributorIds.map(id => ['contributor-id', id]),
-				['date-from', fromDate],
-				['date-to', toDate],
-				['page', String(pageParam)],
-				['size', String(PAGE_SIZE)]
-			])
-
-			const response = await fetch(`/gitlab/commits?${searchParams.toString()}`, {
-				method: 'GET',
-				signal
-			})
-
-			if (!response.ok) {
-				throw new Error('Failed to fetch GitLab commits')
-			}
-
-			const data = (await response.json()) as Awaited<ReturnType<typeof gitlabCommitsLoader>>
-			return data
-		},
-
-		getNextPageParam: lastPage =>
-			lastPage.pageInfo.hasNextPage ? lastPage.pageInfo.page + 1 : undefined,
-
-		enabled:
-			Boolean(loaderData.user.gitlab?.id) &&
-			state.selectedGitlabProjectIds.length > 0 &&
-			state.selectedGitlabContributorIds.length > 0 &&
-			Boolean(state.dateRange?.from) &&
-			Boolean(state.dateRange?.to)
+	const gitlabCommitsQuery = useGitlabCommitsQuery({
+		userId: loaderData.user.gitlab?.id,
+		projectIds: state.selectedGitlabProjectIds,
+		contributorIds: state.selectedGitlabContributorIds,
+		dateRange: state.dateRange
 	})
 
 	const handleJiraProjectIdsChange = useCallback((value: string[]) => {
@@ -871,13 +569,6 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 		return Array.from(keys)
 	}, [gitlabCommitsQuery.data])
 
-	const commitIssueKeyChunks = useMemo(() => {
-		if (commitIssueKeys.length === 0) {
-			return []
-		}
-		return chunkArray(commitIssueKeys, PAGE_SIZE)
-	}, [commitIssueKeys])
-
 	// Auto-load all pages for infinite queries
 	const worklogAutoLoad = useAutoLoadInfiniteQuery(worklogEntriesQuery, {
 		enabled: canLoadWorklogs
@@ -889,58 +580,8 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 		enabled: canLoadGitlabCommits
 	})
 
-	const commitIssuesFromGitlabQuery = useInfiniteQuery({
-		queryKey: ['jira-issues-from-commits', commitIssueKeys.join('|')],
-		initialPageParam: 0,
-		enabled: commitIssueKeyChunks.length > 0,
-		async queryFn({ pageParam, signal }) {
-			const chunk = commitIssueKeyChunks[pageParam] ?? []
-			if (chunk.length === 0) {
-				return {
-					issues: [],
-					summary: {
-						totalIssuesMatched: 0,
-						truncated: false
-					},
-					pageInfo: {
-						page: pageParam + 1,
-						size: PAGE_SIZE,
-						total: commitIssueKeys.length,
-						totalPages: Math.ceil(commitIssueKeys.length / PAGE_SIZE),
-						hasNextPage: pageParam + 1 < commitIssueKeyChunks.length
-					}
-				}
-			}
-
-			const searchParams = new URLSearchParams(chunk.map(key => ['issue-key', key]))
-			searchParams.set('page', '1')
-			searchParams.set('size', String(chunk.length))
-
-			const response = await fetch(`/jira/issues?${searchParams.toString()}`, {
-				method: 'GET',
-				signal
-			})
-
-			if (!response.ok) {
-				throw new Error('Failed to fetch Jira issues referenced in commits')
-			}
-
-			const data = (await response.json()) as Awaited<ReturnType<typeof jiraIssuesLoader>>
-			return {
-				...data,
-				pageInfo: {
-					page: pageParam + 1,
-					size: chunk.length,
-					total: commitIssueKeys.length,
-					totalPages: Math.ceil(commitIssueKeys.length / PAGE_SIZE),
-					hasNextPage: pageParam + 1 < commitIssueKeyChunks.length
-				}
-			}
-		},
-		getNextPageParam: (_lastPage, _pages, lastPageParam) => {
-			const next = lastPageParam + 1
-			return next < commitIssueKeyChunks.length ? next : undefined
-		}
+	const commitIssuesFromGitlabQuery = useCommitIssuesQuery({
+		issueKeys: commitIssueKeys
 	})
 
 	const commitIssuesAutoLoad = useAutoLoadInfiniteQuery(commitIssuesFromGitlabQuery, {
@@ -2369,16 +2010,6 @@ function GitlabContributors({ data, value, onChange }: GitlabContributorsProps):
 	)
 }
 
-interface GitlabCommitDebugEntry {
-	id: string
-	shortId: string
-	title: string
-	authorLabel: string
-	projectName: string
-	createdAt?: string
-	issueKeys: string[]
-}
-
 function GitlabCommitDebugCard({ commit }: { commit: GitlabCommitDebugEntry }): React.ReactNode {
 	return (
 		<article className='rounded-md border bg-background px-3 py-2 shadow-sm'>
@@ -2520,16 +2151,6 @@ function WorklogCalendarToolbar<TEvent extends object, TResource extends object>
 	)
 }
 
-interface WorklogDebugEntry {
-	id: string
-	issueKey: string
-	summary: string
-	projectName: string
-	authorName: string
-	started?: string
-	timeSpentSeconds: number
-}
-
 function WorklogEntryDebugCard({ entry }: { entry: WorklogDebugEntry }): React.ReactNode {
 	return (
 		<article className='rounded-md border bg-background px-3 py-2 shadow-sm'>
@@ -2548,17 +2169,6 @@ function WorklogEntryDebugCard({ entry }: { entry: WorklogDebugEntry }): React.R
 	)
 }
 
-interface RelevantIssueDebugEntry {
-	id: string
-	key: string
-	summary: string
-	projectName: string
-	status: string
-	assignee: string
-	updated?: string
-	created?: string
-}
-
 function RelevantIssueDebugCard({ issue }: { issue: RelevantIssueDebugEntry }): React.ReactNode {
 	return (
 		<article className='rounded-md border bg-background px-3 py-2 shadow-sm'>
@@ -2575,134 +2185,6 @@ function RelevantIssueDebugCard({ issue }: { issue: RelevantIssueDebugEntry }): 
 			</div>
 		</article>
 	)
-}
-
-/**
- * Predefined pastel color palette for calendar events
- * Each color has background, text, and border variants for good contrast
- */
-const PASTEL_COLORS = [
-	// Soft blue
-	{ bg: 'hsl(210, 70%, 85%)', text: 'hsl(210, 50%, 25%)', border: 'hsl(210, 60%, 70%)' },
-	// Soft pink
-	{ bg: 'hsl(330, 70%, 85%)', text: 'hsl(330, 50%, 30%)', border: 'hsl(330, 60%, 70%)' },
-	// Soft green
-	{ bg: 'hsl(150, 60%, 85%)', text: 'hsl(150, 50%, 25%)', border: 'hsl(150, 50%, 70%)' },
-	// Soft purple
-	{ bg: 'hsl(270, 65%, 85%)', text: 'hsl(270, 50%, 30%)', border: 'hsl(270, 55%, 70%)' },
-	// Soft orange
-	{ bg: 'hsl(30, 75%, 85%)', text: 'hsl(30, 60%, 30%)', border: 'hsl(30, 65%, 70%)' },
-	// Soft cyan
-	{ bg: 'hsl(180, 65%, 85%)', text: 'hsl(180, 50%, 25%)', border: 'hsl(180, 55%, 70%)' },
-	// Soft rose
-	{ bg: 'hsl(350, 70%, 85%)', text: 'hsl(350, 50%, 30%)', border: 'hsl(350, 60%, 70%)' },
-	// Soft lime
-	{ bg: 'hsl(90, 60%, 85%)', text: 'hsl(90, 50%, 25%)', border: 'hsl(90, 50%, 70%)' },
-	// Soft violet
-	{ bg: 'hsl(250, 65%, 85%)', text: 'hsl(250, 50%, 30%)', border: 'hsl(250, 55%, 70%)' },
-	// Soft amber
-	{ bg: 'hsl(45, 75%, 85%)', text: 'hsl(45, 60%, 30%)', border: 'hsl(45, 65%, 70%)' },
-	// Soft teal
-	{ bg: 'hsl(170, 60%, 85%)', text: 'hsl(170, 50%, 25%)', border: 'hsl(170, 50%, 70%)' },
-	// Soft magenta
-	{ bg: 'hsl(310, 65%, 85%)', text: 'hsl(310, 50%, 30%)', border: 'hsl(310, 55%, 70%)' }
-]
-
-/**
- * Generate a consistent pastel color for a given string (project name, user name, etc.)
- * Uses predefined palette for consistent, pleasant colors
- */
-function generateColorFromString(str: string): {
-	backgroundColor: string
-	textColor: string
-	borderColor: string
-} {
-	// Simple hash function to generate a number from a string
-	let hash = 0
-	for (let i = 0; i < str.length; i++) {
-		hash = str.charCodeAt(i) + ((hash << 5) - hash)
-		hash = hash & hash // Convert to 32bit integer
-	}
-
-	// Select color from palette based on hash
-	const colorIndex = Math.abs(hash) % PASTEL_COLORS.length
-	const color = PASTEL_COLORS[colorIndex]
-	invariant(color, 'Color generation failed')
-
-	return {
-		backgroundColor: color.bg,
-		textColor: color.text,
-		borderColor: color.border
-	}
-}
-
-function formatDurationFromSeconds(seconds?: number) {
-	if (!seconds || Number.isNaN(seconds)) {
-		return '0m'
-	}
-
-	const minutesTotal = Math.max(1, Math.round(seconds / 60))
-	if (minutesTotal < 60) {
-		return `${minutesTotal}m`
-	}
-
-	const hours = Math.floor(minutesTotal / 60)
-	const minutes = minutesTotal % 60
-
-	if (minutes === 0) {
-		return `${hours}h`
-	}
-
-	return `${hours}h ${minutes}m`
-}
-
-function formatDateTimeLabel(value?: string) {
-	if (!value) {
-		return 'Unknown date'
-	}
-
-	const date = new Date(value)
-	if (Number.isNaN(date.getTime())) {
-		return value
-	}
-
-	try {
-		return format(date, 'PP p')
-	} catch {
-		return date.toISOString()
-	}
-}
-
-function getErrorMessage(error: unknown) {
-	if (error instanceof Error) {
-		return error.message
-	}
-
-	if (typeof error === 'string') {
-		return error
-	}
-
-	return 'Unknown error'
-}
-
-function chunkArray<T>(items: T[], size: number): T[][] {
-	if (size <= 0) {
-		return [items]
-	}
-
-	const chunks: T[][] = []
-	for (let index = 0; index < items.length; index += size) {
-		chunks.push(items.slice(index, index + size))
-	}
-	return chunks
-}
-
-interface WorklogChanges {
-	newEntries: LocalWorklogEntry[]
-	modifiedEntries: LocalWorklogEntry[]
-	deletedEntries: LocalWorklogEntry[]
-	hasChanges: boolean
-	changeCount: number
 }
 
 function compareWorklogEntries(
@@ -2862,8 +2344,6 @@ function DateRangeFilter({ value, onChange }: DateRangeFilterProps): React.React
 		</Popover>
 	)
 }
-
-type InferQueryKeyParams<T> = T extends Array<string | infer U> ? [string, U] : never
 
 export async function loader({ request }: Route.LoaderArgs) {
 	const session = await getSession(request.headers.get('Cookie'))
