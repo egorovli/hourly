@@ -7,6 +7,16 @@ import type { loader as gitlabProjectsLoader } from './gitlab.projects.tsx'
 import type { loader as jiraProjectsLoader } from './jira.projects.tsx'
 import type { loader as jiraUsersLoader } from './jira.users.tsx'
 
+// FSD entities layer imports
+import type {
+	GitlabCommitDebugEntry,
+	LocalWorklogEntry,
+	RelevantIssueDebugEntry,
+	WorklogCalendarEvent,
+	WorklogChanges,
+	WorklogDebugEntry
+} from '~/entities/index.ts'
+
 import type {
 	CalendarProps,
 	DayPropGetter,
@@ -50,25 +60,6 @@ import { orm, Token } from '~/lib/mikro-orm/index.ts'
 import { getSession } from '~/lib/session/storage.ts'
 import { cn, invariant } from '~/lib/util/index.ts'
 
-// FSD shared layer imports
-import {
-	ErrorPlaceholder,
-	formatDateTimeLabel,
-	formatDurationFromSeconds,
-	generateColorFromString,
-	getErrorMessage
-} from '~/shared/index.ts'
-
-// FSD entities layer imports
-import type {
-	GitlabCommitDebugEntry,
-	LocalWorklogEntry,
-	RelevantIssueDebugEntry,
-	WorklogCalendarEvent,
-	WorklogChanges,
-	WorklogDebugEntry
-} from '~/entities/index.ts'
-
 // FSD features layer imports
 import { useJiraProjectsQuery } from '~/features/load-jira-projects/index.ts'
 import { useJiraUsersQuery } from '~/features/load-jira-users/index.ts'
@@ -78,6 +69,15 @@ import { useGitlabProjectsQuery } from '~/features/load-gitlab-projects/index.ts
 import { useGitlabContributorsQuery } from '~/features/load-gitlab-contributors/index.ts'
 import { useGitlabCommitsQuery } from '~/features/load-gitlab-commits/index.ts'
 import { useCommitIssuesQuery } from '~/features/load-commit-issues/index.ts'
+
+// FSD shared layer imports
+import {
+	ErrorPlaceholder,
+	formatDateTimeLabel,
+	formatDurationFromSeconds,
+	generateColorFromString,
+	getErrorMessage
+} from '~/shared/index.ts'
 
 import {
 	Command,
