@@ -248,6 +248,11 @@ const DEBUG_FILTER_PRESET = {
 	}
 } as const
 
+const FORMATS: CalendarProps<WorklogCalendarEvent>['formats'] = {
+	dayFormat: 'EEE, MMM d',
+	timeGutterFormat: 'HH:mm'
+}
+
 interface ErrorPlaceholderProps {
 	message: string
 	className?: string
@@ -1430,6 +1435,7 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 									view={calendarView}
 									views={['month', 'week']}
 									step={15}
+									formats={FORMATS}
 									components={calendarComponents}
 									onView={handleControlledCalendarViewChange}
 									onNavigate={handleControlledCalendarNavigate}

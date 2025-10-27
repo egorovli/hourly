@@ -587,6 +587,7 @@ button.rbc-input::-moz-focus-inner {
 .rbc-time-slot {
 	flex: 1 0 0;
 	border-top: 1px solid hsla(var(--border), 0.5);
+	padding-left: 4px;
 }
 
 .rbc-time-slot,
@@ -614,6 +615,10 @@ button.rbc-input::-moz-focus-inner {
 	font-size: 0.6875rem;
 	font-weight: 400;
 	color: hsl(var(--muted-foreground) / 0.55);
+}
+
+.rbc-time-slot .rbc-label {
+	font-feature-settings: 'tnum' 1;
 }
 
 /* ============================================
