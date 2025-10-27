@@ -1,10 +1,10 @@
 import type { Route } from './+types/preferences.js'
-import type { Preferences } from '~/domain/preferences.js'
+import type { Preferences } from '~/domain/preferences.ts'
 
 import z from 'zod'
 
-import { Theme } from '~/domain/index.js'
-import * as cookies from '~/lib/cookies/index.js'
+import { Theme } from '~/domain/index.ts'
+import * as cookies from '~/lib/cookies/index.ts'
 
 const timeString = z
 	.string()

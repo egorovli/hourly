@@ -1,4 +1,4 @@
-import { cn } from '~/lib/util'
+import { cn } from '~/lib/util/index.ts'
 
 function Input({ className, type, ...props }: React.ComponentProps<'input'>) {
 	return (

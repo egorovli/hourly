@@ -9,7 +9,7 @@ import {
 	DialogDescription,
 	DialogHeader,
 	DialogTitle
-} from '~/components/shadcn/ui/dialog'
+} from '~/components/shadcn/ui/dialog.tsx'
 
 function Command({ className, ...props }: React.ComponentProps<typeof CommandPrimitive>) {
 	return (
