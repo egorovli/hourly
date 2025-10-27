@@ -153,14 +153,14 @@ button.rbc-input::-moz-focus-inner {
 }
 
 /* ============================================
-   Header Styles - Subtle and sleek
+   Header Styles - Compact and sleek
    ============================================ */
 .rbc-header {
 	overflow: hidden;
 	flex: 1 0 0%;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-	padding: 0.625rem 0.75rem;
+	padding: 0.375rem 0.5rem;
 	text-align: center;
 	vertical-align: middle;
 	font-weight: 500;
@@ -500,6 +500,7 @@ button.rbc-input::-moz-focus-inner {
 	box-sizing: content-box;
 	width: 100%;
 	position: relative;
+	display: none;
 }
 
 .rbc-time-view .rbc-allday-events {

@@ -807,11 +807,14 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 	const hasGitlabProjectsSelected = state.selectedGitlabProjectIds.length > 0
 	const hasGitlabContributorsSelected = state.selectedGitlabContributorIds.length > 0
 	const hasCompleteDateRange = Boolean(state.dateRange?.from && state.dateRange?.to)
+
 	const canLoadWorklogs =
 		state.selectedJiraProjectIds.length > 0 &&
 		state.selectedJiraUserIds.length > 0 &&
 		hasCompleteDateRange
+
 	const canLoadRelevantIssues = canLoadWorklogs
+
 	const canLoadGitlabCommits =
 		hasGitlabProjectsSelected && hasGitlabContributorsSelected && hasCompleteDateRange
 
@@ -1038,7 +1041,8 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 			style: {
 				backgroundColor: colors.backgroundColor,
 				color: colors.textColor,
-				border: 'none'
+				border: `1px solid ${colors.borderColor}`,
+				borderRadius: '0.375rem'
 			}
 		}
 	}, [])
@@ -1073,13 +1077,46 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 
 	const calendarBusinessHours = useMemo(() => {
 		const base = calendarDate ?? new Date()
+
+		// Default business hours: 07:00 - 19:00
+		let minHour = 7
+		let maxHour = 19
+
+		// Filter events to only those in the current view range
+		const viewRange = state.calendarViewDateRange
+		const visibleEvents = viewRange
+			? calendarEvents.filter(event => {
+					return event.start <= viewRange.to && event.end >= viewRange.from
+				})
+			: calendarEvents
+
+		// Check if any visible events extend beyond default hours
+		if (visibleEvents.length > 0) {
+			for (const event of visibleEvents) {
+				const startHour = event.start.getHours()
+				const endHour = event.end.getHours()
+
+				if (startHour < minHour) {
+					minHour = startHour
+				}
+
+				if (endHour > maxHour) {
+					maxHour = endHour
+				}
+
+				if (event.end.getMinutes() > 0 && endHour >= maxHour) {
+					maxHour = endHour + 1
+				}
+			}
+		}
+
 		const start = new Date(base)
-		start.setHours(7, 0, 0, 0)
+		start.setHours(minHour, 0, 0, 0)
 		const end = new Date(base)
-		end.setHours(20, 0, 0, 0)
+		end.setHours(maxHour, 0, 0, 0)
 
 		return { start, end }
-	}, [calendarDate])
+	}, [calendarDate, calendarEvents, state.calendarViewDateRange])
 
 	const isAnyQueryLoading =
 		projectsQuery.isLoading ||
@@ -1284,7 +1321,7 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 						</div>
 					) : (
 						<>
-							<div className='flex items-center justify-between'>
+							<div className='flex items-center justify-between mb-3'>
 								<div>
 									<h2 className='text-xl font-semibold'>Worklog Calendar</h2>
 									<p className='text-sm text-muted-foreground'>
@@ -1299,6 +1336,41 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 									progressPercent={worklogAutoLoad.progressPercent}
 								/>
 							</div>
+							{(() => {
+								const uniqueProjects = Array.from(
+									new Set(worklogDebugEntries.map(e => e.projectName))
+								).sort()
+
+								if (uniqueProjects.length <= 2) {
+									return null
+								}
+
+								return (
+									<div className='flex flex-wrap items-center gap-3 mb-3 pb-3 border-b'>
+										<span className='text-xs font-medium text-muted-foreground uppercase tracking-wide'>
+											Projects:
+										</span>
+										{uniqueProjects.map(projectName => {
+											const colors = generateColorFromString(projectName)
+											return (
+												<div
+													key={projectName}
+													className='flex items-center gap-1.5 text-xs'
+												>
+													<div
+														className='w-3 h-3 rounded-sm border'
+														style={{
+															backgroundColor: colors.backgroundColor,
+															borderColor: colors.borderColor
+														}}
+													/>
+													<span className='font-medium text-foreground'>{projectName}</span>
+												</div>
+											)
+										})}
+									</div>
+								)
+							})()}
 							<div
 								className='rounded-lg border bg-card shadow-sm overflow-hidden'
 								style={{ height: '700px' }}
@@ -1312,7 +1384,7 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 									style={{ height: '100%' }}
 									view={calendarView}
 									views={['month', 'week']}
-									step={30}
+									step={15}
 									components={calendarComponents}
 									onView={handleControlledCalendarViewChange}
 									onNavigate={handleControlledCalendarNavigate}
@@ -1321,6 +1393,8 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 									dayPropGetter={calendarDayPropGetter}
 									slotPropGetter={calendarSlotPropGetter}
 									showMultiDayTimes
+									// allDayMaxRows={0}
+									// allDayAccessor={() => false}
 									popup
 									min={calendarBusinessHours.start}
 									max={calendarBusinessHours.end}
@@ -2278,17 +2352,23 @@ function GitlabCommitDebugCard({ commit }: { commit: GitlabCommitDebugEntry }): 
 
 function WorklogCalendarEventContent({ event }: EventProps<WorklogCalendarEvent>): React.ReactNode {
 	return (
-		<div className='flex h-full flex-col justify-center gap-0.5 px-0.5 text-xs leading-snug'>
-			<div className='flex items-center justify-between gap-1'>
-				<span className='text-[10px] font-bold uppercase tracking-wider'>
-					{event.resource.projectName}
-				</span>
-				<span className='text-[10px] font-medium tabular-nums'>
-					{formatDurationFromSeconds(event.resource.timeSpentSeconds)}
+		<div className='flex h-full flex-col justify-between py-1.5 text-xs leading-tight'>
+			<div className='flex flex-col gap-0.5'>
+				<div className='flex items-start justify-between gap-1.5'>
+					<span className='text-[9px] font-semibold uppercase tracking-wider opacity-90 line-clamp-1'>
+						{event.resource.projectName}
+					</span>
+					<span className='text-[9px] font-bold tabular-nums opacity-90 shrink-0'>
+						{formatDurationFromSeconds(event.resource.timeSpentSeconds)}
+					</span>
+				</div>
+				<span className='text-sm font-bold leading-tight line-clamp-2'>
+					{event.resource.issueKey}
 				</span>
 			</div>
-			<span className='text-sm font-bold leading-tight truncate'>{event.resource.issueKey}</span>
-			<span className='text-[10px] font-medium truncate'>{event.resource.authorName}</span>
+			<div className='flex items-center gap-1 text-[10px] font-medium opacity-75 mt-auto pb-4'>
+				<span className='truncate'>{event.resource.authorName}</span>
+			</div>
 		</div>
 	)
 }
