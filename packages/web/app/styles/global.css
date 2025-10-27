@@ -9,9 +9,9 @@
 	strategy: "class";
 }
 
-@custom-variant print (@media print);
-@custom-variant dark (&:where(.dark, .dark *, [data-theme=dark], [data-theme=dark] *));
-@custom-variant light (&:where(.light, .light *, [data-theme=light], [data-theme=light] *));
+/* @custom-variant print (@media print); */
+@custom-variant dark (&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *));
+@custom-variant light (&:where(.light, .light *, [data-theme="light"], [data-theme="light"] *));
 
 @utility no-scrollbar {
 	&::-webkit-scrollbar {

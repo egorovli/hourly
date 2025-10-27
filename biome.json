@@ -152,6 +152,19 @@
 			"indentWidth": 2
 		}
 	},
+	"html": {
+		"experimentalFullSupportEnabled": true,
+
+		"formatter": {
+			"enabled": true,
+			"indentScriptAndStyle": true
+		}
+	},
+	"css": {
+		"parser": {
+			"tailwindDirectives": true
+		}
+	},
 	"overrides": [
 		{
 			"includes": ["packages/web/app/**/*"],
