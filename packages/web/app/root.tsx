@@ -23,6 +23,8 @@ import * as query from '~/lib/query/index.ts'
 import { cn } from '~/lib/util/index.ts'
 
 import 'temporal-polyfill/global'
+import 'react-big-calendar/lib/css/react-big-calendar.css'
+import 'react-big-calendar/lib/addons/dragAndDrop/styles.css'
 import '~/styles/global.css'
 
 export const links: Route.LinksFunction = () => []

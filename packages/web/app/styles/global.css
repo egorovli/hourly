@@ -3,6 +3,7 @@
 @import "tailwindcss-safe-area";
 
 @import "./shadcn.css";
+@import "./react-big-calendar.css";
 @import "./fonts/inter.css";
 
 @plugin "@tailwindcss/forms" {
