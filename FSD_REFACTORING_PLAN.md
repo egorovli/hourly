@@ -719,8 +719,6 @@ export function AppProviders({ children }) {
 
 - [ ] Create all FSD layer directories
 - [ ] Set up index.ts barrel exports for each slice
-- [ ] Configure path aliases in tsconfig.json
-- [ ] Set up ESLint rules for FSD boundaries
 
 ### Shared Layer
 
@@ -789,7 +787,6 @@ export function AppProviders({ children }) {
 
 ### Testing & Quality
 
-- [ ] Add FSD linting rules (eslint-plugin-boundaries)
 - [ ] Write unit tests for each feature
 - [ ] Write integration tests for widgets
 - [ ] Write E2E tests for page
@@ -858,7 +855,7 @@ Each feature slice should represent a single user-facing capability.
 
 ### 2. Strict Layer Boundaries
 
-Use ESLint with `eslint-plugin-boundaries` to enforce rules. No exceptions to the dependency flow.
+Maintain strict adherence to the dependency flow. No exceptions to the layer hierarchy.
 
 ### 3. Public API via index.ts
 
@@ -875,67 +872,6 @@ Pages should be thin composition layers. Business logic belongs in features/widg
 ### 6. Shared Layer Discipline
 
 Only truly reusable code goes in shared. If it's domain-specific, it belongs in entities or features.
-
----
-
-## 📝 ESLint Configuration for FSD Boundaries
-
-Install and configure `eslint-plugin-boundaries`:
-
-```bash
-bun add -D eslint-plugin-boundaries
-```
-
-```js
-// .eslintrc.js
-module.exports = {
-  plugins: ['boundaries'],
-  settings: {
-    'boundaries/elements': [
-      { type: 'app', pattern: 'app/*' },
-      { type: 'pages', pattern: 'pages/*' },
-      { type: 'widgets', pattern: 'widgets/*' },
-      { type: 'features', pattern: 'features/*' },
-      { type: 'entities', pattern: 'entities/*' },
-      { type: 'shared', pattern: 'shared/*' }
-    ]
-  },
-  rules: {
-    'boundaries/element-types': [
-      'error',
-      {
-        default: 'disallow',
-        rules: [
-          {
-            from: 'app',
-            allow: ['pages', 'widgets', 'features', 'entities', 'shared']
-          },
-          {
-            from: 'pages',
-            allow: ['widgets', 'features', 'entities', 'shared']
-          },
-          {
-            from: 'widgets',
-            allow: ['features', 'entities', 'shared']
-          },
-          {
-            from: 'features',
-            allow: ['entities', 'shared']
-          },
-          {
-            from: 'entities',
-            allow: ['shared']
-          },
-          {
-            from: 'shared',
-            allow: ['shared']
-          }
-        ]
-      }
-    ]
-  }
-}
-```
 
 ---
 
