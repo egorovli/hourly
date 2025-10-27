@@ -17,10 +17,8 @@ import type {
 	CalendarProps,
 	DayPropGetter,
 	EventPropGetter,
-	EventProps,
 	NavigateAction,
 	SlotPropGetter,
-	ToolbarProps,
 	View
 } from 'react-big-calendar'
 
@@ -30,15 +28,7 @@ import { DateTime } from 'luxon'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { luxonLocalizer, Views } from 'react-big-calendar'
 
-import {
-	BugIcon,
-	CalendarDays,
-	ChevronDown,
-	ChevronLeft,
-	ChevronRight,
-	Save,
-	Undo2
-} from 'lucide-react'
+import { BugIcon, CalendarDays, ChevronDown, Save, Undo2 } from 'lucide-react'
 
 import { Badge } from '~/components/shadcn/ui/badge.tsx'
 import { Button } from '~/components/shadcn/ui/button.tsx'
@@ -47,11 +37,11 @@ import { Button } from '~/components/shadcn/ui/button.tsx'
 import { Skeleton } from '~/components/shadcn/ui/skeleton.tsx'
 import { AutoLoadProgress } from '~/components/ui/auto-load-progress.tsx'
 import { useAutoLoadInfiniteQuery } from '~/hooks/use-auto-load-infinite-query.ts'
-import { DragAndDropCalendar } from '~/lib/calendar/drag-and-drop-calendar.client.tsx'
+import { WorklogsCalendar } from '~/widgets/worklogs-calendar/index.ts'
 import * as cookies from '~/lib/cookies/index.ts'
 import { orm, Token } from '~/lib/mikro-orm/index.ts'
 import { getSession } from '~/lib/session/storage.ts'
-import { cn, invariant } from '~/lib/util/index.ts'
+import { invariant } from '~/lib/util/index.ts'
 
 // FSD features layer imports
 import { useJiraProjectsQuery } from '~/features/load-jira-projects/index.ts'
@@ -79,7 +69,6 @@ import {
 
 // FSD manage-worklogs feature
 import { compareWorklogEntries, useWorklogState } from '~/features/manage-worklogs/index.ts'
-// Local Command-based selector UIs were removed in favor of feature components
 
 // State type moved to features/manage-worklogs
 
@@ -88,25 +77,6 @@ import { compareWorklogEntries, useWorklogState } from '~/features/manage-worklo
 // Reducer moved to features/manage-worklogs
 
 // initialState moved to features/manage-worklogs
-
-const VIEW_LABELS: Partial<Record<View, string>> = {
-	month: 'Month',
-	week: 'Week',
-	work_week: 'Work Week',
-	day: 'Day',
-	agenda: 'Agenda'
-}
-
-const DEBUG_FILTER_PRESET = {
-	jiraProjectIds: ['10718'],
-	jiraUserIds: ['6242e240699649006ae56ef4'],
-	gitlabProjectIds: ['59014094'],
-	gitlabContributorIds: ['a.egorov@health-samurai.io', 'anton.egorov@health-samurai.io'],
-	dateRange: {
-		from: new Date(2025, 8, 1),
-		to: new Date(2025, 8, 30)
-	}
-} as const
 
 const FORMATS: CalendarProps<WorklogCalendarEvent>['formats'] = {
 	dayFormat: 'EEE, MMM d',
@@ -269,7 +239,16 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 			return
 		}
 
-		const preset = DEBUG_FILTER_PRESET
+		const preset = {
+			jiraProjectIds: ['10718'],
+			jiraUserIds: ['6242e240699649006ae56ef4'],
+			gitlabProjectIds: ['59014094'],
+			gitlabContributorIds: ['a.egorov@health-samurai.io', 'anton.egorov@health-samurai.io'],
+			dateRange: {
+				from: new Date(2025, 8, 1),
+				to: new Date(2025, 8, 30)
+			}
+		} as const
 		const presetFrom = new Date(preset.dateRange.from.getTime())
 		const presetTo = new Date(preset.dateRange.to.getTime())
 
@@ -361,13 +340,7 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 	)
 
 	// Drag and drop handlers (no logic for now)
-	const handleEventDrop = useCallback(() => {
-		/* no-op for now */
-	}, [])
-
-	const handleEventResize = useCallback(() => {
-		/* no-op for now */
-	}, [])
+	// DnD handlers will be implemented in the widget phase if needed
 
 	useEffect(() => {
 		if (state.dateRange?.from) {
@@ -611,13 +584,7 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 		return classNames.length > 0 ? { className: classNames.join(' ') } : {}
 	}, [])
 
-	const calendarComponents = useMemo<CalendarProps<WorklogCalendarEvent>['components']>(
-		() => ({
-			toolbar: WorklogCalendarToolbar,
-			event: WorklogCalendarEventContent
-		}),
-		[]
-	)
+	// calendar components provided by widget
 
 	const calendarBusinessHours = useMemo(() => {
 		const base = calendarDate ?? new Date()
@@ -957,35 +924,20 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 								className='rounded-lg border bg-card shadow-sm overflow-hidden'
 								style={{ height: '700px' }}
 							>
-								<DragAndDropCalendar
-									className='worklog-calendar'
+								<WorklogsCalendar
 									date={calendarDate}
-									defaultView={Views.WEEK}
-									events={calendarEvents}
-									localizer={localizer}
-									style={{ height: '100%' }}
 									view={calendarView}
-									views={['month', 'week']}
-									step={15}
+									localizer={localizer}
+									events={calendarEvents}
 									formats={FORMATS}
-									components={calendarComponents}
+									min={calendarBusinessHours.start}
+									max={calendarBusinessHours.end}
 									onView={handleControlledCalendarViewChange}
 									onNavigate={handleControlledCalendarNavigate}
 									onRangeChange={handleControlledCalendarRangeChange}
 									eventPropGetter={calendarEventPropGetter}
 									dayPropGetter={calendarDayPropGetter}
 									slotPropGetter={calendarSlotPropGetter}
-									showMultiDayTimes
-									// allDayMaxRows={0}
-									// allDayAccessor={() => false}
-									// popup
-									min={calendarBusinessHours.start}
-									max={calendarBusinessHours.end}
-									tooltipAccessor={event => event.title}
-									onEventDrop={handleEventDrop}
-									onEventResize={handleEventResize}
-									resizable
-									draggableAccessor={() => true}
 								/>
 								)
 							</div>
@@ -1461,124 +1413,9 @@ function GitlabCommitDebugCard({ commit }: { commit: GitlabCommitDebugEntry }): 
 	)
 }
 
-function WorklogCalendarEventContent({ event }: EventProps<WorklogCalendarEvent>): React.ReactNode {
-	return (
-		<div className='flex h-full flex-col justify-between py-1.5 text-xs leading-tight'>
-			{/* Header: Project & Duration */}
-			<div className='flex items-start justify-between gap-1.5 mb-1'>
-				<span className='text-[9px] font-semibold uppercase tracking-wider opacity-80 line-clamp-1'>
-					{event.resource.projectName}
-				</span>
-				<span className='text-[9px] font-bold tabular-nums opacity-80 shrink-0'>
-					{formatDurationFromSeconds(event.resource.timeSpentSeconds)}
-				</span>
-			</div>
+// Event content moved to widget
 
-			{/* Main content: Issue Key & Summary */}
-			<div className='flex-1 flex flex-col gap-0.5 min-h-0'>
-				<div className='flex items-baseline gap-1.5'>
-					<span className='text-[10px] font-bold uppercase tracking-wide shrink-0'>
-						{event.resource.issueKey}
-					</span>
-				</div>
-				<p className='text-xs font-medium leading-snug line-clamp-2'>
-					{event.resource.issueSummary}
-				</p>
-			</div>
-
-			{/* Footer: Author */}
-			<div className='flex items-center gap-1 text-[9px] font-medium opacity-70 mt-1 pt-2 pb-4'>
-				<span className='truncate'>{event.resource.authorName}</span>
-			</div>
-		</div>
-	)
-}
-
-function WorklogCalendarToolbar<TEvent extends object, TResource extends object>({
-	label,
-	onNavigate,
-	onView,
-	view,
-	views
-}: ToolbarProps<TEvent, TResource>): React.ReactElement {
-	const normalizedViews: View[] = Array.isArray(views)
-		? views
-		: (Object.keys(views) as View[]).filter(viewName => {
-				const config = (views as Partial<Record<View, unknown>>)[viewName]
-				return config !== false && config !== undefined
-			})
-
-	return (
-		<header className='rbc-toolbar flex flex-col gap-3 border-b border-border bg-card/70 px-4 py-3'>
-			<div className='flex flex-wrap items-center justify-between gap-3 w-full'>
-				<div className='flex items-center gap-2'>
-					<Button
-						type='button'
-						size='sm'
-						variant='outline'
-						onClick={() => onNavigate('TODAY')}
-					>
-						Today
-					</Button>
-
-					<div className='flex items-center overflow-hidden rounded-md border border-border bg-background shadow-sm'>
-						<Button
-							type='button'
-							size='icon'
-							variant='ghost'
-							onClick={() => onNavigate('PREV')}
-							aria-label='Go to previous period'
-						>
-							<ChevronLeft />
-						</Button>
-						<Button
-							type='button'
-							size='icon'
-							variant='ghost'
-							onClick={() => onNavigate('NEXT')}
-							aria-label='Go to next period'
-						>
-							<ChevronRight />
-						</Button>
-					</div>
-				</div>
-
-				<div className='flex min-w-48 flex-col gap-0.5 text-left sm:text-center'>
-					<span className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
-						Worklog calendar
-					</span>
-					<span className='text-lg font-semibold text-foreground'>{label}</span>
-				</div>
-
-				{/* <div /> */}
-
-				<div className='flex flex-wrap items-center justify-end gap-1 invisible pointer-events-none'>
-					{normalizedViews.map(viewOption => {
-						const isActive = view === viewOption
-						const viewLabel = VIEW_LABELS[viewOption] ?? viewOption.replace('_', ' ')
-
-						return (
-							<Button
-								key={viewOption}
-								type='button'
-								size='sm'
-								variant={isActive ? 'default' : 'outline'}
-								className={cn(
-									'capitalize',
-									!isActive && 'bg-background/80 text-foreground hover:bg-muted'
-								)}
-								aria-pressed={isActive}
-								onClick={() => onView(viewOption)}
-							>
-								{viewLabel}
-							</Button>
-						)
-					})}
-				</div>
-			</div>
-		</header>
-	)
-}
+// Toolbar moved to widget
 
 function WorklogEntryDebugCard({ entry }: { entry: WorklogDebugEntry }): React.ReactNode {
 	return (
