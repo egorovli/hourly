@@ -584,40 +584,84 @@ export class AtlassianClient {
 				selections.map(project => [project.projectKey, project] as const)
 			)
 
-			for (const issue of issueSummaries.issues) {
-				const { worklogs, truncated: worklogsTruncated } = await fetchIssueWorklogs({
-					client: this,
-					cloudId,
-					issue,
-					startedAfter,
-					startedBefore,
-					authorIds: authorIdSet
+			// Fetch worklogs in parallel batches for optimal performance
+			const batches = chunkArray(issueSummaries.issues, WORKLOG_FETCH_BATCH_SIZE)
+			const totalBatches = batches.length
+
+			try {
+				process.stdout.write(
+					`[Jira] Fetching worklogs for ${issueSummaries.issues.length} issues in ${totalBatches} parallel batches (batch size: ${WORKLOG_FETCH_BATCH_SIZE})\n`
+				)
+			} catch {}
+
+			for (const [batchIndex, batch] of batches.entries()) {
+				// Fetch all worklogs in this batch in parallel
+				const batchPromises = batch.map(async issue => {
+					try {
+						const result = await fetchIssueWorklogs({
+							client: this,
+							cloudId,
+							issue,
+							startedAfter,
+							startedBefore,
+							authorIds: authorIdSet
+						})
+						return { issue, result, error: null }
+					} catch (error) {
+						// Log individual failure but continue processing other issues
+						try {
+							process.stdout.write(
+								`[Jira] Warning: Failed to fetch worklogs for issue ${issue.key}: ${error instanceof Error ? error.message : 'Unknown error'}\n`
+							)
+						} catch {}
+						return { issue, result: null, error }
+					}
 				})
 
-				if (worklogs.length === 0) {
-					continue
+				const batchResults = await Promise.all(batchPromises)
+
+				// Process successful results
+				for (const { issue, result, error } of batchResults) {
+					if (error || !result) {
+						continue
+					}
+
+					const { worklogs, truncated: worklogsTruncated } = result
+
+					if (worklogs.length === 0) {
+						continue
+					}
+
+					truncated ||= worklogsTruncated
+
+					const projectKey = issue.fields.project?.key ?? ''
+					const projectMatch = selectionByKey.get(projectKey) ?? null
+
+					issues.push({
+						issueId: issue.id,
+						issueKey: issue.key,
+						summary: issue.fields.summary,
+						project: {
+							id: projectMatch?.projectId ?? issue.fields.project?.id ?? '',
+							key: projectMatch?.projectKey ?? projectKey,
+							name: projectMatch?.projectName ?? issue.fields.project?.name ?? '',
+							cloudId
+						},
+						worklogs
+					})
+
+					totalIssuesFetched += 1
+					totalWorklogs += worklogs.length
 				}
 
-				truncated ||= worklogsTruncated
-
-				const projectKey = issue.fields.project?.key ?? ''
-				const projectMatch = selectionByKey.get(projectKey) ?? null
-
-				issues.push({
-					issueId: issue.id,
-					issueKey: issue.key,
-					summary: issue.fields.summary,
-					project: {
-						id: projectMatch?.projectId ?? issue.fields.project?.id ?? '',
-						key: projectMatch?.projectKey ?? projectKey,
-						name: projectMatch?.projectName ?? issue.fields.project?.name ?? '',
-						cloudId
-					},
-					worklogs
-				})
-
-				totalIssuesFetched += 1
-				totalWorklogs += worklogs.length
+				// Log batch progress
+				try {
+					const successCount = batchResults.filter(r => !r.error).length
+					const failCount = batchResults.filter(r => r.error).length
+					process.stdout.write(
+						`[Jira] Batch ${batchIndex + 1}/${totalBatches} complete: ${successCount} success, ${failCount} failed, ${totalWorklogs} total worklogs so far\n`
+					)
+				} catch {}
 			}
 		}
 
@@ -782,6 +826,7 @@ const ISSUE_SEARCH_MAX_RESULTS = 1000
 const ISSUE_WORKLOG_PAGE_SIZE = 100
 const ISSUE_WORKLOG_MAX_RESULTS = 5000
 const ISSUE_KEY_QUERY_CHUNK_SIZE = 40
+const WORKLOG_FETCH_BATCH_SIZE = 15
 
 function emptyWorklogResult(): JiraWorklogsResult {
 	return {
