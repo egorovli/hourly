@@ -7,6 +7,8 @@ A powerful web application for reconciling personal GitLab commit activity with 
 ![React](https://img.shields.io/badge/react-19-blue)
 ![TypeScript](https://img.shields.io/badge/typescript-5.x-blue)
 
+> **⚠️ Development Status**: This project is currently under active development. Features, APIs, and documentation may change. While the core functionality is stable, some features are still being refined and new capabilities are being added regularly.
+
 ## 🎯 Overview
 
 This tool helps developers and teams track, reconcile, and visualize their working hours by:

@@ -125,3 +125,17 @@ Git history is not bundled in this workspace; follow Conventional Commits (`feat
 - When instantiating the calendar, follow the docs and prefer our locale/timezone from user preferences. Reference: https://schedule-x.dev/docs/calendar/configuration
 
 - For a range date picker (2 months visible) in the Filters section, install and use shadcn `calendar`, `popover`, `button`, `input`, and `command` (for typeahead) components as needed; keep functionality separated from the UI scaffold.
+
+## Documentation Maintenance
+
+**Keep README.md synchronized with actual implementation.** After completing features or significant changes:
+
+1. **Validate against current state** - Review README.md to ensure feature descriptions, architecture details, tech stack versions, and configuration examples match the actual codebase.
+
+2. **Update actively** - Add new features to the Features section, update command lists, revise architecture descriptions when data flow changes, and append troubleshooting tips for issues you resolved.
+
+3. **Prune obsolete content** - Remove deprecated features, outdated patterns, broken links, and incorrect examples. The README is critical first-touch documentation for new developers.
+
+4. **Sync user-facing changes** - When adding preferences, OAuth scopes, or environment variables, immediately update the corresponding README sections and .env examples.
+
+Treat README.md as living documentation that reflects the current project state, not historical aspirations.

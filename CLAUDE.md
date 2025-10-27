@@ -334,3 +334,35 @@ In development mode, bypass OAuth flows for quick authenticated testing:
 - Most data sources use cursor-based or offset-based pagination
 - Page size constant: `PAGE_SIZE = 100`
 - Infinite queries automatically load all pages when enabled
+
+## README.md Maintenance
+
+**IMPORTANT: Keep README.md synchronized with actual project features and implementation.**
+
+When implementing new features or making significant changes:
+
+1. **Validate README.md Accuracy**
+   - After completing a feature, review the README.md
+   - Check if the feature list, architecture, or tech stack needs updating
+   - Verify configuration examples match current environment variables
+   - Ensure code examples reflect current patterns and APIs
+
+2. **Update Documentation**
+   - Add new features to the "Features" section with clear descriptions
+   - Update tech stack versions if dependencies changed significantly
+   - Add new commands to the "Available Commands" section
+   - Update architecture diagrams or descriptions if data flow changed
+   - Add troubleshooting entries for common issues you encountered
+
+3. **Keep It Fresh**
+   - Remove deprecated features or obsolete instructions
+   - Update screenshots or examples if UI changed
+   - Verify all links are still valid
+   - Ensure setup instructions work for new developers
+
+4. **User-Facing Changes**
+   - If you add user preferences, update the "User Preferences" section
+   - If you change OAuth scopes, update the setup guides
+   - If you modify environment variables, update the .env examples
+
+The README is the first impression for new developers - treat it as critical documentation that must stay accurate and helpful.
