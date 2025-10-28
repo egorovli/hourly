@@ -1,0 +1,114 @@
+# Git and version control
+.git
+.gitignore
+.gitattributes
+
+# CI/CD
+.github
+
+# IDE and editor configs
+.vscode
+.idea
+.claude
+.cursor
+.zed
+.serena
+.old
+.old*
+.playwright-mcp
+*.swp
+*.swo
+*~
+
+# MCP config (may contain local paths)
+.mcp.json
+
+# Dependencies (will be installed during build)
+node_modules
+.pnp
+.pnp.js
+
+# Testing
+coverage
+.nyc_output
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+__tests__
+__mocks__
+.jest
+
+# Build outputs (will be created during build)
+dist
+build
+.next
+out
+.react-router
+.mikro-orm
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs
+
+# Environment files (never include secrets!)
+.env
+.env.*
+.env.local
+.env.development
+.env.test
+.env.production
+!.env.example
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.icloud
+
+# Documentation and project files
+*.md
+!README.md
+LICENSE
+CHANGELOG.md
+TODO.md
+.editorconfig
+
+# Development tools
+.eslintrc*
+.prettierrc*
+.stylelintrc*
+biome.json
+
+# TypeScript
+*.tsbuildinfo
+tsconfig.json
+
+# Docker
+Dockerfile
+Dockerfile.*
+.dockerignore
+docker-compose*.yml
+
+# Misc
+*.backup
+*.back
+.cache
+.temp
+.tmp
+tmp
+temp
+storybook-static
+*storybook.log
+
+# Project-specific build artifacts
+packages/web/build
+packages/web/data
+packages/web/.react-router
