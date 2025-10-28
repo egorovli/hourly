@@ -16,11 +16,9 @@ import {
 	useRouteLoaderData
 } from 'react-router'
 
-import { QueryClientProvider } from '@tanstack/react-query'
-
 import * as cookies from '~/lib/cookies/index.ts'
-import * as query from '~/lib/query/index.ts'
 import { cn } from '~/lib/util/index.ts'
+import { AppProviders } from '~/providers/index.ts'
 
 import 'temporal-polyfill/global'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
@@ -100,11 +98,11 @@ export function Layout({ children }: LayoutProps): React.ReactNode {
 
 export default function App({ loaderData }: Route.ComponentProps): React.ReactNode {
 	return (
-		<QueryClientProvider client={query.client}>
+		<AppProviders>
 			<div className='min-h-screen'>
 				<Outlet />
 			</div>
-		</QueryClientProvider>
+		</AppProviders>
 	)
 }
 

@@ -267,6 +267,76 @@ bunx --bun shadcn@latest add <component-name>
 
 ## 🏗️ Architecture
 
+### Feature-Sliced Design (FSD)
+
+The application follows [Feature-Sliced Design](https://feature-sliced.design/) methodology for scalable, maintainable architecture.
+
+#### Layer Hierarchy
+
+```
+app/         ← Application setup, providers, routing
+pages/       ← Route pages composing widgets and features
+widgets/     ← Large composite UI blocks
+features/    ← Business features providing user value
+entities/    ← Business domain models and data
+shared/      ← Reusable UI kit and utilities
+```
+
+#### Key Benefits
+
+- **Scalability**: Easy to add new features without affecting existing code
+- **Maintainability**: Clear structure makes navigation and refactoring straightforward
+- **Testability**: Isolated layers enable focused unit and integration testing
+- **Team Collaboration**: Developers can work on different features independently
+- **Dependency Control**: Strict rules prevent architectural violations
+
+#### Layer Examples
+
+**Entities Layer** (Domain Models)
+```typescript
+// entities/worklog/model/types.ts
+export interface LocalWorklogEntry {
+  localId: string
+  issueKey: string
+  timeSpentSeconds: number
+  // ...
+}
+```
+
+**Features Layer** (Business Capabilities)
+```typescript
+// features/select-jira-projects/ui/jira-projects-selector.tsx
+export function JiraProjectsSelector({ value, onChange }) {
+  // Reusable project selection feature
+}
+```
+
+**Widgets Layer** (Composite UI)
+```typescript
+// widgets/worklogs-calendar/ui/worklogs-calendar.tsx
+export function WorklogsCalendar({ events, dateRange }) {
+  // Complex calendar widget composing multiple features
+}
+```
+
+**Pages Layer** (Route Compositions)
+```typescript
+// pages/worklogs/ui/worklogs-page.tsx
+export function WorklogsPage({ loaderData }) {
+  // Composes widgets and features for the main dashboard
+}
+```
+
+#### Adding New Features
+
+1. **Define entities** in `entities/` for domain models
+2. **Create features** in `features/` for user-facing functionality
+3. **Build widgets** in `widgets/` for complex UI compositions
+4. **Integrate in pages** by importing and composing components
+5. **Update routes** to delegate to the new pages
+
+See `CLAUDE.md` for detailed FSD workflow and import patterns.
+
 ### Authentication Flow
 
 1. User initiates OAuth flow (Atlassian or GitLab)

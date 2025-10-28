@@ -114,29 +114,182 @@ bun run --filter @working-hours/web start
 - Main application: `packages/web/`
 
 ### Application Structure (`packages/web/app/`)
+
+**Architecture:** Feature-Sliced Design (FSD)
+
+The application follows [Feature-Sliced Design](https://feature-sliced.design/) methodology with strict layer hierarchy and dependency rules.
+
+#### FSD Layers (Top → Bottom)
+```
+app/         ← Application setup, providers, routing
+pages/       ← Route pages composing widgets and features
+widgets/     ← Large composite UI blocks
+features/    ← Business features providing user value
+entities/    ← Business domain models and data
+shared/      ← Reusable UI kit and utilities
+```
+
+#### Dependency Rules
+- ✅ **Allowed:** Import from lower layers (pages → widgets → features → entities → shared)
+- ❌ **Forbidden:** Same-level imports (features cannot import other features)
+- ❌ **Forbidden:** Upward imports (entities cannot import features)
+
+#### Directory Structure
 ```
 app/
-├── routes/              # React Router v7 file-based routing
-│   ├── __.tsx          # Root layout
-│   ├── __._index.tsx   # Main dashboard (nested under layout)
-│   ├── auth.$provider.* # OAuth authentication flows
-│   ├── jira.*          # Jira data loaders (projects, users, issues, worklog)
-│   └── gitlab.*        # GitLab data loaders (projects, contributors, commits)
-├── components/
-│   ├── shadcn/         # shadcn/ui components
-│   └── ui/             # Custom UI components
-├── hooks/              # Custom React hooks
-├── lib/                # Core libraries
-│   ├── atlassian/      # Jira/Atlassian API client
-│   ├── gitlab/         # GitLab API client
-│   ├── mikro-orm/      # Database entities and ORM
-│   ├── session/        # Session storage (database-backed)
-│   ├── auth/           # Authentication strategies
-│   ├── query/          # TanStack Query utilities
-│   └── util/           # Shared utilities
-├── domain/             # Business logic, enums, schemas, state machines
-└── styles/             # Global CSS and Tailwind utilities
+├── providers/                # Application-level providers
+│   ├── query-provider.tsx    # TanStack Query setup
+│   ├── app-providers.tsx     # Provider composition
+│   └── index.ts
+│
+├── pages/                    # Page layer - route compositions
+│   └── worklogs/
+│       ├── ui/
+│       │   └── worklogs-page.tsx      # Main page component
+│       ├── model/
+│       │   └── types.ts               # Page-specific types
+│       └── index.ts
+│
+├── widgets/                  # Widget layer - composite UI blocks
+│   ├── worklogs-calendar/
+│   │   ├── ui/              # Calendar display components
+│   │   ├── model/           # Calendar state management
+│   │   ├── lib/             # Calendar utilities
+│   │   ├── config/          # Calendar constants
+│   │   └── index.ts
+│   ├── filters-panel/       # Filter controls widget
+│   └── debug-panel/         # Debug information widget
+│
+├── features/                 # Feature layer - business capabilities
+│   ├── select-jira-projects/
+│   │   ├── ui/              # Selector components
+│   │   ├── api/             # Data fetching hooks
+│   │   ├── model/           # Feature types
+│   │   └── index.ts
+│   ├── select-jira-users/
+│   ├── select-gitlab-projects/
+│   ├── select-gitlab-contributors/
+│   ├── select-date-range/
+│   ├── manage-worklogs/     # Worklog CRUD operations
+│   ├── load-worklog-entries/
+│   └── load-jira-issues/
+│
+├── entities/                 # Entity layer - domain models
+│   ├── worklog/
+│   │   ├── model/
+│   │   │   └── types.ts    # LocalWorklogEntry, WorklogChanges
+│   │   ├── lib/            # Domain utilities
+│   │   └── index.ts
+│   ├── jira-project/
+│   ├── jira-user/
+│   ├── jira-issue/
+│   ├── gitlab-project/
+│   ├── gitlab-contributor/
+│   ├── gitlab-commit/
+│   └── calendar-event/
+│
+├── shared/                   # Shared layer - reusable code
+│   ├── ui/                  # UI components (shadcn, custom)
+│   │   ├── shadcn/         # shadcn/ui components
+│   │   └── custom/         # Custom UI components
+│   ├── lib/                # Utility libraries
+│   │   ├── formats/        # Date, duration formatting
+│   │   ├── colors/         # Color utilities
+│   │   ├── array/          # Array utilities
+│   │   └── query/          # TanStack Query helpers
+│   ├── config/             # Constants and configuration
+│   └── hooks/              # Reusable React hooks
+│
+├── routes/                  # React Router v7 routing
+│   ├── __.tsx              # Root layout
+│   ├── __._index.tsx       # Main dashboard (delegates to pages/)
+│   ├── auth.$provider.*    # OAuth flows
+│   ├── jira.*              # Jira data loaders
+│   └── gitlab.*            # GitLab data loaders
+│
+├── lib/                     # Infrastructure libraries
+│   ├── atlassian/          # Jira/Atlassian API client
+│   ├── gitlab/             # GitLab API client
+│   ├── mikro-orm/          # Database entities and ORM
+│   ├── session/            # Session storage
+│   ├── auth/               # Authentication strategies
+│   ├── query/              # Query client config
+│   ├── cookies/            # Cookie handling
+│   └── util/               # Shared utilities
+│
+├── domain/                  # Business logic, enums, schemas
+└── styles/                  # Global CSS and Tailwind
 ```
+
+#### FSD Segments
+Each feature/widget/entity can contain these segments:
+- **ui/** - React components
+- **api/** - Data fetching hooks (useQuery, useMutation)
+- **model/** - Types, state, business logic
+- **lib/** - Pure utility functions
+- **config/** - Constants and configuration
+- **index.ts** - Public API (barrel export)
+
+#### Import Examples
+```typescript
+// ✅ Correct: Page imports from widgets and features
+import { WorklogsCalendar } from '~/widgets/worklogs-calendar/index.ts'
+import { JiraProjectsSelector } from '~/features/select-jira-projects/index.ts'
+import { LocalWorklogEntry } from '~/entities/worklog/index.ts'
+import { formatDurationFromSeconds } from '~/shared/lib/formats/index.ts'
+
+// ❌ Wrong: Feature imports from widget (upward import)
+import { WorklogsCalendar } from '~/widgets/worklogs-calendar/index.ts'
+
+// ❌ Wrong: Feature imports from another feature (same-level)
+import { JiraProjectsSelector } from '~/features/select-jira-projects/index.ts'
+```
+
+#### Adding New Features (FSD Workflow)
+
+When adding a new feature to the application:
+
+1. **Start with entities** if you need new domain models:
+   ```bash
+   mkdir -p app/entities/new-entity/model
+   # Create types.ts with domain models
+   # Add index.ts barrel export
+   ```
+
+2. **Create the feature** for user-facing functionality:
+   ```bash
+   mkdir -p app/features/new-feature/{ui,api,model}
+   # ui/ - React components
+   # api/ - useQuery/useMutation hooks
+   # model/ - Types and business logic
+   # Add index.ts barrel export
+   ```
+
+3. **Build widgets** if you need composite UI:
+   ```bash
+   mkdir -p app/widgets/new-widget/{ui,model,lib,config}
+   # Compose features and entities
+   # Add widget-specific state
+   ```
+
+4. **Integrate in pages**:
+   ```typescript
+   // pages/some-page/ui/some-page.tsx
+   import { NewWidget } from '~/widgets/new-widget/index.ts'
+   import { NewFeature } from '~/features/new-feature/index.ts'
+   ```
+
+5. **Update route** to use the new page:
+   ```typescript
+   // routes/some-route.tsx
+   import { SomePage } from '~/pages/some-page/index.ts'
+   ```
+
+**Key principles:**
+- Always use barrel exports (`index.ts`) for public APIs
+- Import only from `index.ts`, never from internal files
+- Keep dependencies flowing downward (pages → widgets → features → entities → shared)
+- Shared utilities go in `shared/`, not in features
 
 ### Key Architectural Patterns
 
