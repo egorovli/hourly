@@ -9,3 +9,4 @@ export { PASTEL_COLORS, generateColorFromString } from './colors/index.ts'
 
 // Query utilities
 export type { InferQueryKeyParams } from './query/index.ts'
+export { useAutoLoadInfiniteQuery } from './query/index.ts'

@@ -12,46 +12,25 @@ import type {
 
 import type { WorklogsPageProps } from '../model/types.ts'
 
-import { DateTime } from 'luxon'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { luxonLocalizer, Views } from 'react-big-calendar'
+import { useWorklogsPageState } from '../model/use-worklogs-page-state.ts'
 
 import { BugIcon, CalendarDays, ChevronDown } from 'lucide-react'
+import { Views } from 'react-big-calendar'
 
 import { Badge } from '~/components/shadcn/ui/badge.tsx'
 import { Button } from '~/components/shadcn/ui/button.tsx'
 import { Skeleton } from '~/components/shadcn/ui/skeleton.tsx'
 import { AutoLoadProgress } from '~/components/ui/auto-load-progress.tsx'
-import { useAutoLoadInfiniteQuery } from '~/hooks/use-auto-load-infinite-query.ts'
 import { WorklogsCalendar } from '~/widgets/worklogs-calendar/index.ts'
 import { invariant } from '~/lib/util/index.ts'
 
-// FSD features layer imports
-import { useJiraProjectsQuery } from '~/features/load-jira-projects/index.ts'
-import { useJiraUsersQuery } from '~/features/load-jira-users/index.ts'
-import { useWorklogEntriesQuery } from '~/features/load-worklog-entries/index.ts'
-import { useJiraIssuesQuery } from '~/features/load-jira-issues/index.ts'
-import { useGitlabProjectsQuery } from '~/features/load-gitlab-projects/index.ts'
-import { useGitlabContributorsQuery } from '~/features/load-gitlab-contributors/index.ts'
-import { useGitlabCommitsQuery } from '~/features/load-gitlab-commits/index.ts'
-import { useCommitIssuesQuery } from '~/features/load-commit-issues/index.ts'
 import { DateRangeFilter } from '~/features/select-date-range/index.ts'
 
 // FSD shared layer imports
-import {
-	ErrorPlaceholder,
-	formatDurationFromSeconds,
-	generateColorFromString,
-	getErrorMessage
-} from '~/shared/index.ts'
+import { ErrorPlaceholder, formatDurationFromSeconds, getErrorMessage } from '~/shared/index.ts'
 
 // FSD manage-worklogs feature
-import {
-	compareWorklogEntries,
-	useWorklogState,
-	WorklogChangesActions,
-	WorklogChangesSummary
-} from '~/features/manage-worklogs/index.ts'
+import { WorklogChangesActions, WorklogChangesSummary } from '~/features/manage-worklogs/index.ts'
 
 // FSD widgets
 import { FiltersPanel, FilterDependencyMessage } from '~/widgets/filters-panel/index.ts'
@@ -70,25 +49,59 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 	invariant(loaderData.user?.atlassian?.id, 'Atlassian profile ID is required in loader data')
 	invariant(loaderData.user?.gitlab?.id, 'GitLab profile ID is required in loader data')
 
-	// Extract user preferences
-	const preferences = loaderData.preferences ?? {}
-	const weekStartsOn = preferences.weekStartsOn ?? 0 // Default to Sunday
-	const workingDayStartTime = preferences.workingDayStartTime ?? '09:00'
-	const workingDayEndTime = preferences.workingDayEndTime ?? '18:00'
+	const {
+		workingDayStartTime,
+		workingDayEndTime,
+		localizer,
+		state,
+		dispatch,
+		projectsQuery,
+		usersQuery,
+		worklogEntriesQuery,
+		jiraIssuesQuery,
+		gitlabProjectsQuery,
+		gitlabContributorsQuery,
+		gitlabCommitsQuery,
+		commitIssuesFromGitlabQuery,
+		worklogAutoLoad,
+		jiraIssuesAutoLoad,
+		gitlabCommitsAutoLoad,
+		commitIssuesAutoLoad,
+		hasJiraProjectsSelected,
+		hasGitlabProjectsSelected,
+		hasCompleteDateRange,
+		canLoadWorklogs,
+		canLoadRelevantIssues,
+		canLoadGitlabCommits,
+		worklogChanges,
+		worklogDebugEntries,
+		relevantIssueDebugEntries,
+		gitlabCommitsDebugEntries,
+		commitIssueDebugEntries,
+		totalWorklogEntries,
+		totalRelevantIssues,
+		totalGitlabCommits,
+		calendarView,
+		setCalendarView,
+		calendarDate,
+		setCalendarDate,
+		calendarEvents,
+		calendarEventPropGetter,
+		calendarDayPropGetter,
+		calendarSlotPropGetter,
+		calendarBusinessHours,
+		handleJiraProjectIdsChange,
+		handleJiraUserIdsChange,
+		handleDateRangeChange,
+		handleGitlabProjectIdsChange,
+		handleGitlabContributorIdsChange,
+		handleCalendarViewDateRangeChange,
+		handleControlledCalendarViewChange,
+		handleControlledCalendarNavigate,
+		handleControlledCalendarRangeChange
+	} = useWorklogsPageState(loaderData)
 
-	// Create localizer with user's timezone and week start day
-	// Convert weekStartsOn from JS (0=Sunday, 1-6=Mon-Sat) to Luxon (1=Monday, 7=Sunday)
-	const luxonFirstDayOfWeek = weekStartsOn === 0 ? 7 : weekStartsOn
-	const localizer = useMemo(() => {
-		return luxonLocalizer(DateTime, {
-			firstDayOfWeek: luxonFirstDayOfWeek
-		})
-	}, [luxonFirstDayOfWeek])
-
-	const [state, dispatch] = useWorklogState()
 	const [isDebugOpen, setIsDebugOpen] = useState(false)
-	const [calendarView, setCalendarView] = useState<View>(Views.WEEK)
-	const [calendarDate, setCalendarDate] = useState<Date>(() => state.dateRange?.from ?? new Date())
 	const isDebugPresetAvailable = import.meta.env.DEV
 
 	const projectsQuery = useJiraProjectsQuery({
@@ -130,48 +143,6 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 		contributorIds: state.selectedGitlabContributorIds,
 		dateRange: state.dateRange
 	})
-
-	const handleJiraProjectIdsChange = useCallback(
-		(value: string[]) => {
-			dispatch({ type: 'selectedJiraProjectIds.select', payload: value })
-		},
-		[dispatch]
-	)
-
-	const handleJiraUserIdsChange = useCallback(
-		(value: string[]) => {
-			dispatch({ type: 'selectedJiraUserIds.select', payload: value })
-		},
-		[dispatch]
-	)
-
-	const handleDateRangeChange = useCallback(
-		(value: DateRange | undefined) => {
-			dispatch({ type: 'dateRange.select', payload: value })
-		},
-		[dispatch]
-	)
-
-	const handleGitlabProjectIdsChange = useCallback(
-		(value: string[]) => {
-			dispatch({ type: 'selectedGitlabProjectIds.select', payload: value })
-		},
-		[dispatch]
-	)
-
-	const handleGitlabContributorIdsChange = useCallback(
-		(value: string[]) => {
-			dispatch({ type: 'selectedGitlabContributorIds.select', payload: value })
-		},
-		[dispatch]
-	)
-
-	const handleCalendarViewDateRangeChange = useCallback(
-		(value: DateRange | undefined) => {
-			dispatch({ type: 'calendarViewDateRange.select', payload: value })
-		},
-		[dispatch]
-	)
 
 	const handleApplyDebugPreset = useCallback(() => {
 		if (!isDebugPresetAvailable) {
@@ -280,12 +251,6 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 	)
 
 	useEffect(() => {
-		if (state.dateRange?.from) {
-			setCalendarDate(state.dateRange.from)
-		}
-	}, [state.dateRange?.from])
-
-	useEffect(() => {
 		if (!worklogEntriesQuery.data?.pages) {
 			return
 		}
@@ -306,11 +271,6 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 
 		dispatch({ type: 'worklog.setLoaded', payload: loadedEntries })
 	}, [dispatch, worklogEntriesQuery.data])
-
-	const worklogChanges = useMemo(
-		() => compareWorklogEntries(state.loadedWorklogEntries, state.localWorklogEntries),
-		[state.loadedWorklogEntries, state.localWorklogEntries]
-	)
 
 	const hasJiraProjectsSelected = state.selectedJiraProjectIds.length > 0
 	const hasGitlabProjectsSelected = state.selectedGitlabProjectIds.length > 0
