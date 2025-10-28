@@ -28,7 +28,7 @@ import { DateTime } from 'luxon'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { luxonLocalizer, Views } from 'react-big-calendar'
 
-import { BugIcon, CalendarDays, ChevronDown, Save, Undo2 } from 'lucide-react'
+import { BugIcon, CalendarDays, ChevronDown } from 'lucide-react'
 
 import { Badge } from '~/components/shadcn/ui/badge.tsx'
 import { Button } from '~/components/shadcn/ui/button.tsx'
@@ -52,10 +52,6 @@ import { useGitlabProjectsQuery } from '~/features/load-gitlab-projects/index.ts
 import { useGitlabContributorsQuery } from '~/features/load-gitlab-contributors/index.ts'
 import { useGitlabCommitsQuery } from '~/features/load-gitlab-commits/index.ts'
 import { useCommitIssuesQuery } from '~/features/load-commit-issues/index.ts'
-import { JiraProjectsSelector } from '~/features/select-jira-projects/index.ts'
-import { JiraUsersSelector } from '~/features/select-jira-users/index.ts'
-import { GitlabProjectsSelector } from '~/features/select-gitlab-projects/index.ts'
-import { GitlabContributorsSelector } from '~/features/select-gitlab-contributors/index.ts'
 import { DateRangeFilter } from '~/features/select-date-range/index.ts'
 
 // FSD shared layer imports
@@ -68,7 +64,20 @@ import {
 } from '~/shared/index.ts'
 
 // FSD manage-worklogs feature
-import { compareWorklogEntries, useWorklogState } from '~/features/manage-worklogs/index.ts'
+import {
+	compareWorklogEntries,
+	useWorklogState,
+	WorklogChangesActions,
+	WorklogChangesSummary
+} from '~/features/manage-worklogs/index.ts'
+
+// FSD widgets
+import { FiltersPanel, FilterDependencyMessage } from '~/widgets/filters-panel/index.ts'
+import {
+	WorklogEntryDebugCard,
+	RelevantIssueDebugCard,
+	GitlabCommitDebugCard
+} from '~/widgets/debug-panel/index.ts'
 
 // State type moved to features/manage-worklogs
 
@@ -81,49 +90,6 @@ import { compareWorklogEntries, useWorklogState } from '~/features/manage-worklo
 const FORMATS: CalendarProps<WorklogCalendarEvent>['formats'] = {
 	dayFormat: 'EEE, MMM d',
 	timeGutterFormat: 'HH:mm'
-}
-
-interface FilterSectionProps {
-	title: string
-	description?: string
-	dependencyHint?: string
-	children: React.ReactNode
-}
-
-function FilterSection({
-	title,
-	description,
-	dependencyHint,
-	children
-}: FilterSectionProps): React.ReactNode {
-	return (
-		<section className='flex flex-col gap-2'>
-			<div className='flex items-center gap-2'>
-				<span className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
-					{title}
-				</span>
-				{dependencyHint ? (
-					<span className='rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground'>
-						{dependencyHint}
-					</span>
-				) : null}
-			</div>
-			{description ? <p className='text-xs text-muted-foreground'>{description}</p> : null}
-			<div className='flex flex-wrap items-center gap-3'>{children}</div>
-		</section>
-	)
-}
-
-interface FilterDependencyMessageProps {
-	children: React.ReactNode
-}
-
-function FilterDependencyMessage({ children }: FilterDependencyMessageProps): React.ReactNode {
-	return (
-		<span className='rounded-md border border-dashed border-border px-3 py-1 text-xs text-muted-foreground'>
-			{children}
-		</span>
-	)
 }
 
 export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
@@ -710,126 +676,25 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 					) : null}
 				</div>
 
-				<div className='flex flex-col gap-6 pb-4 border-b'>
-					<FilterSection
-						title='Date range'
-						description='Independent range shared by Jira worklogs and GitLab contributors.'
-						dependencyHint='Standalone'
-					>
-						<DateRangeFilter
-							value={state.dateRange}
-							onChange={handleDateRangeChange}
-						/>
-					</FilterSection>
-
-					<div className='flex flex-col xl:flex-row gap-6'>
-						<div className='grow basis-2/5'>
-							<FilterSection
-								title='Jira'
-								description='Pick projects first, then load users to pull worklogs.'
-								dependencyHint='Projects -> Users'
-							>
-								{projectsQuery.isLoading ? (
-									<Skeleton className='h-9 w-32 rounded-md' />
-								) : projectsQuery.error ? (
-									<ErrorPlaceholder
-										message={`Projects error: ${
-											projectsQuery.error instanceof Error
-												? projectsQuery.error.message
-												: 'Unknown error'
-										}`}
-									/>
-								) : projectsQuery.data ? (
-									<JiraProjectsSelector
-										data={projectsQuery.data}
-										value={state.selectedJiraProjectIds}
-										onChange={handleJiraProjectIdsChange}
-									/>
-								) : null}
-
-								{hasJiraProjectsSelected ? (
-									usersQuery.isLoading ? (
-										<Skeleton className='h-9 w-32 rounded-md' />
-									) : usersQuery.error ? (
-										<ErrorPlaceholder
-											message={`Users error: ${
-												usersQuery.error instanceof Error
-													? usersQuery.error.message
-													: 'Unknown error'
-											}`}
-										/>
-									) : usersQuery.data ? (
-										<JiraUsersSelector
-											data={usersQuery.data}
-											value={state.selectedJiraUserIds}
-											onChange={handleJiraUserIdsChange}
-										/>
-									) : null
-								) : (
-									<FilterDependencyMessage>
-										Select Jira projects to load users
-									</FilterDependencyMessage>
-								)}
-							</FilterSection>
-						</div>
-
-						<div className='grow basis-3/5'>
-							<FilterSection
-								title='GitLab'
-								description='Contributors become available after selecting projects and a date range.'
-								dependencyHint='Projects + Date range -> Contributors'
-							>
-								{gitlabProjectsQuery.isLoading ? (
-									<Skeleton className='h-9 w-32 rounded-md' />
-								) : gitlabProjectsQuery.error ? (
-									<ErrorPlaceholder
-										message={`GitLab projects error: ${
-											gitlabProjectsQuery.error instanceof Error
-												? gitlabProjectsQuery.error.message
-												: 'Unknown error'
-										}`}
-									/>
-								) : gitlabProjectsQuery.data ? (
-									<GitlabProjectsSelector
-										data={gitlabProjectsQuery.data}
-										value={state.selectedGitlabProjectIds}
-										onChange={handleGitlabProjectIdsChange}
-									/>
-								) : null}
-
-								{hasGitlabProjectsSelected ? (
-									hasCompleteDateRange ? (
-										gitlabContributorsQuery.isLoading ? (
-											<Skeleton className='h-9 w-48 rounded-md' />
-										) : gitlabContributorsQuery.error ? (
-											<ErrorPlaceholder
-												message={`GitLab contributors error: ${
-													gitlabContributorsQuery.error instanceof Error
-														? gitlabContributorsQuery.error.message
-														: 'Unknown error'
-												}`}
-											/>
-										) : gitlabContributorsQuery.data ? (
-											<GitlabContributorsSelector
-												data={gitlabContributorsQuery.data}
-												value={state.selectedGitlabContributorIds}
-												onChange={handleGitlabContributorIdsChange}
-											/>
-										) : null
-									) : (
-										<FilterDependencyMessage>
-											Select a date range to load contributors
-										</FilterDependencyMessage>
-									)
-								) : (
-									<FilterDependencyMessage>
-										Select GitLab projects to load contributors
-									</FilterDependencyMessage>
-								)}
-							</FilterSection>
-						</div>
-					</div>
-				</div>
+				<FiltersPanel
+					dateRange={state.dateRange}
+					onDateRangeChange={handleDateRangeChange}
+					jiraProjectsQuery={projectsQuery}
+					selectedJiraProjectIds={state.selectedJiraProjectIds}
+					onJiraProjectIdsChange={handleJiraProjectIdsChange}
+					jiraUsersQuery={usersQuery}
+					selectedJiraUserIds={state.selectedJiraUserIds}
+					onJiraUserIdsChange={handleJiraUserIdsChange}
+					gitlabProjectsQuery={gitlabProjectsQuery}
+					selectedGitlabProjectIds={state.selectedGitlabProjectIds}
+					onGitlabProjectIdsChange={handleGitlabProjectIdsChange}
+					gitlabContributorsQuery={gitlabContributorsQuery}
+					selectedGitlabContributorIds={state.selectedGitlabContributorIds}
+					onGitlabContributorIdsChange={handleGitlabContributorIdsChange}
+					hasJiraProjectsSelected={hasJiraProjectsSelected}
+					hasGitlabProjectsSelected={hasGitlabProjectsSelected}
+					hasCompleteDateRange={hasCompleteDateRange}
+				/>
 			</div>
 
 			{/* Main calendar view */}
@@ -1248,98 +1113,14 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 								onChange={handleCalendarViewDateRangeChange}
 							/>
 
-							{worklogChanges.hasChanges && (
-								<div className='flex items-center gap-2'>
-									<Badge variant='outline'>
-										{worklogChanges.changeCount}{' '}
-										{worklogChanges.changeCount === 1 ? 'change' : 'changes'}
-									</Badge>
-									<Button
-										size='sm'
-										variant='default'
-										onClick={handleWorklogApply}
-									>
-										<Save className='h-4 w-4' />
-										Apply Changes (stub)
-									</Button>
-									<Button
-										size='sm'
-										variant='outline'
-										onClick={handleWorklogRevert}
-									>
-										<Undo2 className='h-4 w-4' />
-										Revert
-									</Button>
-								</div>
-							)}
+							<WorklogChangesActions
+								worklogChanges={worklogChanges}
+								onApply={handleWorklogApply}
+								onRevert={handleWorklogRevert}
+							/>
 						</div>
 
-						{worklogChanges.hasChanges && (
-							<div className='flex flex-col gap-2'>
-								<p className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
-									Pending Changes
-								</p>
-								<div className='space-y-1 text-xs'>
-									{worklogChanges.newEntries.length > 0 && (
-										<p className='text-green-600 dark:text-green-400'>
-											+ {worklogChanges.newEntries.length} new{' '}
-											{worklogChanges.newEntries.length === 1 ? 'entry' : 'entries'}
-										</p>
-									)}
-									{worklogChanges.modifiedEntries.length > 0 && (
-										<p className='text-yellow-600 dark:text-yellow-400'>
-											~ {worklogChanges.modifiedEntries.length} modified{' '}
-											{worklogChanges.modifiedEntries.length === 1 ? 'entry' : 'entries'}
-										</p>
-									)}
-									{worklogChanges.deletedEntries.length > 0 && (
-										<p className='text-red-600 dark:text-red-400'>
-											- {worklogChanges.deletedEntries.length} deleted{' '}
-											{worklogChanges.deletedEntries.length === 1 ? 'entry' : 'entries'}
-										</p>
-									)}
-								</div>
-
-								<details className='text-xs'>
-									<summary className='cursor-pointer font-medium'>View detailed changes</summary>
-									<div className='mt-2 space-y-2'>
-										{worklogChanges.newEntries.map(entry => (
-											<div
-												key={entry.localId}
-												className='rounded border border-green-200 bg-green-50 p-2 dark:border-green-900 dark:bg-green-950'
-											>
-												<p className='font-semibold text-green-700 dark:text-green-300'>
-													NEW: {entry.issueKey}
-												</p>
-												<p className='text-muted-foreground'>{entry.summary}</p>
-											</div>
-										))}
-										{worklogChanges.modifiedEntries.map(entry => (
-											<div
-												key={entry.localId}
-												className='rounded border border-yellow-200 bg-yellow-50 p-2 dark:border-yellow-900 dark:bg-yellow-950'
-											>
-												<p className='font-semibold text-yellow-700 dark:text-yellow-300'>
-													MODIFIED: {entry.issueKey}
-												</p>
-												<p className='text-muted-foreground'>{entry.summary}</p>
-											</div>
-										))}
-										{worklogChanges.deletedEntries.map(entry => (
-											<div
-												key={entry.localId}
-												className='rounded border border-red-200 bg-red-50 p-2 dark:border-red-900 dark:bg-red-950'
-											>
-												<p className='font-semibold text-red-700 dark:text-red-300'>
-													DELETED: {entry.issueKey}
-												</p>
-												<p className='text-muted-foreground'>{entry.summary}</p>
-											</div>
-										))}
-									</div>
-								</details>
-							</div>
-						)}
+						<WorklogChangesSummary worklogChanges={worklogChanges} />
 
 						<div className='flex flex-col gap-2'>
 							<p className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
@@ -1391,67 +1172,7 @@ export default function WorklogsPage({ loaderData }: Route.ComponentProps) {
 
 // Local GitLab selector implementations moved to features/select-gitlab-*
 
-function GitlabCommitDebugCard({ commit }: { commit: GitlabCommitDebugEntry }): React.ReactNode {
-	return (
-		<article className='rounded-md border bg-background px-3 py-2 shadow-sm'>
-			<div className='flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-muted-foreground'>
-				<span>{commit.shortId}</span>
-				<span>{formatDateTimeLabel(commit.createdAt)}</span>
-			</div>
-			<p className='text-sm font-medium text-foreground'>{commit.title}</p>
-			<p className='text-xs text-muted-foreground'>{commit.projectName}</p>
-			<div className='flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground'>
-				<span>{commit.authorLabel}</span>
-				{commit.issueKeys.length > 0 ? (
-					<>
-						<span>•</span>
-						<span>{commit.issueKeys.join(', ')}</span>
-					</>
-				) : null}
-			</div>
-		</article>
-	)
-}
-
-// Event content moved to widget
-
-// Toolbar moved to widget
-
-function WorklogEntryDebugCard({ entry }: { entry: WorklogDebugEntry }): React.ReactNode {
-	return (
-		<article className='rounded-md border bg-background px-3 py-2 shadow-sm'>
-			<div className='flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-muted-foreground'>
-				<span>{entry.issueKey}</span>
-				<span>{formatDurationFromSeconds(entry.timeSpentSeconds)}</span>
-			</div>
-			<p className='text-sm font-medium text-foreground'>{entry.summary}</p>
-			<p className='text-xs text-muted-foreground'>{entry.projectName}</p>
-			<div className='flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground'>
-				<span>{entry.authorName}</span>
-				<span>•</span>
-				<span>{formatDateTimeLabel(entry.started)}</span>
-			</div>
-		</article>
-	)
-}
-
-function RelevantIssueDebugCard({ issue }: { issue: RelevantIssueDebugEntry }): React.ReactNode {
-	return (
-		<article className='rounded-md border bg-background px-3 py-2 shadow-sm'>
-			<div className='flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-muted-foreground'>
-				<span>{issue.key}</span>
-				<span>{issue.status}</span>
-			</div>
-			<p className='text-sm font-medium text-foreground'>{issue.summary}</p>
-			<p className='text-xs text-muted-foreground'>{issue.projectName}</p>
-			<div className='flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground'>
-				<span>{issue.assignee}</span>
-				<span>•</span>
-				<span>{formatDateTimeLabel(issue.updated ?? issue.created)}</span>
-			</div>
-		</article>
-	)
-}
+// Debug card components moved to widgets/debug-panel
 
 // Local compareWorklogEntries moved to features/manage-worklogs
 

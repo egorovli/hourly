@@ -5,7 +5,7 @@ import { Calendar } from '~/components/shadcn/ui/calendar.tsx'
 import { CalendarDays, ChevronDown } from 'lucide-react'
 import { format, endOfMonth, startOfMonth, subMonths } from 'date-fns'
 import { cn } from '~/lib/util/index.ts'
-import type { DateRangeFilterProps } from '../model/types.ts'
+import type { DateRangeFilterProps, DateRange } from '../model/types.ts'
 
 export function DateRangeFilter({ value, onChange }: DateRangeFilterProps): React.ReactNode {
 	const label = useMemo(() => {
