@@ -52,7 +52,7 @@ Expected final image size: **~200-300MB** (compared to 1GB+ without optimization
 - ✅ **Non-root user**: Runs as `bun` user (UID 1000, GID 1000)
 - ✅ **Minimal attack surface**: Only production dependencies and compiled code
 - ✅ **No secrets in image**: Environment variables must be provided at runtime
-- ✅ **Vulnerability scanning**: Trivy scans in CI/CD pipeline
+- ⚠️ **Vulnerability scanning**: Trivy currently disabled (can be re-enabled in workflow)
 - ✅ **SBOM generation**: Software Bill of Materials for supply chain security
 - ✅ **Provenance attestations**: Build provenance for image verification
 
@@ -80,9 +80,10 @@ Location: `.github/workflows/build.yml`
 
 1. **Setup**: QEMU for multi-platform, Buildx for advanced features
 2. **Version Extract**: Determines version from git tag or commit SHA
-3. **Build**: Create image for scanning (single platform, fast)
-4. **Scan**: Trivy vulnerability scan with SARIF upload
-5. **Push**: Multi-platform build (linux/amd64, linux/arm64) and push to GHCR
+3. **Build**: Create Docker image with version metadata
+4. **Push**: Multi-platform build (linux/amd64, linux/arm64) and push to GHCR
+
+**Note**: Trivy vulnerability scanning is currently disabled in the workflow.
 
 The version extraction logic:
 - **Release event**: Uses `github.event.release.tag_name` (strips `v` prefix)
@@ -91,21 +92,21 @@ The version extraction logic:
 
 #### Security Scanning
 
-- **Trivy**: Scans for vulnerabilities, secrets, and misconfigurations
-- **SARIF Upload**: Results visible in GitHub Security tab
-- **Severity Levels**: Reports CRITICAL, HIGH, MEDIUM
-- **Fail on Critical**: Build fails if CRITICAL or HIGH vulnerabilities found
+- **Trivy**: Currently disabled (commented out in workflow)
+  - Can be re-enabled by uncommenting the Trivy steps in `.github/workflows/build.yml`
+  - When enabled: Scans for vulnerabilities, secrets, and misconfigurations
+  - SARIF results can be uploaded to GitHub Security tab
 
 ### Action Versions (Latest as of October 2025)
 
-- `actions/checkout@v4`
+- `actions/checkout@v5` (uses Node.js 24, requires runner v2.327.1+)
 - `docker/setup-qemu-action@v3.6.0`
 - `docker/setup-buildx-action@v3.11.1`
 - `docker/login-action@v3.6.0`
 - `docker/metadata-action@v5.8.0`
 - `docker/build-push-action@v6.18.0`
-- `aquasecurity/trivy-action@0.33.1`
-- `github/codeql-action/upload-sarif@v3`
+- ~~`aquasecurity/trivy-action@0.33.1`~~ (disabled)
+- ~~`github/codeql-action/upload-sarif@v4`~~ (disabled)
 
 ## Environment Variables
 
@@ -337,7 +338,17 @@ docker logs <container-id> | grep -i version
 
 ## Security Scanning Locally
 
-### Trivy Scan
+### Re-enabling Trivy in Workflow
+
+Trivy scanning is currently commented out in the workflow. To re-enable:
+
+1. Open `.github/workflows/build.yml`
+2. Uncomment the three Trivy-related steps (lines ~120-150)
+3. Commit and push the changes
+
+### Manual Trivy Scan
+
+You can still scan images locally:
 
 ```bash
 # Install Trivy
