@@ -10,13 +10,15 @@ import type {
 	EventProps
 } from 'react-big-calendar'
 
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 
 import { DragAndDropCalendar } from '~/lib/calendar/drag-and-drop-calendar.client.tsx'
 import { cn } from '~/lib/util/index.ts'
 import { ContextMenuTrigger } from '~/shared/ui/shadcn/ui/context-menu.tsx'
 import { SlotContextMenu } from '~/features/calendar-context-menu/index.ts'
 import { EventContextMenu } from '~/features/calendar-context-menu/index.ts'
+import { CalendarEventDialog } from '~/features/calendar-event-dialog/index.ts'
+import type { EventDialogMode, EventFormData } from '~/features/calendar-event-dialog/index.ts'
 import { useCalendarEventsState } from '../model/use-calendar-events-state.ts'
 
 import { WorklogCalendarActions } from './worklog-calendar-actions.tsx'
@@ -72,11 +74,16 @@ export function WorklogsCalendar({
 		saveError
 	} = useCalendarEventsState({ events })
 
-	// Context menu handlers (stubs)
+	// Dialog state management
+	const [dialogOpen, setDialogOpen] = useState(false)
+	const [dialogMode, setDialogMode] = useState<EventDialogMode>('create')
+	const [selectedEvent, setSelectedEvent] = useState<WorklogCalendarEvent | undefined>(undefined)
+
+	// Context menu handlers
 	const handleEditEvent = useCallback((event: WorklogCalendarEvent) => {
-		// TODO: Implement edit event functionality
-		// For now, this is a stub that will be connected to actual edit logic
-		void event
+		setSelectedEvent(event)
+		setDialogMode('edit')
+		setDialogOpen(true)
 	}, [])
 
 	const handleDeleteEvent = useCallback((event: WorklogCalendarEvent) => {
@@ -86,9 +93,22 @@ export function WorklogsCalendar({
 	}, [])
 
 	const handleCreateEvent = useCallback(() => {
-		// TODO: Implement create event functionality
-		// For now, this is a stub that will be connected to actual create logic
+		setSelectedEvent(undefined)
+		setDialogMode('create')
+		setDialogOpen(true)
 	}, [])
+
+	// Dialog save handler
+	const handleDialogSave = useCallback(
+		(data: EventFormData) => {
+			// TODO: Implement save logic
+			// This will be connected to the actual API to create/update worklog entries
+			void data
+			void dialogMode
+			void selectedEvent
+		},
+		[dialogMode, selectedEvent]
+	)
 
 	// Create a custom toolbar component with compact mode props
 	const CustomToolbar = useMemo(
@@ -132,51 +152,62 @@ export function WorklogsCalendar({
 	}
 
 	return (
-		<div className='flex flex-col h-full'>
-			<WorklogCalendarActions
-				changesSummary={changesSummary}
-				onSave={handleSave}
-				onCancel={handleCancel}
-				isSaving={isSaving}
-				saveError={saveError}
+		<>
+			<div className='flex flex-col h-full'>
+				<WorklogCalendarActions
+					changesSummary={changesSummary}
+					onSave={handleSave}
+					onCancel={handleCancel}
+					isSaving={isSaving}
+					saveError={saveError}
+				/>
+				<SlotContextMenu onCreate={handleCreateEvent}>
+					<ContextMenuTrigger asChild>
+						<div className='flex-1 overflow-hidden'>
+							<DragAndDropCalendar
+								className={cn(
+									'worklog-calendar',
+									compactMode === 'comfortable' && 'worklog-calendar--comfortable',
+									compactMode === 'compact' && 'worklog-calendar--compact'
+								)}
+								date={date}
+								defaultView={view}
+								events={localEvents}
+								localizer={localizer}
+								style={{ height: '100%' }}
+								view={view}
+								views={['month', 'week']}
+								step={15}
+								formats={formats}
+								components={mergedComponents}
+								onView={onView}
+								onNavigate={onNavigate}
+								onRangeChange={onRangeChange}
+								onEventResize={handleEventResize}
+								onEventDrop={handleEventDrop}
+								eventPropGetter={eventPropGetter}
+								dayPropGetter={dayPropGetter}
+								slotPropGetter={slotPropGetter}
+								showMultiDayTimes
+								min={min}
+								max={max}
+								tooltipAccessor={event => event.title}
+								resizable
+								draggableAccessor={() => true}
+							/>
+						</div>
+					</ContextMenuTrigger>
+				</SlotContextMenu>
+			</div>
+
+			{/* Event Dialog */}
+			<CalendarEventDialog
+				open={dialogOpen}
+				onOpenChange={setDialogOpen}
+				mode={dialogMode}
+				event={selectedEvent}
+				onSave={handleDialogSave}
 			/>
-			<SlotContextMenu onCreate={handleCreateEvent}>
-				<ContextMenuTrigger asChild>
-					<div className='flex-1 overflow-hidden'>
-						<DragAndDropCalendar
-							className={cn(
-								'worklog-calendar',
-								compactMode === 'comfortable' && 'worklog-calendar--comfortable',
-								compactMode === 'compact' && 'worklog-calendar--compact'
-							)}
-							date={date}
-							defaultView={view}
-							events={localEvents}
-							localizer={localizer}
-							style={{ height: '100%' }}
-							view={view}
-							views={['month', 'week']}
-							step={15}
-							formats={formats}
-							components={mergedComponents}
-							onView={onView}
-							onNavigate={onNavigate}
-							onRangeChange={onRangeChange}
-							onEventResize={handleEventResize}
-							onEventDrop={handleEventDrop}
-							eventPropGetter={eventPropGetter}
-							dayPropGetter={dayPropGetter}
-							slotPropGetter={slotPropGetter}
-							showMultiDayTimes
-							min={min}
-							max={max}
-							tooltipAccessor={event => event.title}
-							resizable
-							draggableAccessor={() => true}
-						/>
-					</div>
-				</ContextMenuTrigger>
-			</SlotContextMenu>
-		</div>
+		</>
 	)
 }
