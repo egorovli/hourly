@@ -6,8 +6,8 @@ import { Link } from 'react-router'
 import { DateTime } from 'luxon'
 import { Fragment, useEffect, useMemo, useReducer } from 'react'
 
-import { Avatar, AvatarFallback, AvatarImage } from '~/components/shadcn/ui/avatar.tsx'
-import { Badge } from '~/components/shadcn/ui/badge.tsx'
+import { Avatar, AvatarFallback, AvatarImage } from '~/shared/ui/shadcn/ui/avatar.tsx'
+import { Badge } from '~/shared/ui/shadcn/ui/badge.tsx'
 
 import {
 	DropdownMenu,
@@ -17,14 +17,14 @@ import {
 	DropdownMenuLabel,
 	DropdownMenuSeparator,
 	DropdownMenuTrigger
-} from '~/components/shadcn/ui/dropdown-menu.tsx'
+} from '~/shared/ui/shadcn/ui/dropdown-menu.tsx'
 
 import {
 	SidebarMenu,
 	SidebarMenuButton,
 	SidebarMenuItem,
 	useSidebar
-} from '~/components/shadcn/ui/sidebar.tsx'
+} from '~/shared/ui/shadcn/ui/sidebar.tsx'
 
 export interface NavUserProps {
 	user: NavUser

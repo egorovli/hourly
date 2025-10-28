@@ -3,10 +3,10 @@ import type { JiraUsersSelectorProps } from '../model/types.ts'
 import { useMemo } from 'react'
 import { Check, UsersIcon } from 'lucide-react'
 
-import { Badge } from '~/components/shadcn/ui/badge.tsx'
-import { Button } from '~/components/shadcn/ui/button.tsx'
-import { Popover, PopoverContent, PopoverTrigger } from '~/components/shadcn/ui/popover.tsx'
-import { Separator } from '~/components/shadcn/ui/separator.tsx'
+import { Badge } from '~/shared/ui/shadcn/ui/badge.tsx'
+import { Button } from '~/shared/ui/shadcn/ui/button.tsx'
+import { Popover, PopoverContent, PopoverTrigger } from '~/shared/ui/shadcn/ui/popover.tsx'
+import { Separator } from '~/shared/ui/shadcn/ui/separator.tsx'
 import { cn } from '~/lib/util/index.ts'
 
 import {
@@ -16,7 +16,7 @@ import {
 	CommandInput,
 	CommandItem,
 	CommandList
-} from '~/components/shadcn/ui/command.tsx'
+} from '~/shared/ui/shadcn/ui/command.tsx'
 
 export function JiraUsersSelector({
 	data,

@@ -3,9 +3,11 @@ export { formatDurationFromSeconds, formatDateTimeLabel, getErrorMessage } from 
 export { chunkArray } from './lib/index.ts'
 export { PASTEL_COLORS, generateColorFromString } from './lib/index.ts'
 export { useAutoLoadInfiniteQuery } from './lib/index.ts'
+export type { InferQueryKeyParams } from './lib/index.ts'
 
 // Shared configuration (curated)
 export { PAGE_SIZE } from './config/index.ts'
 
 // Shared UI components (curated)
 export { ErrorPlaceholder, type ErrorPlaceholderProps } from './ui/index.ts'
+export { AutoLoadProgress } from './ui/index.ts'

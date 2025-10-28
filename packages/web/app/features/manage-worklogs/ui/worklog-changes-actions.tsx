@@ -1,6 +1,6 @@
 import { Save, Undo2 } from 'lucide-react'
-import { Badge } from '~/components/shadcn/ui/badge.tsx'
-import { Button } from '~/components/shadcn/ui/button.tsx'
+import { Badge } from '~/shared/ui/shadcn/ui/badge.tsx'
+import { Button } from '~/shared/ui/shadcn/ui/button.tsx'
 import type { WorklogChanges } from '~/entities/worklog/index.ts'
 
 export interface WorklogChangesActionsProps {

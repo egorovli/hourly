@@ -7,7 +7,7 @@ import {
 	Collapsible,
 	CollapsibleContent,
 	CollapsibleTrigger
-} from '~/components/shadcn/ui/collapsible.tsx'
+} from '~/shared/ui/shadcn/ui/collapsible.tsx'
 
 import {
 	SidebarGroup,
@@ -19,7 +19,7 @@ import {
 	SidebarMenuSub,
 	SidebarMenuSubButton,
 	SidebarMenuSubItem
-} from '~/components/shadcn/ui/sidebar.tsx'
+} from '~/shared/ui/shadcn/ui/sidebar.tsx'
 
 export interface NavMainProps {
 	items: NavMainItem[]

@@ -16,7 +16,7 @@ The workspace uses Bun workspaces with code under `packages/`. The web app lives
 **Example:** When adding infinite scroll, search Context7 for "TanStack Query useInfiniteQuery", DDG for "React Router v7 infinite queries pagination", and Perplexity with recency="month" for "React infinite scroll auto-load patterns 2025".
 
 ## Build, Test, and Development Commands
-Run `bun install` from the repo root to sync dependencies. Use `bun run --filter @working-hours/web dev` for the local server at http://localhost:3000 with SSR enabled. Build production bundles with `bun run --filter @working-hours/web build`, and generate type output with `bun run --filter @working-hours/web check-types`. Static analysis runs through Biome via `bun run lint` or `bun run lint:fix`.
+Run `bun install` from the repo root to sync dependencies. Use `bun run --filter @working-hours/web dev` for the local server at http://localhost:3000 with SSR enabled. Build production bundles with `bun run --filter @working-hours/web build`, and generate type output with `bun run --filter @working-hours/web types:check`. Static analysis runs through Biome via `bun run lint` or `bun run lint:fix`.
 
 ## Coding Style & Naming Conventions
 

@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+// import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 
-import { Button } from '~/components/shadcn/ui/button.tsx'
+import { Button } from '~/shared/ui/shadcn/ui/button.tsx'
 
 import {
 	Collapsible,
 	CollapsibleContent,
 	CollapsibleTrigger
-} from '~/components/shadcn/ui/collapsible.tsx'
+} from '~/shared/ui/shadcn/ui/collapsible.tsx'
 
 import { cn } from '~/lib/util/index.ts'
 
@@ -61,7 +61,7 @@ export function CollapsibleDebugPanel({
 
 			<CollapsibleContent className='border-t'>
 				<div className='max-h-64 overflow-auto text-xs'>
-					<SyntaxHighlighter
+					{/* <SyntaxHighlighter
 						language='json'
 						customStyle={{
 							background: 'transparent',
@@ -70,7 +70,7 @@ export function CollapsibleDebugPanel({
 						}}
 					>
 						{formatted ?? '{}'}
-					</SyntaxHighlighter>
+					</SyntaxHighlighter> */}
 				</div>
 			</CollapsibleContent>
 		</Collapsible>

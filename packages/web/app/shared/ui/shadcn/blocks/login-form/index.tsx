@@ -2,7 +2,7 @@ import { SiAtlassian, SiAtlassianHex, SiGitlab, SiGitlabHex } from '@icons-pack/
 import { CheckCircle2, RefreshCw } from 'lucide-react'
 import { Link } from 'react-router'
 
-import { Button } from '~/components/shadcn/ui/button.tsx'
+import { Button } from '~/shared/ui/shadcn/ui/button.tsx'
 import { cn } from '~/lib/util/index.ts'
 
 import {
@@ -11,7 +11,7 @@ import {
 	CardDescription,
 	CardHeader,
 	CardTitle
-} from '~/components/shadcn/ui/card.tsx'
+} from '~/shared/ui/shadcn/ui/card.tsx'
 
 import {
 	Field,
@@ -19,9 +19,9 @@ import {
 	FieldGroup,
 	FieldLabel,
 	FieldSeparator
-} from '~/components/shadcn/ui/field.tsx'
+} from '~/shared/ui/shadcn/ui/field.tsx'
 
-import { Input } from '~/components/shadcn/ui/input.tsx'
+import { Input } from '~/shared/ui/shadcn/ui/input.tsx'
 
 interface LoginFormProps extends React.ComponentProps<'div'> {
 	connectedProviders?: {

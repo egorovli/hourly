@@ -8,7 +8,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuSeparator,
 	DropdownMenuTrigger
-} from '~/components/shadcn/ui/dropdown-menu.tsx'
+} from '~/shared/ui/shadcn/ui/dropdown-menu.tsx'
 
 import {
 	SidebarGroup,
@@ -18,7 +18,7 @@ import {
 	SidebarMenuButton,
 	SidebarMenuItem,
 	useSidebar
-} from '~/components/shadcn/ui/sidebar.tsx'
+} from '~/shared/ui/shadcn/ui/sidebar.tsx'
 
 export interface NavProject {
 	name: string

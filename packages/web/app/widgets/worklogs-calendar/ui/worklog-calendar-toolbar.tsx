@@ -1,5 +1,5 @@
 import type { ToolbarProps, View } from 'react-big-calendar'
-import { Button } from '~/components/shadcn/ui/button.tsx'
+import { Button } from '~/shared/ui/shadcn/ui/button.tsx'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '~/lib/util/index.ts'
 

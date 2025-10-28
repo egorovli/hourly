@@ -6,7 +6,7 @@ import {
 	SidebarMenu,
 	SidebarMenuButton,
 	SidebarMenuItem
-} from '~/components/shadcn/ui/sidebar.tsx'
+} from '~/shared/ui/shadcn/ui/sidebar.tsx'
 
 export interface NavSecondaryProps extends React.ComponentPropsWithoutRef<typeof SidebarGroup> {
 	items: NavSecondaryItem[]

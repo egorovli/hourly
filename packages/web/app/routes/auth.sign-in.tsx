@@ -3,7 +3,7 @@ import type { Route } from './+types/auth.sign-in.ts'
 import { TimerIcon } from 'lucide-react'
 import { Link } from 'react-router'
 
-import { LoginForm } from '~/components/shadcn/blocks/login-form/index.tsx'
+import { LoginForm } from '~/shared/ui/shadcn/blocks/login-form/index.tsx'
 import { getSession } from '~/lib/session/storage.ts'
 import { getConnectedProviders } from '~/lib/session/helpers.ts'
 

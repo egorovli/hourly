@@ -1,13 +1,13 @@
 import type { SessionUser } from '~/lib/session/storage.ts'
-import type { Route as RootRoute } from '../../../../+types/root.ts'
+import type { Route as RootRoute } from '../../../../../+types/root.ts'
 
 import { CalendarIcon, Clock10Icon, ClockIcon, Loader2, Settings, TimerIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useFetcher, useRouteLoaderData } from 'react-router'
 
-import { Button } from '~/components/shadcn/ui/button.tsx'
-import { Label } from '~/components/shadcn/ui/label.tsx'
-import { Separator } from '~/components/shadcn/ui/separator.tsx'
+import { Button } from '~/shared/ui/shadcn/ui/button.tsx'
+import { Label } from '~/shared/ui/shadcn/ui/label.tsx'
+import { Separator } from '~/shared/ui/shadcn/ui/separator.tsx'
 
 import {
 	Sidebar,
@@ -17,7 +17,7 @@ import {
 	SidebarMenu,
 	SidebarMenuButton,
 	SidebarMenuItem
-} from '~/components/shadcn/ui/sidebar.tsx'
+} from '~/shared/ui/shadcn/ui/sidebar.tsx'
 
 import {
 	Dialog,
@@ -26,7 +26,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 	DialogTrigger
-} from '~/components/shadcn/ui/dialog.tsx'
+} from '~/shared/ui/shadcn/ui/dialog.tsx'
 
 import {
 	Select,
@@ -34,7 +34,7 @@ import {
 	SelectItem,
 	SelectTrigger,
 	SelectValue
-} from '~/components/shadcn/ui/select.tsx'
+} from '~/shared/ui/shadcn/ui/select.tsx'
 
 import { InputGroup, InputGroupAddon, InputGroupInput } from '../../ui/input-group.tsx'
 import { NavMain } from './main.tsx'

@@ -192,8 +192,10 @@ working-hours/
 │       │   │   ├── gitlab.*                  # GitLab data loaders
 │       │   │   └── preferences.tsx           # User settings
 │       │   ├── components/
-│       │   │   ├── shadcn/                   # shadcn/ui components
-│       │   │   └── ui/                       # Custom components
+│       │   │   ├── shadcn/                   # shadcn/ui components (will move under shared/ui and widgets)
+│       │   │   └── ui/                       # Custom components (migrating to shared/ui)
+│       │   ├── shared/                       # FSD shared layer (ui, lib, config)
+│       │   ├── widgets/                      # Composite UI blocks (e.g., debug-panel, worklogs-calendar)
 │       │   ├── lib/
 │       │   │   ├── atlassian/                # Jira API client
 │       │   │   ├── gitlab/                   # GitLab API client
@@ -221,7 +223,7 @@ working-hours/
 bun run --filter @working-hours/web dev
 
 # Type checking
-bun run --filter @working-hours/web check-types
+bun run --filter @working-hours/web types:check
 
 # Linting
 bun run lint              # Check all files
@@ -515,7 +517,7 @@ bun run db:migrate
 
 **Type errors:**
 ```bash
-bun run --filter @working-hours/web check-types
+bun run --filter @working-hours/web types:check
 ```
 
 **Biome errors:**

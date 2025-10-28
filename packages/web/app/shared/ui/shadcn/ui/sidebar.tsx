@@ -6,10 +6,10 @@ import { PanelLeftIcon } from 'lucide-react'
 
 import { useIsMobile } from '~/hooks/use-mobile.ts'
 import { cn } from '~/lib/util/index.ts'
-import { Button } from '~/components/shadcn/ui/button.tsx'
-import { Input } from '~/components/shadcn/ui/input.tsx'
-import { Separator } from '~/components/shadcn/ui/separator.tsx'
-import { Skeleton } from '~/components/shadcn/ui/skeleton.tsx'
+import { Button } from '~/shared/ui/shadcn/ui/button.tsx'
+import { Input } from '~/shared/ui/shadcn/ui/input.tsx'
+import { Separator } from '~/shared/ui/shadcn/ui/separator.tsx'
+import { Skeleton } from '~/shared/ui/shadcn/ui/skeleton.tsx'
 
 import {
 	Sheet,
@@ -17,14 +17,14 @@ import {
 	SheetDescription,
 	SheetHeader,
 	SheetTitle
-} from '~/components/shadcn/ui/sheet.tsx'
+} from '~/shared/ui/shadcn/ui/sheet.tsx'
 
 import {
 	Tooltip,
 	TooltipContent,
 	TooltipProvider,
 	TooltipTrigger
-} from '~/components/shadcn/ui/tooltip.tsx'
+} from '~/shared/ui/shadcn/ui/tooltip.tsx'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 
 const SIDEBAR_COOKIE_NAME = 'sidebar_state'

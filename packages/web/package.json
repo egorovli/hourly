@@ -6,7 +6,7 @@
 		"build": "react-router build",
 		"dev": "react-router dev",
 		"start": "react-router-serve ./build/server/index.js",
-		"check-types": "react-router typegen && tsc",
+		"types:check": "react-router typegen && tsc",
 		"test": "jest",
 		"db:migrate": "dbmate up",
 		"db:rollback": "dbmate rollback",

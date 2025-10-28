@@ -10,11 +10,11 @@ import {
 	BreadcrumbList,
 	BreadcrumbPage,
 	BreadcrumbSeparator
-} from '~/components/shadcn/ui/breadcrumb.tsx'
+} from '~/shared/ui/shadcn/ui/breadcrumb.tsx'
 
-import { AppSidebar } from '~/components/shadcn/blocks/sidebar/index.tsx'
-import { Separator } from '~/components/shadcn/ui/separator.tsx'
-import { SidebarInset, SidebarProvider, SidebarTrigger } from '~/components/shadcn/ui/sidebar.tsx'
+import { AppSidebar } from '~/shared/ui/shadcn/blocks/sidebar/index.tsx'
+import { Separator } from '~/shared/ui/shadcn/ui/separator.tsx'
+import { SidebarInset, SidebarProvider, SidebarTrigger } from '~/shared/ui/shadcn/ui/sidebar.tsx'
 
 import { getSession } from '~/lib/session/storage.ts'
 

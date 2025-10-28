@@ -68,7 +68,7 @@ bun install
 bun run --filter @working-hours/web dev
 
 # Type generation and checking
-bun run --filter @working-hours/web check-types
+bun run --filter @working-hours/web types:check
 
 # Linting (Biome)
 bun run lint          # Check all files

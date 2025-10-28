@@ -1,4 +1,4 @@
-import { Progress } from '~/components/shadcn/ui/progress.tsx'
+import { Progress } from '~/shared/ui/shadcn/ui/progress.tsx'
 import { cn } from '~/lib/util/index.ts'
 
 interface AutoLoadProgressProps {

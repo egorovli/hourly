@@ -3,9 +3,9 @@ import type { VariantProps } from 'class-variance-authority'
 import { cva } from 'class-variance-authority'
 
 import { cn } from '~/lib/util/index.ts'
-import { Button } from '~/components/shadcn/ui/button.tsx'
-import { Input } from '~/components/shadcn/ui/input.tsx'
-import { Textarea } from '~/components/shadcn/ui/textarea.tsx'
+import { Button } from '~/shared/ui/shadcn/ui/button.tsx'
+import { Input } from '~/shared/ui/shadcn/ui/input.tsx'
+import { Textarea } from '~/shared/ui/shadcn/ui/textarea.tsx'
 
 function InputGroup({ className, ...props }: React.ComponentProps<'fieldset'>) {
 	return (

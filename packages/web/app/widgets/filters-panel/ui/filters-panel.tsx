@@ -1,4 +1,4 @@
-import { Skeleton } from '~/components/shadcn/ui/skeleton.tsx'
+import { Skeleton } from '~/shared/ui/shadcn/ui/skeleton.tsx'
 import { ErrorPlaceholder } from '~/shared/ui/error-placeholder.tsx'
 import { DateRangeFilter } from '~/features/select-date-range/index.ts'
 import { JiraProjectsSelector } from '~/features/select-jira-projects/index.ts'
