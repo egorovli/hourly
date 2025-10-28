@@ -232,6 +232,7 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 	const totalWorklogEntries = worklogEntriesQuery.data?.pages?.[0]?.pageInfo.total ?? 0
 	const totalRelevantIssues = jiraIssuesQuery.data?.pages?.[0]?.pageInfo.total ?? 0
 	const totalGitlabCommits = gitlabCommitsQuery.data?.pages?.[0]?.pageInfo.total ?? 0
+	const totalCommitReferencedIssues = commitIssueKeys.length
 
 	// Calendar transforms and getters
 	const calendarEvents = useMemo<WorklogCalendarEvent[]>(() => {
@@ -461,6 +462,7 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 		totalWorklogEntries,
 		totalRelevantIssues,
 		totalGitlabCommits,
+		totalCommitReferencedIssues,
 		// calendar
 		calendarView,
 		setCalendarView,

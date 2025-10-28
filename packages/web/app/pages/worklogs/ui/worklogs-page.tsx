@@ -1,19 +1,10 @@
-import type { DateRange } from 'react-day-picker'
-import type { LocalWorklogEntry, WorklogCalendarEvent } from '~/entities/index.ts'
-
-import type {
-	CalendarProps,
-	DayPropGetter,
-	EventPropGetter,
-	NavigateAction,
-	SlotPropGetter,
-	View
-} from 'react-big-calendar'
-
+import type { WorklogCalendarEvent } from '~/entities/index.ts'
+import type { CalendarProps } from 'react-big-calendar'
 import type { WorklogsPageProps } from '../model/types.ts'
 
 import { useWorklogsPageState } from '../model/use-worklogs-page-state.ts'
 
+import { useCallback, useState } from 'react'
 import { BugIcon, CalendarDays, ChevronDown } from 'lucide-react'
 import { Views } from 'react-big-calendar'
 
@@ -27,7 +18,12 @@ import { invariant } from '~/lib/util/index.ts'
 import { DateRangeFilter } from '~/features/select-date-range/index.ts'
 
 // FSD shared layer imports
-import { ErrorPlaceholder, formatDurationFromSeconds, getErrorMessage } from '~/shared/index.ts'
+import {
+	ErrorPlaceholder,
+	formatDurationFromSeconds,
+	getErrorMessage,
+	generateColorFromString
+} from '~/shared/index.ts'
 
 // FSD manage-worklogs feature
 import { WorklogChangesActions, WorklogChangesSummary } from '~/features/manage-worklogs/index.ts'
@@ -40,6 +36,7 @@ import {
 	GitlabCommitDebugCard
 } from '~/widgets/debug-panel/index.ts'
 
+// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 const FORMATS: CalendarProps<WorklogCalendarEvent>['formats'] = {
 	dayFormat: 'EEE, MMM d',
 	timeGutterFormat: 'HH:mm'
@@ -50,11 +47,14 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 	invariant(loaderData.user?.gitlab?.id, 'GitLab profile ID is required in loader data')
 
 	const {
+		// preferences
 		workingDayStartTime,
 		workingDayEndTime,
 		localizer,
+		// feature state
 		state,
 		dispatch,
+		// queries
 		projectsQuery,
 		usersQuery,
 		worklogEntriesQuery,
@@ -63,16 +63,19 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 		gitlabContributorsQuery,
 		gitlabCommitsQuery,
 		commitIssuesFromGitlabQuery,
+		// autos
 		worklogAutoLoad,
 		jiraIssuesAutoLoad,
 		gitlabCommitsAutoLoad,
 		commitIssuesAutoLoad,
+		// derived flags
 		hasJiraProjectsSelected,
 		hasGitlabProjectsSelected,
 		hasCompleteDateRange,
 		canLoadWorklogs,
 		canLoadRelevantIssues,
 		canLoadGitlabCommits,
+		// derived data
 		worklogChanges,
 		worklogDebugEntries,
 		relevantIssueDebugEntries,
@@ -81,6 +84,8 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 		totalWorklogEntries,
 		totalRelevantIssues,
 		totalGitlabCommits,
+		totalCommitReferencedIssues,
+		// calendar
 		calendarView,
 		setCalendarView,
 		calendarDate,
@@ -90,6 +95,7 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 		calendarDayPropGetter,
 		calendarSlotPropGetter,
 		calendarBusinessHours,
+		// handlers
 		handleJiraProjectIdsChange,
 		handleJiraUserIdsChange,
 		handleDateRangeChange,
@@ -103,46 +109,6 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 
 	const [isDebugOpen, setIsDebugOpen] = useState(false)
 	const isDebugPresetAvailable = import.meta.env.DEV
-
-	const projectsQuery = useJiraProjectsQuery({
-		userId: loaderData.user.atlassian.id
-	})
-
-	const usersQuery = useJiraUsersQuery({
-		userId: loaderData.user.atlassian.id,
-		projectIds: state.selectedJiraProjectIds
-	})
-
-	const worklogEntriesQuery = useWorklogEntriesQuery({
-		userId: loaderData.user.atlassian.id,
-		projectIds: state.selectedJiraProjectIds,
-		userIds: state.selectedJiraUserIds,
-		dateRange: state.dateRange
-	})
-
-	const jiraIssuesQuery = useJiraIssuesQuery({
-		userId: loaderData.user.atlassian.id,
-		projectIds: state.selectedJiraProjectIds,
-		userIds: state.selectedJiraUserIds,
-		dateRange: state.dateRange
-	})
-
-	const gitlabProjectsQuery = useGitlabProjectsQuery({
-		userId: loaderData.user.gitlab?.id
-	})
-
-	const gitlabContributorsQuery = useGitlabContributorsQuery({
-		userId: loaderData.user.gitlab?.id,
-		projectIds: state.selectedGitlabProjectIds,
-		dateRange: state.dateRange
-	})
-
-	const gitlabCommitsQuery = useGitlabCommitsQuery({
-		userId: loaderData.user.gitlab?.id,
-		projectIds: state.selectedGitlabProjectIds,
-		contributorIds: state.selectedGitlabContributorIds,
-		dateRange: state.dateRange
-	})
 
 	const handleApplyDebugPreset = useCallback(() => {
 		if (!isDebugPresetAvailable) {
@@ -178,13 +144,14 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 		setCalendarView(Views.WEEK)
 		setCalendarDate(presetFrom)
 	}, [
-		isDebugPresetAvailable,
 		handleCalendarViewDateRangeChange,
 		handleDateRangeChange,
 		handleGitlabContributorIdsChange,
 		handleGitlabProjectIdsChange,
 		handleJiraProjectIdsChange,
-		handleJiraUserIdsChange
+		handleJiraUserIdsChange,
+		setCalendarDate,
+		setCalendarView
 	])
 
 	const handleWorklogDelete = useCallback(
@@ -201,365 +168,6 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 	const handleWorklogRevert = useCallback(() => {
 		dispatch({ type: 'worklog.revert' })
 	}, [dispatch])
-
-	const handleControlledCalendarViewChange = useCallback((nextView: View) => {
-		setCalendarView(nextView)
-	}, [])
-
-	const handleControlledCalendarNavigate = useCallback(
-		(newDate: Date, nextView?: View, _action?: NavigateAction) => {
-			setCalendarDate(newDate)
-			if (nextView) {
-				setCalendarView(nextView)
-			}
-		},
-		[]
-	)
-
-	const handleControlledCalendarRangeChange = useCallback(
-		(
-			range:
-				| Date[]
-				| { start: Date; end: Date }
-				| { start: Date; end: Date; resourceId?: number | string }
-				| null
-		) => {
-			let from: Date | undefined
-			let to: Date | undefined
-
-			if (Array.isArray(range)) {
-				if (range.length > 0) {
-					const sorted = [...range].sort((a, b) => a.getTime() - b.getTime())
-					from = sorted[0]
-					to = sorted[sorted.length - 1]
-				}
-			} else if (range && 'start' in range && 'end' in range) {
-				from = range.start
-				to = range.end
-			}
-
-			handleCalendarViewDateRangeChange(
-				from && to
-					? {
-							from,
-							to
-						}
-					: undefined
-			)
-		},
-		[handleCalendarViewDateRangeChange]
-	)
-
-	useEffect(() => {
-		if (!worklogEntriesQuery.data?.pages) {
-			return
-		}
-
-		const loadedEntries: LocalWorklogEntry[] = worklogEntriesQuery.data.pages.flatMap(page =>
-			page.entries.map(entry => ({
-				localId: entry.id,
-				id: entry.id,
-				issueKey: entry.issueKey,
-				summary: entry.summary ?? 'Untitled issue',
-				projectName: entry.project?.name ?? entry.project?.key ?? 'Unknown project',
-				authorName:
-					entry.worklog.author?.displayName ?? entry.worklog.author?.accountId ?? 'Unknown author',
-				started: entry.worklog.started ?? new Date().toISOString(),
-				timeSpentSeconds: entry.worklog.timeSpentSeconds ?? 0
-			}))
-		)
-
-		dispatch({ type: 'worklog.setLoaded', payload: loadedEntries })
-	}, [dispatch, worklogEntriesQuery.data])
-
-	const hasJiraProjectsSelected = state.selectedJiraProjectIds.length > 0
-	const hasGitlabProjectsSelected = state.selectedGitlabProjectIds.length > 0
-	const hasGitlabContributorsSelected = state.selectedGitlabContributorIds.length > 0
-	const hasCompleteDateRange = Boolean(state.dateRange?.from && state.dateRange?.to)
-
-	const canLoadWorklogs =
-		state.selectedJiraProjectIds.length > 0 &&
-		state.selectedJiraUserIds.length > 0 &&
-		hasCompleteDateRange
-
-	const canLoadRelevantIssues = canLoadWorklogs
-
-	const canLoadGitlabCommits =
-		hasGitlabProjectsSelected && hasGitlabContributorsSelected && hasCompleteDateRange
-
-	const gitlabProjectNameById = useMemo(() => {
-		if (!gitlabProjectsQuery.data) {
-			return new Map<string, string>()
-		}
-
-		return new Map(
-			gitlabProjectsQuery.data.projects.map(project => [
-				String(project.id),
-				project.name_with_namespace ??
-					project.name ??
-					project.path_with_namespace ??
-					String(project.id)
-			])
-		)
-	}, [gitlabProjectsQuery.data])
-
-	const commitIssueKeys = useMemo(() => {
-		const keys = new Set<string>()
-		for (const page of gitlabCommitsQuery.data?.pages ?? []) {
-			for (const key of page.issueKeys ?? []) {
-				keys.add(key)
-			}
-		}
-		return Array.from(keys)
-	}, [gitlabCommitsQuery.data])
-
-	// Auto-load all pages for infinite queries
-	const worklogAutoLoad = useAutoLoadInfiniteQuery(worklogEntriesQuery, {
-		enabled: canLoadWorklogs
-	})
-	const jiraIssuesAutoLoad = useAutoLoadInfiniteQuery(jiraIssuesQuery, {
-		enabled: canLoadRelevantIssues
-	})
-	const gitlabCommitsAutoLoad = useAutoLoadInfiniteQuery(gitlabCommitsQuery, {
-		enabled: canLoadGitlabCommits
-	})
-
-	const commitIssuesFromGitlabQuery = useCommitIssuesQuery({
-		issueKeys: commitIssueKeys
-	})
-
-	const commitIssuesAutoLoad = useAutoLoadInfiniteQuery(commitIssuesFromGitlabQuery, {
-		enabled: commitIssueKeys.length > 0
-	})
-
-	const worklogDebugEntries = useMemo(() => {
-		if (!worklogEntriesQuery.data?.pages) {
-			return []
-		}
-
-		return worklogEntriesQuery.data.pages.flatMap(page =>
-			page.entries.map(entry => ({
-				id: entry.id,
-				issueKey: entry.issueKey,
-				summary: entry.summary ?? 'Untitled issue',
-				projectName: entry.project?.name ?? entry.project?.key ?? 'Unknown project',
-				authorName:
-					entry.worklog.author?.displayName ?? entry.worklog.author?.accountId ?? 'Unknown author',
-				started: entry.worklog.started,
-				timeSpentSeconds: entry.worklog.timeSpentSeconds ?? 0
-			}))
-		)
-	}, [worklogEntriesQuery.data])
-
-	const relevantIssueDebugEntries = useMemo(() => {
-		if (!jiraIssuesQuery.data?.pages) {
-			return []
-		}
-
-		return jiraIssuesQuery.data.pages.flatMap(page =>
-			page.issues.map(issue => ({
-				id: issue.id,
-				key: issue.key,
-				summary: issue.fields.summary ?? 'Untitled issue',
-				projectName: issue.fields.project?.name ?? issue.fields.project?.key ?? 'Unknown project',
-				status: issue.fields.status?.name ?? 'Unknown status',
-				assignee:
-					issue.fields.assignee?.displayName ?? issue.fields.assignee?.accountId ?? 'Unassigned',
-				updated: issue.fields.updated ?? issue.fields.created,
-				created: issue.fields.created
-			}))
-		)
-	}, [jiraIssuesQuery.data])
-
-	const gitlabCommitsDebugEntries = useMemo(() => {
-		if (!gitlabCommitsQuery.data?.pages) {
-			return []
-		}
-
-		return gitlabCommitsQuery.data.pages.flatMap(page =>
-			page.commits.map(commit => ({
-				id: commit.id,
-				shortId: commit.shortId,
-				title: commit.title || commit.message?.split('\n')[0] || commit.id.slice(0, 8),
-				authorLabel: commit.authorEmail
-					? `${commit.authorName ?? 'Unknown'} (${commit.authorEmail})`
-					: (commit.authorName ?? 'Unknown author'),
-				projectName:
-					gitlabProjectNameById.get(String(commit.projectId)) ?? `Project ${commit.projectId}`,
-				createdAt: commit.createdAt ?? undefined,
-				issueKeys: commit.issueKeys ?? []
-			}))
-		)
-	}, [gitlabCommitsQuery.data, gitlabProjectNameById])
-
-	const commitIssueDebugEntries = useMemo(() => {
-		if (!commitIssuesFromGitlabQuery.data?.pages) {
-			return []
-		}
-
-		return commitIssuesFromGitlabQuery.data.pages.flatMap(page =>
-			page.issues.map(issue => ({
-				id: issue.id,
-				key: issue.key,
-				summary: issue.fields.summary ?? 'Untitled issue',
-				projectName: issue.fields.project?.name ?? issue.fields.project?.key ?? 'Unknown project',
-				status: issue.fields.status?.name ?? 'Unknown status',
-				assignee:
-					issue.fields.assignee?.displayName ?? issue.fields.assignee?.accountId ?? 'Unassigned',
-				updated: issue.fields.updated ?? issue.fields.created,
-				created: issue.fields.created
-			}))
-		)
-	}, [commitIssuesFromGitlabQuery.data])
-
-	const totalWorklogEntries = worklogEntriesQuery.data?.pages?.[0]?.pageInfo.total ?? 0
-	const totalRelevantIssues = jiraIssuesQuery.data?.pages?.[0]?.pageInfo.total ?? 0
-	const totalGitlabCommits = gitlabCommitsQuery.data?.pages?.[0]?.pageInfo.total ?? 0
-	const totalCommitReferencedIssues = commitIssueKeys.length
-
-	// Transform worklog entries into calendar events
-	const calendarEvents = useMemo<WorklogCalendarEvent[]>(() => {
-		if (!worklogDebugEntries || worklogDebugEntries.length === 0) {
-			return []
-		}
-
-		return worklogDebugEntries
-			.filter(entry => entry.started && entry.timeSpentSeconds > 0)
-			.map<WorklogCalendarEvent>(entry => {
-				const startDate = new Date(entry.started ?? new Date().toISOString())
-				const endDate = new Date(startDate.getTime() + entry.timeSpentSeconds * 1000)
-
-				return {
-					id: entry.id ?? entry.issueKey,
-					title: `${entry.issueKey}: ${entry.summary}`,
-					start: startDate,
-					end: endDate,
-					resource: {
-						issueKey: entry.issueKey,
-						issueSummary: entry.summary,
-						projectName: entry.projectName,
-						authorName: entry.authorName,
-						timeSpentSeconds: entry.timeSpentSeconds,
-						started: entry.started ?? new Date().toISOString()
-					}
-				}
-			})
-	}, [worklogDebugEntries])
-
-	const calendarEventPropGetter = useCallback<EventPropGetter<WorklogCalendarEvent>>(event => {
-		// Generate color based on project name for consistent coloring
-		const colors = generateColorFromString(event.resource.projectName)
-
-		return {
-			className: 'worklog-calendar__event',
-			style: {
-				backgroundColor: colors.backgroundColor,
-				color: colors.textColor,
-				border: `1px solid ${colors.borderColor}`,
-				borderRadius: '0.375rem'
-			}
-		}
-	}, [])
-
-	const calendarDayPropGetter = useCallback<DayPropGetter>(date => {
-		const isWeekend = date.getDay() === 0 || date.getDay() === 6
-		return isWeekend ? { className: 'worklog-calendar__day--weekend' } : {}
-	}, [])
-
-	const calendarSlotPropGetter = useCallback<SlotPropGetter>(date => {
-		const classNames: string[] = []
-
-		if (date.getDay() === 0 || date.getDay() === 6) {
-			classNames.push('worklog-calendar__slot--weekend')
-		}
-
-		const hour = date.getHours()
-		if (hour < 7 || hour >= 19) {
-			classNames.push('worklog-calendar__slot--out-of-office')
-		}
-
-		return classNames.length > 0 ? { className: classNames.join(' ') } : {}
-	}, [])
-
-	const calendarBusinessHours = useMemo(() => {
-		const base = calendarDate ?? new Date()
-
-		// Parse working day times from preferences (format HH:MM)
-		const [startHourStr, startMinStr] = (workingDayStartTime ?? '09:00').split(':').map(Number)
-		const [endHourStr, endMinStr] = (workingDayEndTime ?? '18:00').split(':').map(Number)
-		const isInvalid =
-			Number.isNaN(startHourStr) ||
-			Number.isNaN(startMinStr) ||
-			Number.isNaN(endHourStr) ||
-			Number.isNaN(endMinStr)
-		const defaultStart = new Date(base)
-		defaultStart.setHours(8, 0, 0, 0)
-		const defaultEnd = new Date(base)
-		defaultEnd.setHours(18, 0, 0, 0)
-		if (isInvalid) {
-			return { start: defaultStart, end: defaultEnd }
-		}
-
-		// Calculate default bounds with -30min buffer before start, +30min buffer after end
-		const startMinutes = (startHourStr ?? 9) * 60 + (startMinStr ?? 0) - 30
-		const endMinutes = (endHourStr ?? 18) * 60 + (endMinStr ?? 0) + 30
-
-		let minHour = Math.floor(Math.max(0, startMinutes) / 60)
-		let minMinutes = Math.max(0, startMinutes) % 60
-		let maxHour = Math.floor(Math.min(24 * 60, endMinutes) / 60)
-		let maxMinutes = Math.min(24 * 60, endMinutes) % 60
-
-		// Filter events to only those in the current view range
-		const viewRange = state.calendarViewDateRange
-		const visibleEvents =
-			viewRange?.from && viewRange?.to
-				? calendarEvents.filter(
-						event =>
-							viewRange.to &&
-							viewRange.from &&
-							event.start <= viewRange.to &&
-							event.end >= viewRange.from
-					)
-				: calendarEvents
-
-		// Check if any visible events extend beyond default hours
-		if (visibleEvents.length > 0) {
-			for (const event of visibleEvents) {
-				const eventStartMinutes = event.start.getHours() * 60 + event.start.getMinutes()
-				const eventEndMinutes = event.end.getHours() * 60 + event.end.getMinutes()
-
-				const defaultStartMinutes = minHour * 60 + minMinutes
-				const defaultEndMinutes = maxHour * 60 + maxMinutes
-
-				if (eventStartMinutes < defaultStartMinutes) {
-					minHour = event.start.getHours()
-					minMinutes = 0
-				}
-
-				if (eventEndMinutes > defaultEndMinutes) {
-					maxHour = event.end.getHours()
-					maxMinutes = 0
-					// If event ends with minutes, include the next hour
-					if (event.end.getMinutes() > 0) {
-						maxHour += 1
-					}
-				}
-			}
-		}
-
-		const start = new Date(base)
-		start.setHours(minHour, minMinutes, 0, 0)
-		const end = new Date(base)
-		end.setHours(maxHour, maxMinutes, 0, 0)
-
-		return { start, end }
-	}, [
-		calendarDate,
-		calendarEvents,
-		state.calendarViewDateRange,
-		workingDayStartTime,
-		workingDayEndTime
-	])
 
 	const isAnyQueryLoading =
 		projectsQuery.isLoading ||
@@ -995,7 +603,7 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 								) : null}
 							</div>
 
-							{commitIssueKeys.length === 0 ? (
+							{commitIssueDebugEntries.length === 0 ? (
 								<p className='text-xs text-muted-foreground'>
 									No recognizable Jira issue references were found in the selected commits.
 								</p>
