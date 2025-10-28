@@ -1,4 +1,7 @@
 export * from './ui/worklog-calendar.tsx'
 export * from './ui/worklog-calendar-event.tsx'
 export * from './ui/worklog-calendar-toolbar.tsx'
+export * from './ui/worklog-calendar-actions.tsx'
+export * from './model/types.ts'
 export * from './model/use-business-hours.ts'
+export * from './model/use-calendar-events-state.ts'

@@ -41,6 +41,7 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 	const weekStartsOn = preferences?.weekStartsOn ?? 0
 	const workingDayStartTime = preferences?.workingDayStartTime ?? '09:00'
 	const workingDayEndTime = preferences?.workingDayEndTime ?? '18:00'
+	const calendarCompactMode = preferences?.calendarCompactMode ?? 'standard'
 
 	// Localizer per user settings
 	const luxonFirstDayOfWeek = weekStartsOn === 0 ? 7 : weekStartsOn
@@ -463,6 +464,7 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 		// preferences
 		workingDayStartTime,
 		workingDayEndTime,
+		calendarCompactMode,
 		localizer,
 		// feature state
 		state,

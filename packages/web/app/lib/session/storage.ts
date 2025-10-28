@@ -10,6 +10,7 @@ export interface ProviderAuth {
 	email?: string
 	tokenExpiresAt?: string
 	avatarUrl?: string
+	hasRefreshToken?: boolean
 }
 
 export interface SessionUser {

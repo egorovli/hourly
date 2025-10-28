@@ -868,3 +868,110 @@ button.rbc-input::-moz-focus-inner {
 	left: 10px;
 	right: 0;
 }
+
+/* ============================================
+   Calendar Compact Modes
+   ============================================ */
+
+/* Comfortable Mode - Slightly reduced spacing */
+.worklog-calendar--comfortable .rbc-time-slot {
+	min-height: 30px;
+}
+
+.worklog-calendar--comfortable .rbc-timeslot-group {
+	min-height: 30px;
+}
+
+.worklog-calendar--comfortable .rbc-event {
+	padding: 0.125rem 0.375rem;
+	font-size: 0.75rem;
+}
+
+.worklog-calendar--comfortable .rbc-day-slot .rbc-event {
+	min-height: 18px;
+	padding: 0.125rem 0.375rem;
+}
+
+.worklog-calendar--comfortable .rbc-event-content {
+	font-size: 0.75rem;
+	line-height: 1.2;
+}
+
+.worklog-calendar--comfortable .rbc-event-label {
+	font-size: 0.5625rem;
+}
+
+.worklog-calendar--comfortable .rbc-header {
+	padding: 0.25rem 0.375rem;
+	font-size: 0.625rem;
+}
+
+.worklog-calendar--comfortable .rbc-time-gutter .rbc-time-slot {
+	font-size: 0.625rem;
+}
+
+/* Compact Mode - Minimal spacing for maximum density */
+.worklog-calendar--compact .rbc-time-slot {
+	min-height: 20px;
+	padding: 1px 3px;
+}
+
+.worklog-calendar--compact .rbc-timeslot-group {
+	min-height: 20px;
+}
+
+.worklog-calendar--compact .rbc-event {
+	padding: 0.0625rem 0.25rem;
+	font-size: 0.6875rem;
+	min-height: 16px;
+}
+
+.worklog-calendar--compact .rbc-day-slot .rbc-event {
+	min-height: 16px;
+	padding: 0.0625rem 0.25rem;
+}
+
+.worklog-calendar--compact .rbc-event-content {
+	font-size: 0.6875rem;
+	line-height: 1.1;
+}
+
+.worklog-calendar--compact .rbc-event-label {
+	font-size: 0.5rem;
+	margin-bottom: 0;
+}
+
+.worklog-calendar--compact .rbc-header {
+	padding: 0.125rem 0.25rem;
+	font-size: 0.5625rem;
+}
+
+.worklog-calendar--compact .rbc-toolbar {
+	padding: 0.5rem;
+	font-size: 13px;
+}
+
+.worklog-calendar--compact .rbc-toolbar button {
+	height: 32px;
+	padding: 0 10px;
+	font-size: 0.8125rem;
+}
+
+.worklog-calendar--compact .rbc-time-gutter .rbc-time-slot {
+	font-size: 0.5625rem;
+	padding-left: 3px;
+}
+
+.worklog-calendar--compact .rbc-label {
+	padding: 0 0.25rem;
+	font-size: 0.5625rem;
+}
+
+.worklog-calendar--compact .rbc-day-slot .rbc-event-label {
+	padding-right: 3px;
+	font-size: 0.5rem;
+}
+
+.worklog-calendar--compact .rbc-day-slot .rbc-event-content {
+	font-size: 0.6875rem;
+}

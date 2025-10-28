@@ -46,6 +46,17 @@ const querySchema = z
 		}
 	})
 
+const worklogUpdateSchema = z.object({
+	eventId: nonEmptyTrimmedString,
+	issueKey: nonEmptyTrimmedString,
+	started: z.string().datetime(),
+	timeSpentSeconds: z.number().int().positive()
+})
+
+const updateWorklogsActionSchema = z.object({
+	updates: z.array(worklogUpdateSchema).min(1).max(50)
+})
+
 export async function loader({ request }: Route.LoaderArgs) {
 	const session = await sessionStorage.getSession(request.headers.get('Cookie'))
 	const user = session.get('user')
@@ -129,6 +140,57 @@ export async function loader({ request }: Route.LoaderArgs) {
 			totalPages: total === 0 ? 0 : Math.ceil(total / pagination.size),
 			hasNextPage: pagination.offset + pagination.size < total
 		}
+	}
+}
+
+export async function action({ request }: Route.ActionArgs) {
+	const session = await sessionStorage.getSession(request.headers.get('Cookie'))
+	const user = session.get('user')
+
+	invariant(user?.atlassian?.id, 'User is not authenticated with Atlassian')
+
+	// Parse and validate request body
+	let body: unknown
+	try {
+		body = await request.json()
+	} catch {
+		throw new Response(JSON.stringify({ error: 'Invalid JSON in request body' }), {
+			status: 400,
+			headers: { 'Content-Type': 'application/json' }
+		})
+	}
+
+	const parsed = updateWorklogsActionSchema.safeParse(body)
+	if (!parsed.success) {
+		throw new Response(JSON.stringify({ errors: parsed.error.format() }), {
+			status: 400,
+			headers: { 'Content-Type': 'application/json' }
+		})
+	}
+
+	// Fake processing: simulate 5 second delay
+	await new Promise(resolve => setTimeout(resolve, 5000))
+
+	// Fake error: 15% chance of failure
+	const shouldFail = Math.random() < 0.15
+	if (shouldFail) {
+		throw new Response(
+			JSON.stringify({
+				error: 'Failed to update worklogs',
+				message: 'A simulated error occurred while saving your changes. Please try again.'
+			}),
+			{
+				status: 500,
+				headers: { 'Content-Type': 'application/json' }
+			}
+		)
+	}
+
+	// Success response
+	return {
+		success: true,
+		updatedCount: parsed.data.updates.length,
+		message: `Successfully updated ${parsed.data.updates.length} worklog ${parsed.data.updates.length === 1 ? 'entry' : 'entries'}`
 	}
 }
 

@@ -21,7 +21,8 @@ const schema = {
 			weekStartsOn: z.coerce.number().int().min(0).max(6).optional(),
 			workingDayStartTime: timeString,
 			workingDayEndTime: timeString,
-			minimumDurationMinutes: z.coerce.number().int().min(1).max(480).optional()
+			minimumDurationMinutes: z.coerce.number().int().min(1).max(480).optional(),
+			calendarCompactMode: z.enum(['standard', 'comfortable', 'compact']).optional()
 		})
 		.refine(
 			data => {
@@ -87,6 +88,10 @@ export async function action({ request }: Route.ActionArgs) {
 
 	if (typeof data.minimumDurationMinutes === 'number') {
 		preferences.minimumDurationMinutes = data.minimumDurationMinutes
+	}
+
+	if (data.calendarCompactMode) {
+		preferences.calendarCompactMode = data.calendarCompactMode
 	}
 
 	const response = new Response(null, {

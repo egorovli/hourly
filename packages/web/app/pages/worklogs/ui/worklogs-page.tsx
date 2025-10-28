@@ -27,6 +27,7 @@ import {
 
 // FSD manage-worklogs feature
 import { WorklogChangesActions, WorklogChangesSummary } from '~/features/manage-worklogs/index.ts'
+import { useUpdateCalendarCompactMode } from '~/features/update-calendar-compact-mode/index.ts'
 
 // FSD widgets
 import { FiltersPanel, FilterDependencyMessage } from '~/widgets/filters-panel/index.ts'
@@ -51,6 +52,7 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 		// preferences
 		workingDayStartTime,
 		workingDayEndTime,
+		calendarCompactMode,
 		localizer,
 		// feature state
 		state,
@@ -110,6 +112,16 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 
 	const [isDebugOpen, setIsDebugOpen] = useState(false)
 	const isDebugPresetAvailable = import.meta.env.DEV
+
+	// Calendar compact mode mutation
+	const compactModeMutation = useUpdateCalendarCompactMode()
+
+	const handleCompactModeChange = useCallback(
+		(mode: typeof calendarCompactMode) => {
+			compactModeMutation.mutate({ calendarCompactMode: mode })
+		},
+		[compactModeMutation]
+	)
 
 	const handleApplyDebugPreset = useCallback(() => {
 		if (!isDebugPresetAvailable) {
@@ -341,6 +353,8 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 									eventPropGetter={calendarEventPropGetter}
 									dayPropGetter={calendarDayPropGetter}
 									slotPropGetter={calendarSlotPropGetter}
+									compactMode={calendarCompactMode}
+									onCompactModeChange={handleCompactModeChange}
 								/>
 							</div>
 						</>

@@ -1,13 +1,14 @@
 import type { SessionUser } from '~/lib/session/storage.ts'
 
-import { ChevronsUpDown, LogOut, Sparkles, CheckCircle2 } from 'lucide-react'
+import { ChevronsUpDown, LogOut, Sparkles, CheckCircle2, RefreshCw } from 'lucide-react'
 import { SiAtlassian, SiAtlassianHex, SiGitlab, SiGitlabHex } from '@icons-pack/react-simple-icons'
-import { Link } from 'react-router'
+import { Link, useFetcher } from 'react-router'
 import { DateTime } from 'luxon'
 import { Fragment, useEffect, useMemo, useReducer } from 'react'
 
 import { Avatar, AvatarFallback, AvatarImage } from '~/shared/ui/shadcn/ui/avatar.tsx'
 import { Badge } from '~/shared/ui/shadcn/ui/badge.tsx'
+import { cn } from '~/lib/util/index.ts'
 
 import {
 	DropdownMenu,
@@ -85,6 +86,7 @@ function Expiration({ date, interval = 1000 }: ExpirationProps): React.ReactNode
 
 export function NavUser({ user, sessionUser }: NavUserProps) {
 	const { isMobile } = useSidebar()
+	const refreshFetcher = useFetcher<{ success: boolean; error?: string; expiresAt?: string }>()
 
 	const providers = useMemo(
 		() => [
@@ -93,6 +95,7 @@ export function NavUser({ user, sessionUser }: NavUserProps) {
 				label: 'Atlassian',
 				email: sessionUser?.atlassian?.email,
 				expiresAt: sessionUser?.atlassian?.tokenExpiresAt,
+				hasRefreshToken: sessionUser?.atlassian?.hasRefreshToken,
 				signInPath: '/auth/atlassian/sign-in',
 				signOutPath: '/auth/atlassian/sign-out',
 				Icon: SiAtlassian,
@@ -103,6 +106,7 @@ export function NavUser({ user, sessionUser }: NavUserProps) {
 				label: 'GitLab',
 				email: sessionUser?.gitlab?.email,
 				expiresAt: sessionUser?.gitlab?.tokenExpiresAt,
+				hasRefreshToken: sessionUser?.gitlab?.hasRefreshToken,
 				signInPath: '/auth/gitlab/sign-in',
 				signOutPath: '/auth/gitlab/sign-out',
 				Icon: SiGitlab,
@@ -112,6 +116,29 @@ export function NavUser({ user, sessionUser }: NavUserProps) {
 
 		[sessionUser]
 	)
+
+	const handleRefreshToken = (provider: 'atlassian' | 'gitlab') => {
+		refreshFetcher.submit(null, {
+			method: 'POST',
+			action: `/auth/${provider}/refresh`
+		})
+	}
+
+	const isRefreshing = refreshFetcher.state !== 'idle'
+
+	// Handle refresh response
+	useEffect(() => {
+		if (refreshFetcher.data && refreshFetcher.state === 'idle') {
+			if (refreshFetcher.data.success) {
+				// Success - the session is automatically updated by the loader revalidation
+				// You could add a success notification here if desired
+			} else if (refreshFetcher.data.error) {
+				// Show error to user
+				// eslint-disable-next-line no-alert
+				alert(`Failed to refresh token: ${refreshFetcher.data.error}`)
+			}
+		}
+	}, [refreshFetcher.data, refreshFetcher.state])
 
 	return (
 		<SidebarMenu>
@@ -196,6 +223,15 @@ export function NavUser({ user, sessionUser }: NavUserProps) {
 									<DropdownMenuItem asChild>
 										<Link to={p.signInPath}>Reauthenticate {p.label}</Link>
 									</DropdownMenuItem>
+									{p.hasRefreshToken && (
+										<DropdownMenuItem
+											onClick={() => handleRefreshToken(p.key)}
+											disabled={isRefreshing}
+										>
+											<RefreshCw className={cn(isRefreshing && 'animate-spin')} />
+											Refresh token
+										</DropdownMenuItem>
+									)}
 									<DropdownMenuItem asChild>
 										<Link to={p.signOutPath}>Sign out {p.label}</Link>
 									</DropdownMenuItem>

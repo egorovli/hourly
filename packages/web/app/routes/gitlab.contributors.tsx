@@ -26,7 +26,7 @@ const querySchema = z
 	.superRefine(({ dateFrom, dateTo }, ctx) => {
 		if (parseIsoDate(dateFrom) > parseIsoDate(dateTo)) {
 			ctx.addIssue({
-				code: z.ZodIssueCode.custom,
+				code: 'custom',
 				message: 'date-to must be greater than or equal to date-from',
 				path: ['dateTo']
 			})

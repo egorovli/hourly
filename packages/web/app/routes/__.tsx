@@ -15,8 +15,10 @@ import {
 import { AppSidebar } from '~/shared/ui/shadcn/blocks/sidebar/index.tsx'
 import { Separator } from '~/shared/ui/shadcn/ui/separator.tsx'
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '~/shared/ui/shadcn/ui/sidebar.tsx'
+import { Toaster } from '~/shared/ui/shadcn/ui/sonner.tsx'
 
 import { getSession } from '~/lib/session/storage.ts'
+import { enrichSessionUserWithRefreshTokens } from '~/lib/session/helpers.ts'
 
 export default function CommonLayout({ loaderData }: Route.ComponentProps): React.ReactNode {
 	return (
@@ -51,6 +53,7 @@ export default function CommonLayout({ loaderData }: Route.ComponentProps): Reac
 					</main>
 				</div>
 			</SidebarInset>
+			<Toaster />
 		</SidebarProvider>
 	)
 }
@@ -66,5 +69,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 		return redirect(`/auth/sign-in?redirected-from=${encodeURIComponent(redirectedFrom)}`)
 	}
 
-	return { user }
+	// Enrich user with refresh token availability
+	const enrichedUser = await enrichSessionUserWithRefreshTokens(user)
+
+	return { user: enrichedUser }
 }

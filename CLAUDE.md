@@ -5,6 +5,7 @@ Guidance for Claude Code when working in this repo.
 ## Project
 - Purpose: reconcile GitLab commits ↔ Jira issues → monthly hours
 - Stack: Bun, React Router v7 (SSR), React 19, Tailwind 4, shadcn/ui, Radix, TanStack Query v5, SQLite + MikroORM 6, Remix Auth (Atlassian+GitLab), Zod, Conform, Jest/Testing Library/Playwright
+- **Troubleshooting**: If encountering errors, consult `TROUBLESHOOTING.md` for common issues and solutions
 
 ## Doc Search (Mandatory)
 Use all three before new/unknown APIs; cross‑check findings:

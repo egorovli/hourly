@@ -49,7 +49,7 @@ const querySchema = z
 
 		if (!dateFrom || !dateTo) {
 			ctx.addIssue({
-				code: z.ZodIssueCode.custom,
+				code: 'custom',
 				message: 'date-from and date-to are required unless querying by issue keys',
 				path: ['dateFrom']
 			})
@@ -58,7 +58,7 @@ const querySchema = z
 
 		if (parseIsoDate(dateFrom) > parseIsoDate(dateTo)) {
 			ctx.addIssue({
-				code: z.ZodIssueCode.custom,
+				code: 'custom',
 				message: 'date-to must be greater than or equal to date-from',
 				path: ['dateTo']
 			})
@@ -67,7 +67,7 @@ const querySchema = z
 
 		if (projectIds.length === 0) {
 			ctx.addIssue({
-				code: z.ZodIssueCode.custom,
+				code: 'custom',
 				message: 'Select at least one project',
 				path: ['projectIds']
 			})
@@ -75,7 +75,7 @@ const querySchema = z
 
 		if (userIds.length === 0) {
 			ctx.addIssue({
-				code: z.ZodIssueCode.custom,
+				code: 'custom',
 				message: 'Select at least one user',
 				path: ['userIds']
 			})
