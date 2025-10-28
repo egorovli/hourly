@@ -1,3 +1,5 @@
+temp
+
 # Git and version control
 .git
 .gitignore
@@ -89,7 +91,6 @@ biome.json
 
 # TypeScript
 *.tsbuildinfo
-tsconfig.json
 
 # Docker
 Dockerfile

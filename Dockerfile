@@ -26,10 +26,10 @@ WORKDIR /app
 # Install production dependencies with caching
 RUN --mount=type=cache,target=/root/.bun/install/cache \
 	bun install \
-		--frozen-lockfile \
-		--production \
-		--no-save \
-		--ignore-scripts
+	--frozen-lockfile \
+	--production \
+	--no-save \
+	--ignore-scripts
 
 # ============================================================================
 # Dependencies stage: Install all dependencies (for build)
@@ -41,9 +41,9 @@ WORKDIR /app
 # Install all dependencies (including dev) with caching
 RUN --mount=type=cache,target=/root/.bun/install/cache \
 	bun install \
-		--frozen-lockfile \
-		--no-save \
-		--ignore-scripts
+	--frozen-lockfile \
+	--no-save \
+	--ignore-scripts
 
 # ============================================================================
 # Builder stage: Build the application
@@ -59,13 +59,15 @@ WORKDIR /app
 # Copy source code
 COPY . .
 
+RUN ls -lah .
+RUN ls -lah ./packages/web
 # Build the web application
 RUN bun run --filter "@hourly/web" build
 
 # ============================================================================
 # Runtime stage: Final production image
 # ============================================================================
-FROM oven/bun:${BUN_VERSION}-slim AS runtime
+FROM oven/bun:${BUN_VERSION}-slim AS web
 
 # Set production environment and version
 ARG NODE_ENV=production
@@ -76,10 +78,11 @@ ENV PORT=3000
 ENV VERSION=${VERSION}
 
 # Set labels for image metadata
+LABEL maintainer="Anton Egorov <anton@egorov.io>"
 LABEL org.opencontainers.image.title="Hourly Web"
 LABEL org.opencontainers.image.description="GitLab commits ↔ Jira issues → monthly hours reconciliation"
 LABEL org.opencontainers.image.vendor="Hourly"
-LABEL org.opencontainers.image.authors="egorovli"
+LABEL org.opencontainers.image.authors="Anton Egorov <anton@egorov.io>"
 LABEL org.opencontainers.image.version="${VERSION}"
 
 WORKDIR /app

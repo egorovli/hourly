@@ -1,3 +1,5 @@
+import type { Rel } from '@mikro-orm/core'
+
 import { Entity, PrimaryKey, Property, ManyToOne, PrimaryKeyProp } from '@mikro-orm/core'
 
 import { Profile } from './profile.ts'
@@ -13,7 +15,7 @@ export class Token {
 	provider!: string
 
 	@ManyToOne(() => Profile, { fieldNames: ['profile_id', 'provider'] })
-	profile!: Profile
+	profile!: Rel<Profile>
 
 	@Property({ name: 'access_token', columnType: 'text' })
 	accessToken!: string

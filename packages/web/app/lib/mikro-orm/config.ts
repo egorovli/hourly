@@ -17,7 +17,7 @@ const databaseRelativePath =
 
 const __dirname = path.resolve(import.meta.dirname)
 const projectRoot = path.resolve(__dirname, '../../..')
-const metadataFilepath = path.resolve(projectRoot, './db/.tmp/metadata.json')
+const metadataFilepath = path.resolve(projectRoot, './temp/metadata.json')
 const databaseFilepath = path.resolve(projectRoot, databaseRelativePath)
 
 export const config: Options = {
@@ -57,8 +57,7 @@ export const config: Options = {
 			}
 		: {}),
 
-	dynamicImportProvider: async id => import(id),
-	debug: false
+	dynamicImportProvider: async id => import(id)
 }
 
 export default config
