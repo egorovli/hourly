@@ -106,7 +106,7 @@ jobs:
           context: .
           push: false
           load: true
-          target: runtime
+          target: web
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:scan
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
@@ -155,7 +155,7 @@ jobs:
           context: .
           push: true
           platforms: linux/amd64,linux/arm64
-          target: runtime
+          target: web
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
