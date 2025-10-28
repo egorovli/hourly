@@ -1,5 +1,5 @@
 {
-	"name": "@working-hours/web",
+	"name": "@hourly/web",
 	"private": true,
 	"type": "module",
 	"scripts": {

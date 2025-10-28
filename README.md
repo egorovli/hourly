@@ -1,6 +1,6 @@
 # Working Hours Reconciliation Tool
 
-A powerful web application for reconciling personal GitLab commit activity with Jira issues to automate monthly working-hours allocation. Visualize your work distribution across projects with an interactive calendar interface.
+A powerful web application for reconciling personal GitLab commit activity with Jira issues to automate monthly hourly allocation. Visualize your work distribution across projects with an interactive calendar interface.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Bun](https://img.shields.io/badge/bun-latest-black)
@@ -96,7 +96,7 @@ Perfect for freelancers, consultants, and teams who need accurate time tracking 
 
 ```bash
 git clone <repository-url>
-cd working-hours
+cd hourly
 ```
 
 ### 2. Install Dependencies
@@ -148,7 +148,7 @@ bun run db:status
 
 ```bash
 # From project root
-bun run --filter @working-hours/web dev
+bun run --filter @hourly/web dev
 ```
 
 Visit http://localhost:3000
@@ -180,7 +180,7 @@ Visit http://localhost:3000
 ## 📦 Project Structure
 
 ```
-working-hours/
+hourly/
 ├── packages/
 │   └── web/                    # Main application
 │       ├── app/
@@ -220,21 +220,21 @@ working-hours/
 
 ```bash
 # Development server
-bun run --filter @working-hours/web dev
+bun run --filter @hourly/web dev
 
 # Type checking
-bun run --filter @working-hours/web types:check
+bun run --filter @hourly/web types:check
 
 # Linting
 bun run lint              # Check all files
 bun run lint:fix          # Auto-fix issues
 
 # Testing
-bun run --filter @working-hours/web test
+bun run --filter @hourly/web test
 
 # Production build
-bun run --filter @working-hours/web build
-bun run --filter @working-hours/web start
+bun run --filter @hourly/web build
+bun run --filter @hourly/web start
 ```
 
 ### Database Commands
@@ -419,7 +419,7 @@ Preferences are stored in a cookie and respected throughout the application.
 ### Unit & Integration Tests
 
 ```bash
-bun run --filter @working-hours/web test
+bun run --filter @hourly/web test
 ```
 
 ### Test Patterns
@@ -444,7 +444,7 @@ Assumes an existing authenticated session for quick testing.
 ### Build for Production
 
 ```bash
-bun run --filter @working-hours/web build
+bun run --filter @hourly/web build
 ```
 
 ### Environment Variables
@@ -465,7 +465,7 @@ bun run db:migrate
 ### Start Production Server
 
 ```bash
-bun run --filter @working-hours/web start
+bun run --filter @hourly/web start
 ```
 
 ## 🤝 Contributing
@@ -517,7 +517,7 @@ bun run db:migrate
 
 **Type errors:**
 ```bash
-bun run --filter @working-hours/web types:check
+bun run --filter @hourly/web types:check
 ```
 
 **Biome errors:**

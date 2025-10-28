@@ -16,7 +16,7 @@ The workspace uses Bun workspaces with code under `packages/`. The web app lives
 **Example:** When adding infinite scroll, search Context7 for "TanStack Query useInfiniteQuery", DDG for "React Router v7 infinite queries pagination", and Perplexity with recency="month" for "React infinite scroll auto-load patterns 2025".
 
 ## Build, Test, and Development Commands
-Run `bun install` from the repo root to sync dependencies. Use `bun run --filter @working-hours/web dev` for the local server at http://localhost:3000 with SSR enabled. Build production bundles with `bun run --filter @working-hours/web build`, and generate type output with `bun run --filter @working-hours/web types:check`. Static analysis runs through Biome via `bun run lint` or `bun run lint:fix`.
+Run `bun install` from the repo root to sync dependencies. Use `bun run --filter @hourly/web dev` for the local server at http://localhost:3000 with SSR enabled. Build production bundles with `bun run --filter @hourly/web build`, and generate type output with `bun run --filter @hourly/web types:check`. Static analysis runs through Biome via `bun run lint` or `bun run lint:fix`.
 
 ## Coding Style & Naming Conventions
 
@@ -51,7 +51,7 @@ if (process.env.NODE_ENV !== 'development') {
 This pattern ensures connections are reused during development hot reloads while creating fresh instances in production. See [packages/web/app/lib/db/connection.ts](packages/web/app/lib/db/connection.ts) for a complete example with DuckDB.
 
 ## Testing Guidelines
-Unit and integration tests run with Jest and Testing Library (`bun run --filter @working-hours/web test`). Place specs alongside the feature as `*.test.tsx` or inside `__tests__` when covering multiple modules. Use `@testing-library/react` queries over snapshots, and hydrate React Router loaders with representative fixtures. Target meaningful coverage on business-critical routes; add coverage thresholds via `jest.config.ts` if metrics slip.
+Unit and integration tests run with Jest and Testing Library (`bun run --filter @hourly/web test`). Place specs alongside the feature as `*.test.tsx` or inside `__tests__` when covering multiple modules. Use `@testing-library/react` queries over snapshots, and hydrate React Router loaders with representative fixtures. Target meaningful coverage on business-critical routes; add coverage thresholds via `jest.config.ts` if metrics slip.
 
 ### Dev login shortcut for MCP/browser testing
 
@@ -64,10 +64,10 @@ In development, you can quickly assume an authenticated session without going th
 Note: This route is only available when `import.meta.env.DEV` is true.
 
 ## Commit & Pull Request Guidelines
-Git history is not bundled in this workspace; follow Conventional Commits (`feat:`, `fix:`, `docs:`) so automation can infer change scope. Start PR descriptions with a one-sentence summary, list testing evidence (`Tests: bun run lint && bun run --filter @working-hours/web test`), and link tracking tickets. Include screenshots or screencasts when UI changes affect routes. Request review from domain owners and wait for green CI before merging.
+Git history is not bundled in this workspace; follow Conventional Commits (`feat:`, `fix:`, `docs:`) so automation can infer change scope. Start PR descriptions with a one-sentence summary, list testing evidence (`Tests: bun run lint && bun run --filter @hourly/web test`), and link tracking tickets. Include screenshots or screencasts when UI changes affect routes. Request review from domain owners and wait for green CI before merging.
 
 ## Automation Vision
-- Goal: build a service that reconciles personal commit activity with Jira issues to automate monthly working-hours allocation.
+- Goal: build a service that reconciles personal commit activity with Jira issues to automate monthly hourly allocation.
 - Authentication: require Atlassian (Jira) OAuth2 for issue metadata and GitLab OAuth2 for commit history; both flows now handled via Remix Auth with provider-specific session merging.
 - Data Pipeline: filter GitLab commits by agreed criteria (e.g., branch naming, Jira keys in messages), fetch linked Jira issue details (summary, description, status), and stage them for time distribution.
 - Workload Distribution: design rules to map issues/commits onto the working-month calendar, producing shareable reports or automated time entries.

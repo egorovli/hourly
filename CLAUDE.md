@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a **working-hours reconciliation tool** that helps reconcile personal GitLab commit activity with Jira issues to automate monthly working-hours allocation. The goal is to map reconciled issues and commits onto a working-month calendar for time distribution.
+This is a **hourly reconciliation tool** that helps reconcile personal GitLab commit activity with Jira issues to automate monthly hourly allocation. The goal is to map reconciled issues and commits onto a working-month calendar for time distribution.
 
 **Tech Stack:**
 - **Runtime:** Bun (workspaces, package manager)
@@ -65,10 +65,10 @@ bun install
 ### Development
 ```bash
 # Start dev server (http://localhost:3000)
-bun run --filter @working-hours/web dev
+bun run --filter @hourly/web dev
 
 # Type generation and checking
-bun run --filter @working-hours/web types:check
+bun run --filter @hourly/web types:check
 
 # Linting (Biome)
 bun run lint          # Check all files
@@ -95,16 +95,16 @@ bun run db:status
 ### Testing
 ```bash
 # Run Jest test suite
-bun run --filter @working-hours/web test
+bun run --filter @hourly/web test
 ```
 
 ### Build
 ```bash
 # Production build
-bun run --filter @working-hours/web build
+bun run --filter @hourly/web build
 
 # Start production server
-bun run --filter @working-hours/web start
+bun run --filter @hourly/web start
 ```
 
 ## Architecture
