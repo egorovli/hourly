@@ -6,13 +6,17 @@ import type {
 	DayPropGetter,
 	EventPropGetter,
 	SlotPropGetter,
-	View
+	View,
+	EventProps
 } from 'react-big-calendar'
 
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 
 import { DragAndDropCalendar } from '~/lib/calendar/drag-and-drop-calendar.client.tsx'
 import { cn } from '~/lib/util/index.ts'
+import { ContextMenuTrigger } from '~/shared/ui/shadcn/ui/context-menu.tsx'
+import { SlotContextMenu } from '~/features/calendar-context-menu/index.ts'
+import { EventContextMenu } from '~/features/calendar-context-menu/index.ts'
 import { useCalendarEventsState } from '../model/use-calendar-events-state.ts'
 
 import { WorklogCalendarActions } from './worklog-calendar-actions.tsx'
@@ -68,6 +72,24 @@ export function WorklogsCalendar({
 		saveError
 	} = useCalendarEventsState({ events })
 
+	// Context menu handlers (stubs)
+	const handleEditEvent = useCallback((event: WorklogCalendarEvent) => {
+		// TODO: Implement edit event functionality
+		// For now, this is a stub that will be connected to actual edit logic
+		void event
+	}, [])
+
+	const handleDeleteEvent = useCallback((event: WorklogCalendarEvent) => {
+		// TODO: Implement delete event functionality
+		// For now, this is a stub that will be connected to actual delete logic
+		void event
+	}, [])
+
+	const handleCreateEvent = useCallback(() => {
+		// TODO: Implement create event functionality
+		// For now, this is a stub that will be connected to actual create logic
+	}, [])
+
 	// Create a custom toolbar component with compact mode props
 	const CustomToolbar = useMemo(
 		() =>
@@ -83,9 +105,29 @@ export function WorklogsCalendar({
 		[compactMode, onCompactModeChange]
 	)
 
+	// Create custom event component with context menu
+	const EventWithContextMenu = useCallback(
+		(eventProps: EventProps<WorklogCalendarEvent>) => {
+			return (
+				<EventContextMenu
+					event={eventProps.event}
+					onEdit={handleEditEvent}
+					onDelete={handleDeleteEvent}
+				>
+					<ContextMenuTrigger asChild>
+						<div className='h-full w-full'>
+							<WorklogCalendarEventContent {...eventProps} />
+						</div>
+					</ContextMenuTrigger>
+				</EventContextMenu>
+			)
+		},
+		[handleEditEvent, handleDeleteEvent]
+	)
+
 	const mergedComponents: CalendarProps<WorklogCalendarEvent>['components'] = {
 		toolbar: CustomToolbar,
-		event: WorklogCalendarEventContent,
+		event: EventWithContextMenu,
 		...components
 	}
 
@@ -98,39 +140,43 @@ export function WorklogsCalendar({
 				isSaving={isSaving}
 				saveError={saveError}
 			/>
-			<div className='flex-1 overflow-hidden'>
-				<DragAndDropCalendar
-					className={cn(
-						'worklog-calendar',
-						compactMode === 'comfortable' && 'worklog-calendar--comfortable',
-						compactMode === 'compact' && 'worklog-calendar--compact'
-					)}
-					date={date}
-					defaultView={view}
-					events={localEvents}
-					localizer={localizer}
-					style={{ height: '100%' }}
-					view={view}
-					views={['month', 'week']}
-					step={15}
-					formats={formats}
-					components={mergedComponents}
-					onView={onView}
-					onNavigate={onNavigate}
-					onRangeChange={onRangeChange}
-					onEventResize={handleEventResize}
-					onEventDrop={handleEventDrop}
-					eventPropGetter={eventPropGetter}
-					dayPropGetter={dayPropGetter}
-					slotPropGetter={slotPropGetter}
-					showMultiDayTimes
-					min={min}
-					max={max}
-					tooltipAccessor={event => event.title}
-					resizable
-					draggableAccessor={() => true}
-				/>
-			</div>
+			<SlotContextMenu onCreate={handleCreateEvent}>
+				<ContextMenuTrigger asChild>
+					<div className='flex-1 overflow-hidden'>
+						<DragAndDropCalendar
+							className={cn(
+								'worklog-calendar',
+								compactMode === 'comfortable' && 'worklog-calendar--comfortable',
+								compactMode === 'compact' && 'worklog-calendar--compact'
+							)}
+							date={date}
+							defaultView={view}
+							events={localEvents}
+							localizer={localizer}
+							style={{ height: '100%' }}
+							view={view}
+							views={['month', 'week']}
+							step={15}
+							formats={formats}
+							components={mergedComponents}
+							onView={onView}
+							onNavigate={onNavigate}
+							onRangeChange={onRangeChange}
+							onEventResize={handleEventResize}
+							onEventDrop={handleEventDrop}
+							eventPropGetter={eventPropGetter}
+							dayPropGetter={dayPropGetter}
+							slotPropGetter={slotPropGetter}
+							showMultiDayTimes
+							min={min}
+							max={max}
+							tooltipAccessor={event => event.title}
+							resizable
+							draggableAccessor={() => true}
+						/>
+					</div>
+				</ContextMenuTrigger>
+			</SlotContextMenu>
 		</div>
 	)
 }
