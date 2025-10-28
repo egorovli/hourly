@@ -59,16 +59,25 @@ function InputGroupAddon({
 	...props
 }: React.ComponentProps<'fieldset'> & VariantProps<typeof inputGroupAddonVariants>) {
 	return (
-		// biome-ignore lint/a11y/useKeyWithClickEvents: <explanation>
 		<fieldset
 			data-slot='input-group-addon'
 			data-align={align}
 			className={cn(inputGroupAddonVariants({ align }), className)}
+			aria-label='Input group addon'
 			onClick={e => {
 				if ((e.target as HTMLElement).closest('button')) {
 					return
 				}
 				e.currentTarget.parentElement?.querySelector('input')?.focus()
+			}}
+			onKeyDown={e => {
+				if (e.key === 'Enter' || e.key === ' ') {
+					if ((e.target as HTMLElement).closest('button')) {
+						return
+					}
+					e.preventDefault()
+					;(e.currentTarget.parentElement as HTMLElement | null)?.querySelector('input')?.focus()
+				}
 			}}
 			{...props}
 		/>

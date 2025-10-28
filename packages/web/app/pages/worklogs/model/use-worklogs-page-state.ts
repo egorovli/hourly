@@ -1,7 +1,6 @@
 import type { DateRange } from 'react-day-picker'
 import type { LocalWorklogEntry, WorklogCalendarEvent } from '~/entities/index.ts'
 import type {
-	CalendarProps,
 	DayPropGetter,
 	EventPropGetter,
 	NavigateAction,
@@ -12,6 +11,7 @@ import type { WorklogsPageLoaderData } from './types.ts'
 
 import { DateTime } from 'luxon'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { invariant } from '~/lib/util/index.ts'
 import { luxonLocalizer, Views } from 'react-big-calendar'
 
 import { useJiraProjectsQuery } from '~/features/load-jira-projects/index.ts'
@@ -29,6 +29,13 @@ import { generateColorFromString } from '~/shared/index.ts'
 import { useAutoLoadInfiniteQuery } from '~/shared/lib/query/index.ts'
 
 export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
+	invariant(loaderData.user?.atlassian?.id, 'Atlassian profile ID is required in loader data')
+	invariant(loaderData.user?.gitlab?.id, 'GitLab profile ID is required in loader data')
+	const atlassianUserIdRaw = loaderData.user.atlassian?.id
+	const gitlabUserIdRaw = loaderData.user.gitlab?.id
+	// Narrow to string types for linter and type-safety
+	const atlassianUserId = atlassianUserIdRaw as string
+	const gitlabUserId = gitlabUserIdRaw as string
 	// Preferences
 	const preferences = loaderData.preferences ?? {}
 	const weekStartsOn = preferences?.weekStartsOn ?? 0
@@ -49,31 +56,31 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 	const [calendarDate, setCalendarDate] = useState<Date>(() => state.dateRange?.from ?? new Date())
 
 	// Queries
-	const projectsQuery = useJiraProjectsQuery({ userId: loaderData.user.atlassian!.id })
+	const projectsQuery = useJiraProjectsQuery({ userId: atlassianUserId })
 	const usersQuery = useJiraUsersQuery({
-		userId: loaderData.user.atlassian!.id,
+		userId: atlassianUserId,
 		projectIds: state.selectedJiraProjectIds
 	})
 	const worklogEntriesQuery = useWorklogEntriesQuery({
-		userId: loaderData.user.atlassian!.id,
+		userId: atlassianUserId,
 		projectIds: state.selectedJiraProjectIds,
 		userIds: state.selectedJiraUserIds,
 		dateRange: state.dateRange
 	})
 	const jiraIssuesQuery = useJiraIssuesQuery({
-		userId: loaderData.user.atlassian!.id,
+		userId: atlassianUserId,
 		projectIds: state.selectedJiraProjectIds,
 		userIds: state.selectedJiraUserIds,
 		dateRange: state.dateRange
 	})
-	const gitlabProjectsQuery = useGitlabProjectsQuery({ userId: loaderData.user.gitlab!.id })
+	const gitlabProjectsQuery = useGitlabProjectsQuery({ userId: gitlabUserId })
 	const gitlabContributorsQuery = useGitlabContributorsQuery({
-		userId: loaderData.user.gitlab!.id,
+		userId: gitlabUserId,
 		projectIds: state.selectedGitlabProjectIds,
 		dateRange: state.dateRange
 	})
 	const gitlabCommitsQuery = useGitlabCommitsQuery({
-		userId: loaderData.user.gitlab!.id,
+		userId: gitlabUserId,
 		projectIds: state.selectedGitlabProjectIds,
 		contributorIds: state.selectedGitlabContributorIds,
 		dateRange: state.dateRange
@@ -96,7 +103,9 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 
 	// Helpers
 	const gitlabProjectNameById = useMemo(() => {
-		if (!gitlabProjectsQuery.data) return new Map<string, string>()
+		if (!gitlabProjectsQuery.data) {
+			return new Map<string, string>()
+		}
 		return new Map(
 			gitlabProjectsQuery.data.projects.map(project => [
 				String(project.id),
@@ -111,7 +120,9 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 	const commitIssueKeys = useMemo(() => {
 		const keys = new Set<string>()
 		for (const page of gitlabCommitsQuery.data?.pages ?? []) {
-			for (const key of page.issueKeys ?? []) keys.add(key)
+			for (const key of page.issueKeys ?? []) {
+				keys.add(key)
+			}
 		}
 		return Array.from(keys)
 	}, [gitlabCommitsQuery.data])
@@ -134,11 +145,15 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 
 	// Effects
 	useEffect(() => {
-		if (state.dateRange?.from) setCalendarDate(state.dateRange.from)
+		if (state.dateRange?.from) {
+			setCalendarDate(state.dateRange.from)
+		}
 	}, [state.dateRange?.from])
 
 	useEffect(() => {
-		if (!worklogEntriesQuery.data?.pages) return
+		if (!worklogEntriesQuery.data?.pages) {
+			return
+		}
 		const loadedEntries: LocalWorklogEntry[] = worklogEntriesQuery.data.pages.flatMap(page =>
 			page.entries.map(entry => ({
 				localId: entry.id,
@@ -162,7 +177,9 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 	)
 
 	const worklogDebugEntries = useMemo(() => {
-		if (!worklogEntriesQuery.data?.pages) return []
+		if (!worklogEntriesQuery.data?.pages) {
+			return []
+		}
 		return worklogEntriesQuery.data.pages.flatMap(page =>
 			page.entries.map(entry => ({
 				id: entry.id,
@@ -178,7 +195,9 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 	}, [worklogEntriesQuery.data])
 
 	const relevantIssueDebugEntries = useMemo(() => {
-		if (!jiraIssuesQuery.data?.pages) return []
+		if (!jiraIssuesQuery.data?.pages) {
+			return []
+		}
 		return jiraIssuesQuery.data.pages.flatMap(page =>
 			page.issues.map(issue => ({
 				id: issue.id,
@@ -195,7 +214,9 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 	}, [jiraIssuesQuery.data])
 
 	const gitlabCommitsDebugEntries = useMemo(() => {
-		if (!gitlabCommitsQuery.data?.pages) return []
+		if (!gitlabCommitsQuery.data?.pages) {
+			return []
+		}
 		return gitlabCommitsQuery.data.pages.flatMap(page =>
 			page.commits.map(commit => ({
 				id: commit.id,
@@ -213,7 +234,9 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 	}, [gitlabCommitsQuery.data, gitlabProjectNameById])
 
 	const commitIssueDebugEntries = useMemo(() => {
-		if (!commitIssuesFromGitlabQuery.data?.pages) return []
+		if (!commitIssuesFromGitlabQuery.data?.pages) {
+			return []
+		}
 		return commitIssuesFromGitlabQuery.data.pages.flatMap(page =>
 			page.issues.map(issue => ({
 				id: issue.id,
@@ -236,7 +259,9 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 
 	// Calendar transforms and getters
 	const calendarEvents = useMemo<WorklogCalendarEvent[]>(() => {
-		if (!worklogDebugEntries || worklogDebugEntries.length === 0) return []
+		if (!worklogDebugEntries || worklogDebugEntries.length === 0) {
+			return []
+		}
 		return worklogDebugEntries
 			.filter(entry => entry.started && entry.timeSpentSeconds > 0)
 			.map<WorklogCalendarEvent>(entry => {
@@ -279,13 +304,17 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 
 	const calendarSlotPropGetter = useCallback<SlotPropGetter>(date => {
 		const classNames: string[] = []
-		if (date.getDay() === 0 || date.getDay() === 6)
+		if (date.getDay() === 0 || date.getDay() === 6) {
 			classNames.push('worklog-calendar__slot--weekend')
+		}
 		const hour = date.getHours()
-		if (hour < 7 || hour >= 19) classNames.push('worklog-calendar__slot--out-of-office')
+		if (hour < 7 || hour >= 19) {
+			classNames.push('worklog-calendar__slot--out-of-office')
+		}
 		return classNames.length > 0 ? { className: classNames.join(' ') } : {}
 	}, [])
 
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Derived time-window with bounds and event scanning
 	const calendarBusinessHours = useMemo(() => {
 		const base = calendarDate ?? new Date()
 		const [startHourStr, startMinStr] = (workingDayStartTime ?? '09:00').split(':').map(Number)
@@ -299,7 +328,9 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 		defaultStart.setHours(8, 0, 0, 0)
 		const defaultEnd = new Date(base)
 		defaultEnd.setHours(18, 0, 0, 0)
-		if (isInvalid) return { start: defaultStart, end: defaultEnd }
+		if (isInvalid) {
+			return { start: defaultStart, end: defaultEnd }
+		}
 
 		const startMinutes = (startHourStr ?? 9) * 60 + (startMinStr ?? 0) - 30
 		const endMinutes = (endHourStr ?? 18) * 60 + (endMinStr ?? 0) + 30
@@ -333,7 +364,9 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 				if (eventEndMinutes > defaultEndMinutes) {
 					maxHour = event.end.getHours()
 					maxMinutes = 0
-					if (event.end.getMinutes() > 0) maxHour += 1
+					if (event.end.getMinutes() > 0) {
+						maxHour += 1
+					}
 				}
 			}
 		}
@@ -395,7 +428,9 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 	const handleControlledCalendarNavigate = useCallback(
 		(newDate: Date, nextView?: View, _action?: NavigateAction) => {
 			setCalendarDate(newDate)
-			if (nextView) setCalendarView(nextView)
+			if (nextView) {
+				setCalendarView(nextView)
+			}
 		},
 		[]
 	)

@@ -461,6 +461,7 @@ export class AtlassianClient {
 		})
 	}
 
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Orchestration logic with batching and logging
 	async fetchWorklogEntries({
 		projectIds,
 		userIds,
@@ -531,7 +532,9 @@ export class AtlassianClient {
 				process.stdout.write(
 					`[Jira] Fetching worklogs for ${issueSummaries.issues.length} issues in ${totalBatches} parallel batches (batch size: ${WORKLOG_FETCH_BATCH_SIZE})\n`
 				)
-			} catch {}
+			} catch {
+				// Intentionally ignore logging failures (e.g., stdout not available)
+			}
 
 			for (const [batchIndex, batch] of batches.entries()) {
 				// Fetch all worklogs in this batch in parallel
@@ -552,7 +555,9 @@ export class AtlassianClient {
 							process.stdout.write(
 								`[Jira] Warning: Failed to fetch worklogs for issue ${issue.key}: ${error instanceof Error ? error.message : 'Unknown error'}\n`
 							)
-						} catch {}
+						} catch {
+							// Intentionally ignore logging failures (e.g., stdout not available)
+						}
 						return { issue, result: null, error }
 					}
 				})
@@ -600,7 +605,9 @@ export class AtlassianClient {
 					process.stdout.write(
 						`[Jira] Batch ${batchIndex + 1}/${totalBatches} complete: ${successCount} success, ${failCount} failed, ${totalWorklogs} total worklogs so far\n`
 					)
-				} catch {}
+				} catch {
+					// Intentionally ignore logging failures (e.g., stdout not available)
+				}
 			}
 		}
 
@@ -690,6 +697,7 @@ export class AtlassianClient {
 		}
 	}
 
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Cross-resource querying with chunked keys
 	async fetchIssuesByKeys(issueKeys: string[]): Promise<JiraTouchedIssuesResult> {
 		const uniqueKeys = Array.from(
 			new Set(
@@ -937,6 +945,7 @@ function escapeJqlString(input: string) {
 	return input.replace(/\\|"/g, match => `\\${match}`)
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Pagination + de-duplication logic
 async function fetchIssuesForJql({
 	client,
 	cloudId,
@@ -1002,6 +1011,7 @@ async function fetchIssuesForJql({
 }
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Pagination + filtering logic
 async function fetchIssueWorklogs({
 	client,
 	cloudId,

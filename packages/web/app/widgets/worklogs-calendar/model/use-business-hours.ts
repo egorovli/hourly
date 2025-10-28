@@ -14,6 +14,7 @@ export function useBusinessHours({
 	workingDayStartTime: string
 	workingDayEndTime: string
 }) {
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Derived time window with bounds and event scanning
 	return useMemo(() => {
 		const base = calendarDate ?? new Date()
 		const [startHourStr, startMinStr] = (workingDayStartTime ?? '09:00').split(':').map(Number)

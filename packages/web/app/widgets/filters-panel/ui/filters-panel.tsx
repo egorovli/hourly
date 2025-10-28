@@ -9,6 +9,7 @@ import { FilterSection } from './filter-section.tsx'
 import { FilterDependencyMessage } from './filter-dependency-message.tsx'
 import type { FiltersPanelProps } from '../model/types.ts'
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Conditional layout with multiple async states
 export function FiltersPanel({
 	dateRange,
 	onDateRangeChange,

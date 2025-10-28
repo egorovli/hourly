@@ -351,6 +351,7 @@ button.rbc-input::-moz-focus-inner {
 	border-top: 1px solid hsl(var(--border) / 0.18);
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Intentional override order following upstream styles */
 .rbc-date-cell {
 	flex: 1 1 0;
 	min-width: 0;
@@ -576,6 +577,7 @@ button.rbc-input::-moz-focus-inner {
 	flex: 1;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Intentional override order following upstream styles */
 .rbc-timeslot-group {
 	border-bottom: 1px solid hsl(var(--border) / 0.18);
 	min-height: 40px;
@@ -591,7 +593,8 @@ button.rbc-input::-moz-focus-inner {
 }
 
 .rbc-time-slot,
-.rbc-timeslot-group {
+/* biome-ignore lint/style/noDescendingSpecificity: Intentional override order following upstream styles */
+	.rbc-timeslot-group {
 	border-color: hsl(var(--border) / 0.18);
 }
 
@@ -605,6 +608,7 @@ button.rbc-input::-moz-focus-inner {
 	font-weight: 400;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Intentional override order following upstream styles */
 .rbc-time-gutter,
 .rbc-header-gutter {
 	flex: none;
@@ -624,6 +628,7 @@ button.rbc-input::-moz-focus-inner {
 /* ============================================
    Day Slot (Time View Events)
    ============================================ */
+/* biome-ignore lint/style/noDescendingSpecificity: Intentional override order following upstream styles */
 .rbc-day-slot {
 	position: relative;
 }
@@ -756,6 +761,7 @@ button.rbc-input::-moz-focus-inner {
 	text-transform: uppercase;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Intentional override order following upstream styles */
 .rbc-agenda-time-cell {
 	text-transform: lowercase;
 }
@@ -769,7 +775,8 @@ button.rbc-input::-moz-focus-inner {
 }
 
 .rbc-agenda-date-cell,
-.rbc-agenda-time-cell {
+/* biome-ignore lint/style/noDescendingSpecificity: Intentional override order following upstream styles */
+	.rbc-agenda-time-cell {
 	white-space: nowrap;
 	color: hsl(var(--muted-foreground));
 }

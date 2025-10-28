@@ -42,6 +42,7 @@ const FORMATS: CalendarProps<WorklogCalendarEvent>['formats'] = {
 	timeGutterFormat: 'HH:mm'
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Complex conditional rendering for UX states
 export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode {
 	invariant(loaderData.user?.atlassian?.id, 'Atlassian profile ID is required in loader data')
 	invariant(loaderData.user?.gitlab?.id, 'GitLab profile ID is required in loader data')

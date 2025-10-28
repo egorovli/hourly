@@ -85,8 +85,25 @@ function SidebarProvider({
 				_setOpen(openState)
 			}
 
-			// This sets the cookie to keep the sidebar state.
-			document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
+			// Persist state using Cookie Store API when available, otherwise fallback to localStorage.
+			try {
+				if (
+					'cookieStore' in window &&
+					typeof (window as unknown as { cookieStore?: unknown }).cookieStore === 'object'
+				) {
+					// @ts-expect-error Cookie Store API types may not be present
+					void window.cookieStore.set({
+						name: SIDEBAR_COOKIE_NAME,
+						value: String(openState),
+						path: '/',
+						expires: Date.now() + SIDEBAR_COOKIE_MAX_AGE * 1000
+					})
+				} else {
+					localStorage.setItem(SIDEBAR_COOKIE_NAME, String(openState))
+				}
+			} catch {
+				// Intentionally ignore persistence errors (private mode, blocked storage, etc.)
+			}
 		},
 		[setOpenProp, open]
 	)
