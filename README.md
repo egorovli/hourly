@@ -203,6 +203,12 @@ bun run db:migrate
 
 **Lint errors:** `bun run lint:fix`
 
+## Roadmap
+
+Planned: Decouple provider-specific logic to support alternative time tracking and version control systems beyond Jira/GitLab. Provider abstraction layer will enable pluggable integrations.
+
+Contributions welcome.
+
 ## Docs
 
 - [CLAUDE.md](./CLAUDE.md) - Development guidelines
