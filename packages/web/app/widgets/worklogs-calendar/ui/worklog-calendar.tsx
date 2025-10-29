@@ -48,6 +48,12 @@ export interface WorklogsCalendarProps {
 	projectsData?: Array<{ id: string; name: string; key: string }>
 	workingDayStartTime?: string
 	workingDayEndTime?: string
+	onDropFromOutside?: (args: {
+		start: Date
+		end: Date
+		allDay: boolean
+		draggedEl: HTMLElement
+	}) => void
 }
 
 export function WorklogsCalendar({
@@ -72,7 +78,8 @@ export function WorklogsCalendar({
 	selectedProjectIds,
 	projectsData,
 	workingDayStartTime = '09:00',
-	workingDayEndTime = '18:00'
+	workingDayEndTime = '18:00',
+	onDropFromOutside
 }: WorklogsCalendarProps): React.ReactNode {
 	// Use local state management with change tracking
 	const {
@@ -190,6 +197,16 @@ export function WorklogsCalendar({
 		setDialogMode('edit')
 		setDialogOpen(true)
 	}, [])
+
+	// Handle external drop (from search panel)
+	const handleDropFromOutside = useCallback(
+		(args: any) => {
+			if (onDropFromOutside) {
+				onDropFromOutside(args)
+			}
+		},
+		[onDropFromOutside]
+	)
 
 	// Dialog save handler
 	const handleDialogSave = useCallback(
@@ -337,7 +354,7 @@ export function WorklogsCalendar({
 
 	return (
 		<>
-			<div className='flex flex-col h-full'>
+			<div className='flex flex-col'>
 				<WorklogCalendarActions
 					changesSummary={changesSummary}
 					onSave={handleSave}
@@ -372,6 +389,7 @@ export function WorklogsCalendar({
 								onSelecting={handleSelecting}
 								onSelectSlot={handleSelectSlot}
 								onDoubleClickEvent={handleDoubleClickEvent}
+								onDropFromOutside={handleDropFromOutside}
 								eventPropGetter={customEventPropGetter}
 								dayPropGetter={dayPropGetter}
 								slotPropGetter={slotPropGetter}

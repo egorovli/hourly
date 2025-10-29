@@ -39,18 +39,27 @@ const querySchema = z
 		userIds: z.array(nonEmptyTrimmedString).default([]),
 		dateFrom: isoDateSchema.optional(),
 		dateTo: isoDateSchema.optional(),
-		issueKeys: z.array(issueKeySchema).default([])
+		issueKeys: z.array(issueKeySchema).default([]),
+		search: z.string().trim().optional()
 	})
 	.and(paginationSchema)
-	.superRefine(({ dateFrom, dateTo, issueKeys, projectIds, userIds }, ctx) => {
-		if (issueKeys.length > 0) {
+	.superRefine(({ dateFrom, dateTo, issueKeys, projectIds, userIds, search }, ctx) => {
+		// If searching or querying by issue keys, skip other validations
+		if (issueKeys.length > 0 || search) {
+			if (search && projectIds.length === 0) {
+				ctx.addIssue({
+					code: 'custom',
+					message: 'At least one project is required when searching',
+					path: ['projectIds']
+				})
+			}
 			return
 		}
 
 		if (!dateFrom || !dateTo) {
 			ctx.addIssue({
 				code: 'custom',
-				message: 'date-from and date-to are required unless querying by issue keys',
+				message: 'date-from and date-to are required unless querying by issue keys or searching',
 				path: ['dateFrom']
 			})
 			return
@@ -103,6 +112,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 		dateFrom: url.searchParams.get('date-from') ?? undefined,
 		dateTo: url.searchParams.get('date-to') ?? undefined,
 		issueKeys: url.searchParams.getAll('issue-key'),
+		search: url.searchParams.get('search') ?? undefined,
 		page: url.searchParams.get('page') ?? undefined,
 		size: url.searchParams.get('size') ?? undefined
 	})
@@ -125,6 +135,54 @@ export async function loader({ request }: Route.LoaderArgs) {
 		accessToken: token.accessToken,
 		refreshToken: token.refreshToken
 	})
+
+	// Handle search queries
+	if (parsed.data.search && parsed.data.search.length > 0) {
+		const projects = await resolveProjectSelectionsForSearch(client, parsed.data.projectIds)
+
+		if (projects.length === 0) {
+			return {
+				issues: [],
+				summary: {
+					totalIssuesMatched: 0,
+					truncated: false
+				},
+				pageInfo: {
+					page: pagination.page,
+					size: pagination.size,
+					total: 0,
+					totalPages: 0,
+					hasNextPage: false
+				}
+			}
+		}
+
+		const cloudIds = Array.from(new Set(projects.map(p => p.cloudId)))
+		const projectKeys = projects.map(p => p.projectKey)
+
+		const issues = await client.searchIssuesWithinProjects({
+			cloudIds,
+			projectKeys,
+			searchText: parsed.data.search,
+			startAt: pagination.offset,
+			maxResults: pagination.size
+		})
+
+		return {
+			issues: issues.issues,
+			summary: issues.summary,
+			pageInfo: {
+				page: pagination.page,
+				size: pagination.size,
+				total: issues.summary.totalIssuesMatched,
+				totalPages:
+					issues.summary.totalIssuesMatched === 0
+						? 0
+						: Math.ceil(issues.summary.totalIssuesMatched / pagination.size),
+				hasNextPage: pagination.offset + pagination.size < issues.summary.totalIssuesMatched
+			}
+		}
+	}
 
 	if (parsed.data.issueKeys.length > 0) {
 		const uniqueKeys = Array.from(
@@ -202,6 +260,40 @@ export async function loader({ request }: Route.LoaderArgs) {
 			hasNextPage: pagination.offset + pagination.size < total
 		}
 	}
+}
+
+async function resolveProjectSelectionsForSearch(client: AtlassianClient, projectIds: string[]) {
+	if (projectIds.length === 0) {
+		return []
+	}
+
+	const remaining = new Set(projectIds)
+	const selections: Array<{ cloudId: string; projectId: string; projectKey: string }> = []
+	const resources = await client.getAccessibleResources()
+
+	for (const resource of resources) {
+		const { projects } = await client.listJiraProjects(resource.id)
+
+		for (const project of projects) {
+			if (!remaining.has(project.id)) {
+				continue
+			}
+
+			selections.push({
+				cloudId: resource.id,
+				projectId: project.id,
+				projectKey: project.key
+			})
+
+			remaining.delete(project.id)
+		}
+
+		if (remaining.size === 0) {
+			break
+		}
+	}
+
+	return selections
 }
 
 function parseIsoDate(value: string) {

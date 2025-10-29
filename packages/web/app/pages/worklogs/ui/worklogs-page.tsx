@@ -28,6 +28,8 @@ import {
 // FSD manage-worklogs feature
 import { WorklogChangesActions, WorklogChangesSummary } from '~/features/manage-worklogs/index.ts'
 import { useUpdateCalendarCompactMode } from '~/features/update-calendar-compact-mode/index.ts'
+import { JiraIssueSearchPanel } from '~/features/search-jira-issues/index.ts'
+import type { DraggableIssue } from '~/features/search-jira-issues/index.ts'
 
 // FSD widgets
 import { FiltersPanel, FilterDependencyMessage } from '~/widgets/filters-panel/index.ts'
@@ -122,6 +124,24 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 		},
 		[compactModeMutation]
 	)
+
+	// Handle issue drop from search panel onto calendar
+	const handleIssueDropOnCalendar = useCallback((args: any) => {
+		try {
+			// Get issue data from drag event
+			const issueData = JSON.parse(
+				args.draggedEl?.getAttribute('data-issue') ?? '{}'
+			) as DraggableIssue
+
+			// TODO: Open dialog to create worklog entry with the issue data
+			// For now, we'll just show an alert
+			alert(
+				`Creating worklog for ${issueData.key}: ${issueData.summary}\nFrom: ${new Date(args.start).toLocaleString()}\nTo: ${new Date(args.end).toLocaleString()}`
+			)
+		} catch {
+			// Silently ignore parse errors for invalid drag data
+		}
+	}, [])
 
 	const handleApplyDebugPreset = useCallback(() => {
 		if (!isDebugPresetAvailable) {
@@ -344,36 +364,70 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 									</div>
 								)
 							})()}
-							<div
-								className='rounded-lg border bg-card shadow-sm overflow-hidden min-h-[calc(100vh-22rem)]'
-								// style={{ height: '700px' }}
-							>
-								<WorklogsCalendar
-									date={calendarDate}
-									view={calendarView}
-									localizer={localizer}
-									events={calendarEvents}
-									formats={FORMATS}
-									min={calendarBusinessHours.start}
-									max={calendarBusinessHours.end}
-									onView={handleControlledCalendarViewChange}
-									onNavigate={handleControlledCalendarNavigate}
-									onRangeChange={handleControlledCalendarRangeChange}
-									eventPropGetter={calendarEventPropGetter}
-									dayPropGetter={calendarDayPropGetter}
-									slotPropGetter={calendarSlotPropGetter}
-									compactMode={calendarCompactMode}
-									onCompactModeChange={handleCompactModeChange}
-									currentUserAccountId={loaderData.user?.atlassian?.id}
-									currentUserName={
-										usersQuery.data?.users.find(u => u.accountId === loaderData.user?.atlassian?.id)
-											?.displayName ?? 'Current User'
-									}
-									selectedProjectIds={state.selectedJiraProjectIds}
-									projectsData={projectsData}
-									workingDayStartTime={workingDayStartTime}
-									workingDayEndTime={workingDayEndTime}
-								/>
+							<div className='flex gap-4 grow'>
+								{/* Search Panel */}
+								<div className='w-80 rounded-lg border bg-card shadow-sm shrink-0 flex flex-col'>
+									<JiraIssueSearchPanel
+										userId={loaderData.user.atlassian.id}
+										projectIds={state.selectedJiraProjectIds}
+										relevantIssues={
+											jiraIssuesQuery.data?.pages
+												.flatMap(page => page.issues)
+												.slice(0, 10)
+												.map(issue => ({
+													id: issue.id,
+													key: issue.key,
+													summary: issue.fields.summary ?? 'No summary',
+													projectKey: issue.fields.project?.key ?? '',
+													projectName: issue.fields.project?.name ?? ''
+												})) ?? []
+										}
+										referencedIssues={
+											commitIssuesFromGitlabQuery.data?.pages
+												.flatMap(page => page.issues)
+												.slice(0, 10)
+												.map(issue => ({
+													id: issue.id,
+													key: issue.key,
+													summary: issue.fields.summary ?? 'No summary',
+													projectKey: issue.fields.project?.key ?? '',
+													projectName: issue.fields.project?.name ?? ''
+												})) ?? []
+										}
+									/>
+								</div>
+
+								{/* Calendar */}
+								<div className='flex-1 rounded-lg border bg-card shadow-sm overflow-hidden'>
+									<WorklogsCalendar
+										date={calendarDate}
+										view={calendarView}
+										localizer={localizer}
+										events={calendarEvents}
+										formats={FORMATS}
+										min={calendarBusinessHours.start}
+										max={calendarBusinessHours.end}
+										onView={handleControlledCalendarViewChange}
+										onNavigate={handleControlledCalendarNavigate}
+										onRangeChange={handleControlledCalendarRangeChange}
+										eventPropGetter={calendarEventPropGetter}
+										dayPropGetter={calendarDayPropGetter}
+										slotPropGetter={calendarSlotPropGetter}
+										compactMode={calendarCompactMode}
+										onCompactModeChange={handleCompactModeChange}
+										currentUserAccountId={loaderData.user?.atlassian?.id}
+										currentUserName={
+											usersQuery.data?.users.find(
+												u => u.accountId === loaderData.user?.atlassian?.id
+											)?.displayName ?? 'Current User'
+										}
+										selectedProjectIds={state.selectedJiraProjectIds}
+										projectsData={projectsData}
+										workingDayStartTime={workingDayStartTime}
+										workingDayEndTime={workingDayEndTime}
+										onDropFromOutside={handleIssueDropOnCalendar}
+									/>
+								</div>
 							</div>
 						</>
 					)

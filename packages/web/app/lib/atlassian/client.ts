@@ -194,6 +194,14 @@ export interface FetchWorklogEntriesOptions {
 	dateRange: JiraWorklogDateRange
 }
 
+export interface SearchIssuesWithinProjectsParams {
+	cloudIds: string[]
+	projectKeys: string[]
+	searchText: string
+	startAt?: number
+	maxResults?: number
+}
+
 export class AtlassianClientError extends Error {
 	constructor(
 		message: string,
@@ -766,6 +774,65 @@ export class AtlassianClient {
 			}
 		}
 	}
+
+	/**
+	 * Search for issues within specified projects using text search
+	 */
+	async searchIssuesWithinProjects({
+		cloudIds,
+		projectKeys,
+		searchText,
+		startAt = 0,
+		maxResults = 50
+	}: SearchIssuesWithinProjectsParams): Promise<JiraTouchedIssuesResult> {
+		if (cloudIds.length === 0 || projectKeys.length === 0 || !searchText.trim()) {
+			return emptyTouchedIssuesResult()
+		}
+
+		const issuesById = new Map<string, IssueSummary>()
+		let totalIssuesMatched = 0
+		let truncated = false
+
+		const fields = [
+			'summary',
+			'project',
+			'updated',
+			'created',
+			'status',
+			'assignee',
+			'reporter',
+			'creator'
+		]
+
+		for (const cloudId of cloudIds) {
+			const jql = buildSearchJql(projectKeys, searchText.trim())
+			const issueSummaries = await fetchIssuesForJql({
+				client: this,
+				cloudId,
+				jql,
+				fields
+			})
+
+			totalIssuesMatched += issueSummaries.totalMatched
+			truncated ||= issueSummaries.truncated
+
+			for (const issue of issueSummaries.issues) {
+				issuesById.set(issue.id, issue)
+			}
+		}
+
+		// Slice for pagination
+		const allIssues = Array.from(issuesById.values())
+		const paginatedIssues = allIssues.slice(startAt, startAt + maxResults)
+
+		return {
+			issues: paginatedIssues,
+			summary: {
+				totalIssuesMatched,
+				truncated: truncated || allIssues.length > startAt + maxResults
+			}
+		}
+	}
 }
 
 const ISSUE_SEARCH_PAGE_SIZE = 50
@@ -939,6 +1006,28 @@ function buildIssueKeyJql(issueKeys: string[]) {
 function buildIssueIdJql(issueIds: string[]) {
 	const clauses = issueIds.map(id => `"${escapeJqlString(id)}"`)
 	return `id in (${clauses.join(', ')}) ORDER BY created DESC`
+}
+
+function buildSearchJql(projectKeys: string[], searchText: string) {
+	const uniqueKeys = Array.from(
+		new Set(
+			projectKeys.filter((key): key is string => typeof key === 'string' && key.trim().length > 0)
+		)
+	)
+	const [firstKey] = uniqueKeys
+	if (!firstKey) {
+		throw new Error('Unable to build JQL query without project keys')
+	}
+
+	const projectClause =
+		uniqueKeys.length === 1
+			? `project = "${escapeJqlString(firstKey)}"`
+			: `project in (${uniqueKeys.map(key => `"${escapeJqlString(key)}"`).join(', ')})`
+
+	const escapedSearchText = escapeJqlString(searchText)
+	const searchClause = `text ~ "${escapedSearchText}*"`
+
+	return `${projectClause} AND ${searchClause} ORDER BY updated DESC`
 }
 
 function escapeJqlString(input: string) {
