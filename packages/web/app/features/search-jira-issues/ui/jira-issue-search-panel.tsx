@@ -310,7 +310,10 @@ function IssueReasonTag({ reason }: { reason: JiraIssueMatchReason }) {
 
 	return (
 		<span className={cn(ISSUE_REASON_TAG_BASE_CLASS, config.className)}>
-			<Icon aria-hidden className='h-3.5 w-3.5' />
+			<Icon
+				aria-hidden
+				className='h-3.5 w-3.5'
+			/>
 			<span>{config.label}</span>
 		</span>
 	)
