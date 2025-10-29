@@ -4,7 +4,7 @@ import type { WorklogsPageProps } from '../model/types.ts'
 
 import { useWorklogsPageState } from '../model/use-worklogs-page-state.ts'
 
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { BugIcon, CalendarDays, ChevronDown } from 'lucide-react'
 import { Views } from 'react-big-calendar'
 
@@ -196,6 +196,15 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 		gitlabCommitsAutoLoad.isAutoLoading ||
 		commitIssuesAutoLoad.isAutoLoading
 
+	// Flatten projects data for calendar component
+	const projectsData = useMemo(() => {
+		if (!projectsQuery.data?.byResource) {
+			return []
+		}
+		// Extract all projects from byResource map and flatten into single array
+		return Object.values(projectsQuery.data.byResource).flat()
+	}, [projectsQuery.data?.byResource])
+
 	return (
 		<div className='flex flex-col gap-6 grow bg-background'>
 			{/* Subtle loading indicator */}
@@ -336,8 +345,8 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 								)
 							})()}
 							<div
-								className='rounded-lg border bg-card shadow-sm overflow-hidden'
-								style={{ height: '700px' }}
+								className='rounded-lg border bg-card shadow-sm overflow-hidden min-h-[calc(100vh-22rem)]'
+								// style={{ height: '700px' }}
 							>
 								<WorklogsCalendar
 									date={calendarDate}
@@ -356,6 +365,14 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 									compactMode={calendarCompactMode}
 									onCompactModeChange={handleCompactModeChange}
 									currentUserAccountId={loaderData.user?.atlassian?.id}
+									currentUserName={
+										usersQuery.data?.users.find(u => u.accountId === loaderData.user?.atlassian?.id)
+											?.displayName ?? 'Current User'
+									}
+									selectedProjectIds={state.selectedJiraProjectIds}
+									projectsData={projectsData}
+									workingDayStartTime={workingDayStartTime}
+									workingDayEndTime={workingDayEndTime}
 								/>
 							</div>
 						</>

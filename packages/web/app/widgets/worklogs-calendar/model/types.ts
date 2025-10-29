@@ -5,9 +5,9 @@ import type { WorklogCalendarEvent } from '~/entities/index.ts'
  */
 export interface EventChange {
 	eventId: string
-	originalEvent: WorklogCalendarEvent
+	originalEvent: WorklogCalendarEvent | null
 	modifiedEvent: WorklogCalendarEvent
-	changeType: 'resize' | 'move'
+	changeType: 'resize' | 'move' | 'create' | 'delete'
 	timestamp: number
 }
 

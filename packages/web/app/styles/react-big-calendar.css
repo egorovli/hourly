@@ -975,3 +975,8 @@ button.rbc-input::-moz-focus-inner {
 .worklog-calendar--compact .rbc-day-slot .rbc-event-content {
 	font-size: 0.6875rem;
 }
+
+/* Hide time labels on draft events to avoid duplicate time display while dragging */
+.worklog-calendar__event--draft .rbc-event-label {
+	display: none;
+}

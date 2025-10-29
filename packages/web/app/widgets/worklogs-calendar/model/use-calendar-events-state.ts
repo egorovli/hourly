@@ -15,6 +15,14 @@ interface UseCalendarEventsStateResult {
 	changesSummary: EventChangesSummary
 	handleEventResize: (args: EventInteractionArgs<WorklogCalendarEvent>) => void
 	handleEventDrop: (args: EventInteractionArgs<WorklogCalendarEvent>) => void
+	handleCreateEvent: (
+		start: Date,
+		end: Date,
+		currentUserAccountId: string,
+		currentUserName: string,
+		projectName?: string
+	) => WorklogCalendarEvent
+	handleDeleteEvent: (eventId: string) => void
 	handleSave: () => Promise<void>
 	handleCancel: () => void
 	isSaving: boolean
@@ -68,11 +76,8 @@ export function useCalendarEventsState({
 		const startDate = start instanceof Date ? start : new Date(start)
 		const endDate = end instanceof Date ? end : new Date(end)
 
-		// Find original event for comparison
-		const originalEvent = originalEventsRef.current.find(e => e.id === event.id)
-		if (!originalEvent) {
-			return
-		}
+		// Find original event for comparison (null for newly created events)
+		const originalEvent = originalEventsRef.current.find(e => e.id === event.id) ?? null
 
 		// Create updated event
 		const updatedEvent: WorklogCalendarEvent = {
@@ -91,11 +96,12 @@ export function useCalendarEventsState({
 		// Track change
 		setChanges(prev => {
 			const newChanges = new Map(prev)
+			const existingChange = prev.get(event.id)
 			newChanges.set(event.id, {
 				eventId: event.id,
-				originalEvent,
+				originalEvent: existingChange?.originalEvent ?? originalEvent,
 				modifiedEvent: updatedEvent,
-				changeType: 'resize',
+				changeType: existingChange?.changeType === 'create' ? 'create' : 'resize',
 				timestamp: Date.now()
 			})
 			return newChanges
@@ -110,11 +116,8 @@ export function useCalendarEventsState({
 		const startDate = start instanceof Date ? start : new Date(start)
 		const endDate = end instanceof Date ? end : new Date(end)
 
-		// Find original event for comparison
-		const originalEvent = originalEventsRef.current.find(e => e.id === event.id)
-		if (!originalEvent) {
-			return
-		}
+		// Find original event for comparison (null for newly created events)
+		const originalEvent = originalEventsRef.current.find(e => e.id === event.id) ?? null
 
 		// Create updated event
 		const updatedEvent: WorklogCalendarEvent = {
@@ -134,16 +137,107 @@ export function useCalendarEventsState({
 		// Track change
 		setChanges(prev => {
 			const newChanges = new Map(prev)
+			const existingChange = prev.get(event.id)
 			newChanges.set(event.id, {
 				eventId: event.id,
-				originalEvent,
+				originalEvent: existingChange?.originalEvent ?? originalEvent,
 				modifiedEvent: updatedEvent,
-				changeType: 'move',
+				changeType: existingChange?.changeType === 'create' ? 'create' : 'move',
 				timestamp: Date.now()
 			})
 			return newChanges
 		})
 	}, [])
+
+	// Handle event creation (draw to create)
+	const handleCreateEvent = useCallback(
+		(
+			start: Date,
+			end: Date,
+			currentUserAccountId: string,
+			currentUserName: string,
+			projectName = ''
+		): WorklogCalendarEvent => {
+			// Generate a temporary ID for the new event
+			const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+
+			// Calculate time spent in seconds
+			const timeSpentSeconds = Math.floor((end.getTime() - start.getTime()) / 1000)
+
+			// Create new event with default values
+			const newEvent: WorklogCalendarEvent = {
+				id: tempId,
+				title: 'New Event',
+				start,
+				end,
+				resource: {
+					issueKey: '',
+					issueSummary: '',
+					projectName,
+					authorName: currentUserName,
+					authorAccountId: currentUserAccountId,
+					timeSpentSeconds,
+					started: start.toISOString()
+				}
+			}
+
+			// Add to local events
+			setLocalEvents(prev => [...prev, newEvent])
+
+			// Track as a new creation (originalEvent is null)
+			setChanges(prev => {
+				const newChanges = new Map(prev)
+				newChanges.set(tempId, {
+					eventId: tempId,
+					originalEvent: null,
+					modifiedEvent: newEvent,
+					changeType: 'create',
+					timestamp: Date.now()
+				})
+				return newChanges
+			})
+
+			return newEvent
+		},
+		[]
+	)
+
+	// Handle event deletion
+	const handleDeleteEvent = useCallback(
+		(eventId: string) => {
+			// Find the event
+			const existingChange = changes.get(eventId)
+
+			// If it's a newly created event (not in original), just remove it
+			if (existingChange?.changeType === 'create') {
+				setLocalEvents(prev => prev.filter(e => e.id !== eventId))
+				setChanges(prev => {
+					const newChanges = new Map(prev)
+					newChanges.delete(eventId)
+					return newChanges
+				})
+				return
+			}
+
+			// For existing events, remove from local but track as deleted
+			const originalEvent = originalEventsRef.current.find(e => e.id === eventId)
+			if (originalEvent) {
+				setLocalEvents(prev => prev.filter(e => e.id !== eventId))
+				setChanges(prev => {
+					const newChanges = new Map(prev)
+					newChanges.set(eventId, {
+						eventId,
+						originalEvent,
+						modifiedEvent: originalEvent, // Keep reference
+						changeType: 'delete',
+						timestamp: Date.now()
+					})
+					return newChanges
+				})
+			}
+		},
+		[changes]
+	)
 
 	// Save handler using mutation
 	const handleSave = useCallback(async () => {
@@ -196,6 +290,8 @@ export function useCalendarEventsState({
 		changesSummary,
 		handleEventResize,
 		handleEventDrop,
+		handleCreateEvent,
+		handleDeleteEvent,
 		handleSave,
 		handleCancel,
 		isSaving: mutation.isPending,
