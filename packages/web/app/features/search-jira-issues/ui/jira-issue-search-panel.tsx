@@ -13,7 +13,7 @@ import type {
 } from '../model/types.ts'
 
 const ISSUE_REASON_TAG_BASE_CLASS =
-	'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium'
+	'inline-flex items-center gap-1 rounded-sm border px-2 py-0.5 text-xs font-medium'
 
 const ISSUE_REASON_ORDER: JiraIssueMatchReason[] = ['activity', 'worklog', 'commit', 'search']
 
@@ -314,7 +314,6 @@ function IssueReasonTag({ reason }: { reason: JiraIssueMatchReason }) {
 				aria-hidden
 				className='h-3.5 w-3.5'
 			/>
-			<span>{config.label}</span>
 		</span>
 	)
 }

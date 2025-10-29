@@ -573,6 +573,7 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 									<WorklogCalendarStats
 										events={calendarStatsEvents}
 										statuses={insightStatuses}
+										unstyled
 									/>
 								) : (
 									<div className='border-border/60 bg-muted/40 text-xs text-muted-foreground flex items-center gap-2 rounded-lg border px-3 py-2'>

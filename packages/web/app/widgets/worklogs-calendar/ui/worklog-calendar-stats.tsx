@@ -39,12 +39,14 @@ export interface WorklogCalendarStatsProps {
 	events: WorklogCalendarEvent[]
 	className?: string
 	statuses?: WorklogDataStatus[]
+	unstyled?: boolean
 }
 
 export function WorklogCalendarStats({
 	events,
 	className,
-	statuses = []
+	statuses = [],
+	unstyled = false
 }: WorklogCalendarStatsProps): React.ReactNode {
 	const stats = useMemo(() => aggregateWorklogStats(events), [events])
 	const hasData = stats.totalEntries > 0
@@ -56,45 +58,42 @@ export function WorklogCalendarStats({
 
 	const authorChartConfig = useMemo(() => {
 		const config: ChartConfig = {}
-		for (const series of insights.authorSeries) {
-			config[series.dataKey] = { label: series.label, color: series.color }
-		}
+		const paletteSize = 6
+		insights.authorSeries.forEach((series, index) => {
+			const token = `var(--chart-${(index % paletteSize) + 1})`
+			config[series.dataKey] = { label: series.label, color: token }
+		})
 		return config
 	}, [insights.authorSeries])
 
 	const projectChartConfig = useMemo(() => {
 		const config: ChartConfig = {}
-		for (const series of insights.projectSeries) {
-			config[series.dataKey] = { label: series.label, color: series.color }
-		}
+		const paletteSize = 6
+		insights.projectSeries.forEach((series, index) => {
+			const token = `var(--chart-${(index % paletteSize) + 1})`
+			config[series.dataKey] = { label: series.label, color: token }
+		})
 		return config
 	}, [insights.projectSeries])
 
 	const activeStatuses = statuses.filter(status => status.isLoading)
 
-	return (
-		<Card className={className}>
-			<CardHeader className='gap-3'>
-				<div>
-					<CardTitle className='flex items-center gap-2 text-base sm:text-lg'>
-						Worklog Insights
-						{activeStatuses.length > 0 ? (
-							<Badge
-								variant='outline'
-								className='gap-1 border-dashed text-[11px] font-medium'
-							>
-								<Spinner className='size-3' />
-								Syncing data…
-							</Badge>
-						) : null}
-					</CardTitle>
-					<CardDescription>
-						{stats.totalEntries} tracked {stats.totalEntries === 1 ? 'entry' : 'entries'} ·{' '}
-						{formatDurationFromSeconds(stats.totalSeconds)} total time
-					</CardDescription>
-				</div>
+	if (unstyled) {
+		return (
+			<div className={className}>
+				{activeStatuses.length > 0 ? (
+					<div className='mb-2 flex items-center gap-2'>
+						<Badge
+							variant='outline'
+							className='gap-1 border-dashed text-[11px] font-medium'
+						>
+							<Spinner className='size-3' />
+							Syncing data…
+						</Badge>
+					</div>
+				) : null}
 				{statuses.length > 0 ? (
-					<div className='flex flex-wrap gap-2 text-[11px] text-muted-foreground'>
+					<div className='mt-2 flex flex-wrap gap-2 text-[11px] text-muted-foreground'>
 						{statuses.map(status => (
 							<span
 								key={status.label}
@@ -123,9 +122,8 @@ export function WorklogCalendarStats({
 						))}
 					</div>
 				) : null}
-			</CardHeader>
-			<CardContent className='space-y-6 pb-6'>
-				<section className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
+
+				<section className='mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
 					<SummaryTile
 						label='Active Projects'
 						value={topProjects.length}
@@ -151,9 +149,9 @@ export function WorklogCalendarStats({
 				<Separator />
 
 				{hasData ? (
-					<section className='grid gap-6 lg:grid-cols-[1.45fr_1fr]'>
-						<div className='space-y-6'>
-							<div className='space-y-3'>
+					<section className='mt-4 grid gap-6 lg:grid-cols-[1.45fr_1fr]'>
+						<div className='flex flex-col gap-6'>
+							<div className='flex flex-col gap-3'>
 								<header className='flex items-center justify-between'>
 									<h3 className='text-sm font-semibold'>Daily distribution</h3>
 									<span className='text-xs text-muted-foreground'>
@@ -165,11 +163,11 @@ export function WorklogCalendarStats({
 										className='aspect-[16/9] min-h-[260px]'
 										config={authorChartConfig}
 									>
-										<BarChart data={insights.dailyByAuthor}>
-											<CartesianGrid
-												vertical={false}
-												strokeDasharray='3 3'
-											/>
+										<BarChart
+											accessibilityLayer
+											data={insights.dailyByAuthor}
+										>
+											<CartesianGrid vertical={false} />
 											<XAxis
 												dataKey='label'
 												tickLine={false}
@@ -184,70 +182,14 @@ export function WorklogCalendarStats({
 												dx={-8}
 												tickFormatter={value => `${value}h`}
 											/>
-											<ChartTooltip
-												cursor={false}
-												content={
-													<ChartTooltipContent
-														className='w-[220px]'
-														labelFormatter={(_, payload) => {
-															const point = payload?.[0]?.payload as DailySeriesPoint | undefined
-															return point?.fullLabel ?? ''
-														}}
-														formatter={(value, key, item) => {
-															const point = item?.payload as DailySeriesPoint | undefined
-															const numeric =
-																typeof value === 'number'
-																	? value
-																	: typeof value === 'string'
-																		? Number.parseFloat(value)
-																		: 0
-															const label =
-																authorChartConfig[key as keyof typeof authorChartConfig]?.label ??
-																key
-															const order = point?.__seriesOrder ?? []
-															const isLast = order[order.length - 1] === key
-															return (
-																<>
-																	<div
-																		className='h-2.5 w-2.5 shrink-0 rounded-[2px]'
-																		style={
-																			{
-																				'--color-bg': `var(--color-${key})`
-																			} as CSSProperties
-																		}
-																	/>
-																	{label}
-																	<div className='text-foreground ml-auto flex items-baseline gap-0.5 font-mono font-medium tabular-nums'>
-																		{formatHours(numeric)}
-																		<span className='text-muted-foreground font-normal'>h</span>
-																	</div>
-																	{isLast ? (
-																		<div className='text-foreground mt-1.5 flex basis-full items-center border-t pt-1.5 text-xs font-medium'>
-																			Total
-																			<div className='text-foreground ml-auto flex items-baseline gap-0.5 font-mono font-medium tabular-nums'>
-																				{formatHours(point?.totalHours ?? 0)}
-																				<span className='text-muted-foreground font-normal'>h</span>
-																			</div>
-																			<span className='ml-3 text-muted-foreground font-normal'>
-																				{point?.entryCount ?? 0}{' '}
-																				{point?.entryCount === 1 ? 'entry' : 'entries'}
-																			</span>
-																		</div>
-																	) : null}
-																</>
-															)
-														}}
-													/>
-												}
-											/>
+											<ChartTooltip content={<ChartTooltipContent hideLabel />} />
 											{insights.authorSeries.map(series => (
 												<Bar
 													key={series.dataKey}
 													dataKey={series.dataKey}
 													stackId='daily'
-													fill={`var(--color-${series.dataKey})`}
+													// fill={`var(--color-${series.dataKey})`}
 													radius={[4, 4, 0, 0]}
-													maxBarSize={36}
 												/>
 											))}
 											<ChartLegend content={<ChartLegendContent />} />
@@ -282,11 +224,11 @@ export function WorklogCalendarStats({
 													className='aspect-[4/3] min-h-[200px]'
 													config={authorChartConfig}
 												>
-													<BarChart data={project.data}>
-														<CartesianGrid
-															vertical={false}
-															strokeDasharray='3 3'
-														/>
+													<BarChart
+														accessibilityLayer
+														data={project.data}
+													>
+														<CartesianGrid vertical={false} />
 														<XAxis
 															dataKey='label'
 															tickLine={false}
@@ -301,58 +243,14 @@ export function WorklogCalendarStats({
 															dx={-6}
 															tickFormatter={value => `${value}h`}
 														/>
-														<ChartTooltip
-															cursor={false}
-															content={
-																<ChartTooltipContent
-																	className='w-[200px]'
-																	labelFormatter={(_, payload) => {
-																		const point = payload?.[0]?.payload as
-																			| DailySeriesPoint
-																			| undefined
-																		return point?.fullLabel ?? ''
-																	}}
-																	formatter={(value, key) => {
-																		const numeric =
-																			typeof value === 'number'
-																				? value
-																				: typeof value === 'string'
-																					? Number.parseFloat(value)
-																					: 0
-																		const label =
-																			authorChartConfig[key as keyof typeof authorChartConfig]
-																				?.label ?? key
-																		return (
-																			<>
-																				<div
-																					className='h-2.5 w-2.5 shrink-0 rounded-[2px]'
-																					style={
-																						{
-																							'--color-bg': `var(--color-${key})`
-																						} as CSSProperties
-																					}
-																				/>
-																				{label}
-																				<div className='text-foreground ml-auto flex items-baseline gap-0.5 font-mono font-medium tabular-nums'>
-																					{formatHours(numeric)}
-																					<span className='text-muted-foreground font-normal'>
-																						h
-																					</span>
-																				</div>
-																			</>
-																		)
-																	}}
-																/>
-															}
-														/>
+														<ChartTooltip content={<ChartTooltipContent hideLabel />} />
 														{project.series.map(series => (
 															<Bar
 																key={`${project.key}-${series.dataKey}`}
 																dataKey={series.dataKey}
 																stackId={project.key}
-																fill={`var(--color-${series.dataKey})`}
+																// fill={`var(--color-${series.dataKey})`}
 																radius={[4, 4, 0, 0]}
-																maxBarSize={28}
 															/>
 														))}
 													</BarChart>
@@ -363,132 +261,6 @@ export function WorklogCalendarStats({
 								</div>
 							) : null}
 						</div>
-						<div className='space-y-3'>
-							<header className='flex items-center justify-between'>
-								<h3 className='text-sm font-semibold'>User contributions</h3>
-								<span className='text-xs text-muted-foreground'>
-									{insights.authorTotals.length}{' '}
-									{insights.authorTotals.length === 1 ? 'person' : 'people'}
-								</span>
-							</header>
-							<div className='rounded-xl border bg-card/40 p-4'>
-								<ChartContainer
-									className='min-h-[260px]'
-									config={{
-										...projectChartConfig,
-										label: { color: 'var(--background)' }
-									}}
-								>
-									<BarChart
-										data={insights.authorTotals}
-										layout='vertical'
-										barCategoryGap={12}
-									>
-										<CartesianGrid
-											horizontal={false}
-											strokeDasharray='3 3'
-										/>
-										<XAxis
-											type='number'
-											tickLine={false}
-											axisLine={false}
-											domain={[0, 'dataMax']}
-											tickFormatter={value => `${value}h`}
-										/>
-										<YAxis
-											type='category'
-											dataKey='author'
-											tickLine={false}
-											axisLine={false}
-											width={110}
-										/>
-										<ChartTooltip
-											cursor={false}
-											content={
-												<ChartTooltipContent
-													className='w-[220px]'
-													labelFormatter={value => value}
-													formatter={(value, key, item) => {
-														const numeric =
-															typeof value === 'number'
-																? value
-																: typeof value === 'string'
-																	? Number.parseFloat(value)
-																	: 0
-														const label =
-															projectChartConfig[key as keyof typeof projectChartConfig]?.label ??
-															key
-														const point = item?.payload as AuthorTotalsPoint | undefined
-														const order = point?.__projectOrder ?? []
-														const isLast = order[order.length - 1] === key
-														return (
-															<>
-																<div
-																	className='h-2.5 w-2.5 shrink-0 rounded-[2px]'
-																	style={
-																		{
-																			'--color-bg': `var(--color-${key})`
-																		} as CSSProperties
-																	}
-																/>
-																{label}
-																<div className='text-foreground ml-auto flex items-baseline gap-0.5 font-mono font-medium tabular-nums'>
-																	{formatHours(numeric)}
-																	<span className='text-muted-foreground font-normal'>h</span>
-																</div>
-																{isLast ? (
-																	<div className='text-foreground mt-1.5 flex basis-full items-center border-t pt-1.5 text-xs font-medium'>
-																		Total
-																		<div className='text-foreground ml-auto flex items-baseline gap-0.5 font-mono font-medium tabular-nums'>
-																			{formatHours(point?.totalHours ?? 0)}
-																			<span className='text-muted-foreground font-normal'>h</span>
-																		</div>
-																		<span className='ml-3 text-muted-foreground font-normal'>
-																			{point?.entryCount ?? 0}{' '}
-																			{point?.entryCount === 1 ? 'entry' : 'entries'}
-																		</span>
-																	</div>
-																) : null}
-															</>
-														)
-													}}
-												/>
-											}
-										/>
-										{insights.projectSeries.map((series, index) => (
-											<Bar
-												key={series.dataKey}
-												dataKey={series.dataKey}
-												stackId='author-total'
-												fill={`var(--color-${series.dataKey})`}
-												radius={
-													index === insights.projectSeries.length - 1 ? [0, 4, 4, 0] : undefined
-												}
-											>
-												{index === 0 ? (
-													<>
-														<LabelList
-															dataKey='author'
-															position='insideLeft'
-															offset={12}
-															className='fill-(--color-label) text-xs font-medium'
-														/>
-														<LabelList
-															dataKey='totalHours'
-															position='right'
-															offset={8}
-															className='fill-foreground text-xs font-medium'
-															formatter={(value: unknown) => `${formatHours(value)} h`}
-														/>
-													</>
-												) : null}
-											</Bar>
-										))}
-										<ChartLegend content={<ChartLegendContent />} />
-									</BarChart>
-								</ChartContainer>
-							</div>
-						</div>
 					</section>
 				) : (
 					<div className='rounded-xl border bg-muted/40 px-4 py-12 text-center text-sm text-muted-foreground'>
@@ -498,7 +270,7 @@ export function WorklogCalendarStats({
 
 				<Separator />
 
-				<section className='grid gap-4 md:grid-cols-2'>
+				<section className='mt-4 grid gap-4 md:grid-cols-2'>
 					<StatList
 						title='By Project'
 						emptyText='No project information yet.'
@@ -522,8 +294,276 @@ export function WorklogCalendarStats({
 						}))}
 					/>
 				</section>
-			</CardContent>
-		</Card>
+			</div>
+		)
+	}
+
+	return (
+		<div className={className}>
+			{activeStatuses.length > 0 ? (
+				<Badge
+					variant='outline'
+					className='mb-2 gap-1 border-dashed text-[11px] font-medium'
+				>
+					<Spinner className='size-3' />
+					Syncing data…
+				</Badge>
+			) : null}
+			{statuses.length > 0 ? (
+				<div className='flex flex-wrap gap-2 text-[11px] text-muted-foreground'>
+					{statuses.map(status => (
+						<span
+							key={status.label}
+							className='border-border/60 bg-muted/40 text-muted-foreground flex items-center gap-1 rounded-full border px-2 py-1'
+						>
+							<span className='font-medium text-foreground'>{status.label}</span>
+							{status.total !== undefined ? (
+								<span className='font-mono text-[10px] uppercase tracking-wide text-muted-foreground/80'>
+									{(status.loaded ?? 0).toLocaleString()}/{status.total?.toLocaleString()}
+								</span>
+							) : null}
+							<span className='flex items-center gap-1'>
+								{status.isLoading ? (
+									<>
+										<span className='size-1.5 rounded-full bg-primary' />
+										<span>loading…</span>
+									</>
+								) : (
+									<>
+										<span className='size-1.5 rounded-full bg-emerald-500' />
+										<span>up to date</span>
+									</>
+								)}
+							</span>
+						</span>
+					))}
+				</div>
+			) : null}
+			<section className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
+				<SummaryTile
+					label='Active Projects'
+					value={topProjects.length}
+					helper='projects with logged time'
+				/>
+				<SummaryTile
+					label='Contributors'
+					value={stats.byAuthor.length}
+					helper='unique authors'
+				/>
+				<SummaryTile
+					label='Active Days'
+					value={stats.byDay.length}
+					helper='days with activity'
+				/>
+				<SummaryTile
+					label='Avg per Entry'
+					value={formatDurationFromSeconds(Math.round(stats.totalSeconds / stats.totalEntries))}
+					helper='average duration'
+				/>
+			</section>
+
+			<Separator />
+
+			{hasData ? (
+				<section className='grid gap-6 lg:grid-cols-[1.45fr_1fr]'>
+					<div className='flex flex-col gap-6'>
+						<div className='flex flex-col gap-3'>
+							<header className='flex items-center justify-between'>
+								<h3 className='text-sm font-semibold'>Daily distribution</h3>
+								<span className='text-xs text-muted-foreground'>
+									Last {insights.dailyByAuthor.length} days
+								</span>
+							</header>
+							<div className='rounded-xl border bg-card/40 p-4'>
+								<ChartContainer
+									className='aspect-[16/9] min-h-[260px]'
+									config={authorChartConfig}
+								>
+									<BarChart
+										accessibilityLayer
+										data={insights.dailyByAuthor}
+									>
+										<CartesianGrid vertical={false} />
+										<XAxis
+											dataKey='label'
+											tickLine={false}
+											axisLine={false}
+											dy={8}
+											padding={{ left: 12, right: 12 }}
+										/>
+										<YAxis
+											tickLine={false}
+											axisLine={false}
+											width={48}
+											dx={-8}
+											tickFormatter={value => `${value}h`}
+										/>
+										<ChartTooltip content={<ChartTooltipContent hideLabel />} />
+										{insights.authorSeries.map(series => (
+											<Bar
+												key={series.dataKey}
+												dataKey={series.dataKey}
+												stackId='daily'
+												// fill={`var(--color-${series.dataKey})`}
+												radius={[4, 4, 0, 0]}
+											/>
+										))}
+										<ChartLegend content={<ChartLegendContent />} />
+									</BarChart>
+								</ChartContainer>
+							</div>
+						</div>
+						{insights.projectDailyCharts.length > 0 ? (
+							<div className='flex flex-col gap-3'>
+								<header className='flex items-center justify-between'>
+									<h3 className='text-sm font-semibold'>Daily by project</h3>
+									<span className='text-xs text-muted-foreground'>
+										{insights.projectDailyCharts.length}{' '}
+										{insights.projectDailyCharts.length === 1 ? 'project' : 'projects'}
+									</span>
+								</header>
+								<div className='grid gap-4 md:grid-cols-2'>
+									{insights.projectDailyCharts.map(project => (
+										<div
+											key={project.key}
+											className='rounded-xl border bg-card/40 p-4'
+										>
+											<div className='mb-2 flex items-center justify-between text-xs text-muted-foreground'>
+												<span className='text-sm font-semibold text-foreground'>
+													{project.label}
+												</span>
+												<span className='font-mono font-medium text-foreground'>
+													{formatHours(project.totalHours)} h
+												</span>
+											</div>
+											<ChartContainer
+												className='aspect-[4/3] min-h-[200px]'
+												config={authorChartConfig}
+											>
+												<BarChart
+													accessibilityLayer
+													data={project.data}
+												>
+													<CartesianGrid vertical={false} />
+													<XAxis
+														dataKey='label'
+														tickLine={false}
+														axisLine={false}
+														dy={8}
+														padding={{ left: 8, right: 8 }}
+													/>
+													<YAxis
+														tickLine={false}
+														axisLine={false}
+														width={40}
+														dx={-6}
+														tickFormatter={value => `${value}h`}
+													/>
+													<ChartTooltip content={<ChartTooltipContent hideLabel />} />
+													{project.series.map(series => (
+														<Bar
+															key={`${project.key}-${series.dataKey}`}
+															dataKey={series.dataKey}
+															stackId={project.key}
+															// fill={`var(--color-${series.dataKey})`}
+															radius={[4, 4, 0, 0]}
+														/>
+													))}
+												</BarChart>
+											</ChartContainer>
+										</div>
+									))}
+								</div>
+							</div>
+						) : null}
+					</div>
+					<div className='flex flex-col gap-3'>
+						<header className='flex items-center justify-between'>
+							<h3 className='text-sm font-semibold'>User contributions</h3>
+							<span className='text-xs text-muted-foreground'>
+								{insights.authorTotals.length}{' '}
+								{insights.authorTotals.length === 1 ? 'person' : 'people'}
+							</span>
+						</header>
+						<div className='rounded-xl border bg-card/40 p-4'>
+							<ChartContainer
+								className='min-h-[260px]'
+								config={projectChartConfig}
+							>
+								<BarChart
+									accessibilityLayer
+									data={insights.authorTotals}
+									layout='vertical'
+									barCategoryGap={12}
+								>
+									<CartesianGrid horizontal={false} />
+									<XAxis
+										type='number'
+										tickLine={false}
+										axisLine={false}
+										domain={[0, 'dataMax']}
+										tickFormatter={value => `${value}h`}
+									/>
+									<YAxis
+										type='category'
+										dataKey='author'
+										tickLine={false}
+										axisLine={false}
+										width={110}
+									/>
+									<ChartTooltip content={<ChartTooltipContent hideLabel />} />
+									{insights.projectSeries.map((series, index) => (
+										<Bar
+											key={series.dataKey}
+											dataKey={series.dataKey}
+											stackId='author-total'
+											// fill={`var(--color-${series.dataKey})`}
+											radius={
+												index === insights.projectSeries.length - 1 ? [0, 4, 4, 0] : undefined
+											}
+										>
+											{null}
+										</Bar>
+									))}
+									<ChartLegend content={<ChartLegendContent />} />
+								</BarChart>
+							</ChartContainer>
+						</div>
+					</div>
+				</section>
+			) : (
+				<div className='rounded-xl border bg-muted/40 px-4 py-12 text-center text-sm text-muted-foreground'>
+					No chart data yet. Start logging time to see trends here.
+				</div>
+			)}
+
+			<Separator />
+
+			<section className='grid gap-4 md:grid-cols-2'>
+				<StatList
+					title='By Project'
+					emptyText='No project information yet.'
+					items={topProjects.map(entry => ({
+						key: entry.key,
+						label: entry.label,
+						primary: formatDurationFromSeconds(entry.totalSeconds),
+						secondary: `${entry.entryCount} ${entry.entryCount === 1 ? 'entry' : 'entries'}`,
+						meta: entry.meta?.['projectName']
+					}))}
+				/>
+				<StatList
+					title='Top Issues'
+					emptyText='Issues are not linked yet.'
+					items={topIssues.map(entry => ({
+						key: entry.key,
+						label: entry.label,
+						primary: formatDurationFromSeconds(entry.totalSeconds),
+						secondary: `${entry.entryCount} ${entry.entryCount === 1 ? 'entry' : 'entries'}`,
+						meta: entry.meta?.['summary'] ? entry.meta?.['summary'] : entry.meta?.['projectName']
+					}))}
+				/>
+			</section>
+		</div>
 	)
 }
 
@@ -970,7 +1010,7 @@ interface StatListProps {
 
 function StatList({ title, items, emptyText }: StatListProps): React.ReactNode {
 	return (
-		<section className='space-y-3'>
+		<section className='flex flex-col gap-3'>
 			<header className='flex items-center justify-between'>
 				<h3 className='text-sm font-semibold'>{title}</h3>
 				<span className='text-xs text-muted-foreground'>Top {items.length}</span>
@@ -978,7 +1018,7 @@ function StatList({ title, items, emptyText }: StatListProps): React.ReactNode {
 			{items.length === 0 ? (
 				<p className='text-xs text-muted-foreground'>{emptyText}</p>
 			) : (
-				<ul className='space-y-2'>
+				<ul className='flex flex-col gap-2'>
 					{items.map(item => (
 						<li
 							key={item.key}
