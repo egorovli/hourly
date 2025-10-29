@@ -205,9 +205,74 @@ bun run db:migrate
 
 ## Roadmap
 
-Planned: Decouple provider-specific logic to support alternative time tracking and version control systems beyond Jira/GitLab. Provider abstraction layer will enable pluggable integrations.
+### ✅ Completed
 
-Contributions welcome.
+**Core Infrastructure**
+- Dual OAuth authentication (Atlassian + GitLab)
+- Session management with automatic token refresh
+- SQLite persistence with MikroORM
+- React Router v7 SSR architecture
+
+**Data Integration**
+- Jira API: Projects, users, issues, worklog entries
+- GitLab API: Projects, contributors, commits
+- Issue key extraction from commit messages
+- Infinite query pagination with auto-load
+
+**UI & Interaction**
+- Calendar widget with drag-and-drop editing
+- Multi-view support (month, week, day, agenda)
+- Filter panel (projects, users, date ranges)
+- Settings & preferences (theme, timezone, locale)
+- Local worklog editor with change tracking
+
+### 🚧 In Progress
+
+**Reconciliation Engine**
+- Bidirectional sync: Persist calendar edits to Jira API
+- Commit-to-worklog matching algorithm
+- Conflict resolution workflow
+- Automated time allocation suggestions
+
+**Data Completeness**
+- Pagination for Jira projects/users endpoints
+- Bulk operations for large datasets
+
+### 📋 Planned
+
+**Provider Abstraction** (v2.0)
+- Pluggable provider architecture
+- Support for alternative time tracking systems (Tempo, Toggl)
+- Support for alternative VCS platforms (GitHub, Bitbucket)
+- Generic reconciliation interface
+
+**Reporting & Export**
+- Monthly time summary reports
+- Time distribution visualizations by project/issue
+- Export to CSV/PDF formats
+- Historical trend analysis
+
+**Localization**
+- Multi-language support (i18n)
+- Locale-aware date/time formatting
+
+**Advanced Features**
+- Automated worklog suggestions based on commit activity
+- Smart time splitting across multiple issues
+- Team visibility and approvals workflow
+- Browser extension for quick time logging
+
+### Project Completion Criteria
+
+The project will be considered complete when:
+1. ✅ Users can authenticate with both providers
+2. ✅ Worklogs display on interactive calendar
+3. 🚧 Calendar edits persist back to Jira
+4. 🚧 Commits reconcile with worklogs automatically
+5. ❌ Monthly reports generate accurately
+6. ❌ Export functionality works for all formats
+
+Contributions welcome. See [CLAUDE.md](./CLAUDE.md) for development guidelines.
 
 ## Docs
 
