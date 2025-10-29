@@ -76,7 +76,7 @@ export async function action({ request, ...args }: Route.ActionArgs) {
 	}
 
 	// Refresh the token based on provider
-	let result
+	let result: RefreshTokenResult
 	if (provider === 'atlassian') {
 		const clientId = process.env.OAUTH_ATLASSIAN_CLIENT_ID
 		const clientSecret = process.env.OAUTH_ATLASSIAN_CLIENT_SECRET

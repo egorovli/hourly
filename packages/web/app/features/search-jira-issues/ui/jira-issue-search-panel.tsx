@@ -1,19 +1,56 @@
-import { useState, useCallback } from 'react'
-import { Search, GripVertical } from 'lucide-react'
+import { useState, useCallback, useMemo } from 'react'
+import { Search, GripVertical, Sparkles, GitCommit, Timer } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { Input } from '~/shared/ui/shadcn/ui/input.tsx'
-import { ScrollArea } from '~/shared/ui/shadcn/ui/scroll-area.tsx'
 import { Badge } from '~/shared/ui/shadcn/ui/badge.tsx'
 import { Skeleton } from '~/shared/ui/shadcn/ui/skeleton.tsx'
 import { cn } from '~/lib/util/index.ts'
 import { useSearchJiraIssuesQuery } from '../api/use-search-jira-issues-query.ts'
-import type { JiraIssueSearchPanelProps, DraggableIssue } from '../model/types.ts'
+import type {
+	JiraIssueSearchPanelProps,
+	DraggableIssue,
+	JiraIssueMatchReason
+} from '../model/types.ts'
+
+const ISSUE_REASON_TAG_BASE_CLASS =
+	'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium'
+
+const ISSUE_REASON_ORDER: JiraIssueMatchReason[] = ['activity', 'worklog', 'commit', 'search']
+
+const ISSUE_REASON_CONFIG: Record<
+	JiraIssueMatchReason,
+	{ label: string; icon: LucideIcon; className: string }
+> = {
+	activity: {
+		label: 'Recent activity',
+		icon: Sparkles,
+		className: 'border-amber-200 bg-amber-100 text-amber-900'
+	},
+	commit: {
+		label: 'Commit mention',
+		icon: GitCommit,
+		className: 'border-emerald-200 bg-emerald-100 text-emerald-900'
+	},
+	worklog: {
+		label: 'Logged work',
+		icon: Timer,
+		className: 'border-sky-200 bg-sky-100 text-sky-900'
+	},
+	search: {
+		label: 'Search match',
+		icon: Search,
+		className: 'border-violet-200 bg-violet-100 text-violet-900'
+	}
+}
 
 export function JiraIssueSearchPanel({
 	userId,
 	projectIds,
 	relevantIssues = [],
 	referencedIssues = [],
-	className
+	className,
+	onIssueDragStart,
+	onIssueDragEnd
 }: JiraIssueSearchPanelProps): React.ReactNode {
 	const [searchText, setSearchText] = useState('')
 
@@ -25,9 +62,55 @@ export function JiraIssueSearchPanel({
 	})
 
 	const isSearchActive = searchText.trim().length >= 2
+	const defaultIssues = useMemo(() => {
+		const combined = [...relevantIssues, ...referencedIssues]
+
+		if (combined.length === 0) {
+			return combined
+		}
+
+		const deduped = new Map<string, DraggableIssue>()
+		for (const issue of combined) {
+			const existing = deduped.get(issue.id)
+			if (!existing) {
+				deduped.set(issue.id, { ...issue, reasons: [...issue.reasons] })
+				continue
+			}
+
+			const mergedReasons = Array.from(new Set([...existing.reasons, ...issue.reasons]))
+			deduped.set(issue.id, { ...existing, reasons: mergedReasons })
+		}
+		return Array.from(deduped.values())
+	}, [relevantIssues, referencedIssues])
+
+	const defaultIssueReasonMap = useMemo(() => {
+		return new Map(defaultIssues.map(issue => [issue.id, issue.reasons]))
+	}, [defaultIssues])
+
+	const searchIssues = useMemo(() => {
+		const issues = searchResults?.issues ?? []
+
+		return issues.map(issue => {
+			const reasons = new Set<JiraIssueMatchReason>(['search'])
+			const additionalReasons = defaultIssueReasonMap.get(issue.id) ?? []
+
+			for (const reason of additionalReasons) {
+				reasons.add(reason)
+			}
+
+			return {
+				id: issue.id,
+				key: issue.key,
+				summary: issue.fields.summary ?? 'No summary',
+				projectKey: issue.fields.project?.key ?? '',
+				projectName: issue.fields.project?.name ?? '',
+				reasons: Array.from(reasons)
+			}
+		})
+	}, [defaultIssueReasonMap, searchResults?.issues])
 
 	return (
-		<div className={cn('flex flex-col', className)}>
+		<div className={cn('flex h-full flex-col', className)}>
 			{/* Search Input */}
 			<div className='border-b p-4'>
 				<div className='relative'>
@@ -46,92 +129,99 @@ export function JiraIssueSearchPanel({
 			</div>
 
 			{/* Results Area */}
-			<ScrollArea className='h-[calc(100vh-12rem)] p-4'>
+			<div className='flex flex-1 flex-col overflow-hidden'>
 				{isSearchActive ? (
-					// Search Results
-					isSearching ? (
-						<SearchLoadingState />
-					) : (searchResults?.issues ?? []).length > 0 ? (
-						<IssuesList
-							title='Search Results'
-							issues={
-								searchResults?.issues.map(issue => ({
-									id: issue.id,
-									key: issue.key,
-									summary: issue.fields.summary ?? 'No summary',
-									projectKey: issue.fields.project?.key ?? '',
-									projectName: issue.fields.project?.name ?? ''
-								})) ?? []
-							}
-						/>
-					) : (
-						<EmptyState message='No issues found matching your search' />
-					)
-				) : (
-					// Idle State: Show Relevant and Referenced Issues
 					<>
-						{relevantIssues.length > 0 && (
-							<IssuesList
-								title='Relevant Issues'
-								description='Issues you recently worked on'
-								issues={relevantIssues}
-							/>
-						)}
-
-						{referencedIssues.length > 0 && (
-							<IssuesList
-								title='Referenced Issues'
-								description='Issues from your recent commits'
-								issues={referencedIssues}
-								className={relevantIssues.length > 0 ? 'mt-6' : ''}
-							/>
-						)}
-
-						{relevantIssues.length === 0 && referencedIssues.length === 0 && (
-							<EmptyState message='No recent issues. Try searching above.' />
-						)}
+						<SectionHeader
+							title='Search Results'
+							description='Drag issues from the results onto the calendar'
+						/>
+						<div className='flex-1 overflow-y-auto px-4 pb-4 pt-3'>
+							{isSearching ? (
+								<SearchLoadingState />
+							) : searchIssues.length > 0 ? (
+								<IssuesList
+									issues={searchIssues}
+									onIssueDragStart={onIssueDragStart}
+									onIssueDragEnd={onIssueDragEnd}
+								/>
+							) : (
+								<EmptyState message='No issues found matching your search' />
+							)}
+						</div>
 					</>
+				) : defaultIssues.length > 0 ? (
+					<>
+						<SectionHeader
+							title='Suggested Issues'
+							description='Based on recent worklogs and referenced commits'
+						/>
+						<div className='flex-1 overflow-y-auto px-4 pb-4 pt-3'>
+							<IssuesList
+								issues={defaultIssues}
+								onIssueDragStart={onIssueDragStart}
+								onIssueDragEnd={onIssueDragEnd}
+							/>
+						</div>
+					</>
+				) : (
+					<div className='flex flex-1 items-center justify-center px-4 pb-4 pt-6'>
+						<EmptyState message='No recent issues. Try searching above.' />
+					</div>
 				)}
-			</ScrollArea>
+			</div>
+		</div>
+	)
+}
+
+interface SectionHeaderProps {
+	title: string
+	description?: string
+}
+
+function SectionHeader({ title, description }: SectionHeaderProps) {
+	return (
+		<div className='border-b px-4 py-3'>
+			<h3 className='text-sm font-semibold text-foreground'>{title}</h3>
+			{description ? (
+				<p className='text-xs leading-relaxed text-muted-foreground'>{description}</p>
+			) : null}
 		</div>
 	)
 }
 
 interface IssuesListProps {
-	title: string
-	description?: string
 	issues: DraggableIssue[]
-	className?: string
+	onIssueDragStart?: (issue: DraggableIssue) => void
+	onIssueDragEnd?: () => void
 }
 
-function IssuesList({ title, description, issues, className }: IssuesListProps) {
+function IssuesList({ issues, onIssueDragStart, onIssueDragEnd }: IssuesListProps) {
 	return (
-		<div className={className}>
-			<div className='mb-3 space-y-0.5'>
-				<h3 className='text-sm font-semibold text-foreground'>{title}</h3>
-				{description && (
-					<p className='text-xs text-muted-foreground leading-relaxed'>{description}</p>
-				)}
-			</div>
-			<div className='space-y-2.5'>
-				{issues.map(issue => (
-					<DraggableIssueItem
-						key={issue.id}
-						issue={issue}
-					/>
-				))}
-			</div>
+		<div className='space-y-2.5'>
+			{issues.map(issue => (
+				<DraggableIssueItem
+					key={issue.id}
+					issue={issue}
+					onDragStart={onIssueDragStart}
+					onDragEnd={onIssueDragEnd}
+				/>
+			))}
 		</div>
 	)
 }
 
 interface DraggableIssueItemProps {
 	issue: DraggableIssue
+	onDragStart?: (issue: DraggableIssue) => void
+	onDragEnd?: () => void
 }
 
-function DraggableIssueItem({ issue }: DraggableIssueItemProps) {
+function DraggableIssueItem({ issue, onDragStart, onDragEnd }: DraggableIssueItemProps) {
 	const handleDragStart = useCallback(
 		(e: React.DragEvent<HTMLButtonElement>) => {
+			onDragStart?.(issue)
+
 			// Store issue data in drag event
 			e.dataTransfer.effectAllowed = 'copy'
 			e.dataTransfer.setData('application/json', JSON.stringify(issue))
@@ -143,12 +233,16 @@ function DraggableIssueItem({ issue }: DraggableIssueItemProps) {
 				target.classList.add('opacity-50')
 			})
 		},
-		[issue]
+		[issue, onDragStart]
 	)
 
-	const handleDragEnd = useCallback((e: React.DragEvent<HTMLButtonElement>) => {
-		e.currentTarget.classList.remove('opacity-50')
-	}, [])
+	const handleDragEnd = useCallback(
+		(e: React.DragEvent<HTMLButtonElement>) => {
+			e.currentTarget.classList.remove('opacity-50')
+			onDragEnd?.()
+		},
+		[onDragEnd]
+	)
 
 	return (
 		<button
@@ -177,6 +271,7 @@ function DraggableIssueItem({ issue }: DraggableIssueItemProps) {
 				<p className='line-clamp-2 text-sm font-medium leading-snug text-foreground'>
 					{issue.summary}
 				</p>
+				<IssueReasonTags reasons={issue.reasons} />
 				{issue.projectName && (
 					<p className='text-xs text-muted-foreground/80 truncate'>{issue.projectName}</p>
 				)}
@@ -185,12 +280,48 @@ function DraggableIssueItem({ issue }: DraggableIssueItemProps) {
 	)
 }
 
+function IssueReasonTags({ reasons }: { reasons: DraggableIssue['reasons'] }) {
+	if (!reasons || reasons.length === 0) {
+		return null
+	}
+
+	const uniqueReasons = new Set<JiraIssueMatchReason>(reasons)
+	const orderedReasons = ISSUE_REASON_ORDER.filter(reason => uniqueReasons.has(reason))
+
+	if (orderedReasons.length === 0) {
+		return null
+	}
+
+	return (
+		<div className='flex flex-wrap gap-1.5 pt-1'>
+			{orderedReasons.map(reason => (
+				<IssueReasonTag
+					key={reason}
+					reason={reason}
+				/>
+			))}
+		</div>
+	)
+}
+
+function IssueReasonTag({ reason }: { reason: JiraIssueMatchReason }) {
+	const config = ISSUE_REASON_CONFIG[reason]
+	const Icon = config.icon
+
+	return (
+		<span className={cn(ISSUE_REASON_TAG_BASE_CLASS, config.className)}>
+			<Icon aria-hidden className='h-3.5 w-3.5' />
+			<span>{config.label}</span>
+		</span>
+	)
+}
+
 function SearchLoadingState() {
 	return (
 		<div className='space-y-2'>
-			{Array.from({ length: 5 }).map((_, i) => (
+			{['a', 'b', 'c', 'd', 'e'].map(skeletonKey => (
 				<div
-					key={`skeleton-${i}`}
+					key={`skeleton-${skeletonKey}`}
 					className='flex gap-2 rounded-lg border p-3'
 				>
 					<Skeleton className='h-4 w-4 flex-none' />

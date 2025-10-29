@@ -91,6 +91,7 @@ const querySchema = z
 		}
 	})
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: loader aggregates multiple remote queries with validation
 export async function loader({ request }: Route.LoaderArgs) {
 	const session = await sessionStorage.getSession(request.headers.get('Cookie'))
 	const user = session.get('user')

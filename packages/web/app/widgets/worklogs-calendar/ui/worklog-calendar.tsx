@@ -1,6 +1,3 @@
-import type { WorklogCalendarEvent } from '~/entities/index.ts'
-import type { CalendarCompactMode } from '~/domain/preferences.ts'
-
 import type {
 	CalendarProps,
 	DayPropGetter,
@@ -10,7 +7,11 @@ import type {
 	EventProps
 } from 'react-big-calendar'
 
-import { useCallback, useMemo, useState } from 'react'
+import type { DragEvent as ReactDragEvent, ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+
+import type { WorklogCalendarEvent } from '~/entities/index.ts'
+import type { CalendarCompactMode } from '~/domain/preferences.ts'
 
 import { DragAndDropCalendar } from '~/lib/calendar/drag-and-drop-calendar.client.tsx'
 import { cn } from '~/lib/util/index.ts'
@@ -24,6 +25,16 @@ import { useCalendarEventsState } from '../model/use-calendar-events-state.ts'
 import { WorklogCalendarActions } from './worklog-calendar-actions.tsx'
 import { WorklogCalendarEventContent } from './worklog-calendar-event.tsx'
 import { WorklogCalendarToolbar } from './worklog-calendar-toolbar.tsx'
+
+interface ExternalIssueDragItem {
+	id: string
+	key: string
+	summary: string
+	projectKey: string
+	projectName: string
+}
+
+const EXTERNAL_DRAG_DEFAULT_DURATION_MS = 30 * 60 * 1000
 
 export interface WorklogsCalendarProps {
 	date: Date
@@ -48,12 +59,14 @@ export interface WorklogsCalendarProps {
 	projectsData?: Array<{ id: string; name: string; key: string }>
 	workingDayStartTime?: string
 	workingDayEndTime?: string
+	externalIssue?: ExternalIssueDragItem | null
 	onDropFromOutside?: (args: {
 		start: Date
 		end: Date
 		allDay: boolean
-		draggedEl: HTMLElement
+		issue: ExternalIssueDragItem | null
 	}) => void
+	onLocalEventsChange?: (events: WorklogCalendarEvent[]) => void
 }
 
 export function WorklogsCalendar({
@@ -79,8 +92,10 @@ export function WorklogsCalendar({
 	projectsData,
 	workingDayStartTime = '09:00',
 	workingDayEndTime = '18:00',
-	onDropFromOutside
-}: WorklogsCalendarProps): React.ReactNode {
+	externalIssue = null,
+	onDropFromOutside,
+	onLocalEventsChange
+}: WorklogsCalendarProps): ReactNode {
 	// Use local state management with change tracking
 	const {
 		localEvents,
@@ -102,6 +117,14 @@ export function WorklogsCalendar({
 
 	// Draft event state (for visual feedback while dragging)
 	const [draftEvent, setDraftEvent] = useState<WorklogCalendarEvent | null>(null)
+
+	useEffect(() => {
+		if (!onLocalEventsChange) {
+			return
+		}
+
+		onLocalEventsChange(localEvents)
+	}, [localEvents, onLocalEventsChange])
 
 	// Context menu handlers
 	const handleEditEvent = useCallback((event: WorklogCalendarEvent) => {
@@ -200,13 +223,58 @@ export function WorklogsCalendar({
 
 	// Handle external drop (from search panel)
 	const handleDropFromOutside = useCallback(
-		(args: any) => {
-			if (onDropFromOutside) {
-				onDropFromOutside(args)
+		(args: { start: Date; end: Date; allDay: boolean }) => {
+			if (!onDropFromOutside) {
+				return
+			}
+
+			onDropFromOutside({
+				...args,
+				issue: externalIssue
+			})
+		},
+		[onDropFromOutside, externalIssue]
+	)
+
+	const handleDragOver = useCallback(
+		(event: ReactDragEvent) => {
+			if (!externalIssue) {
+				return
+			}
+
+			event.preventDefault()
+			if (event.dataTransfer) {
+				event.dataTransfer.dropEffect = 'copy'
 			}
 		},
-		[onDropFromOutside]
+		[externalIssue]
 	)
+
+	const dragFromOutsideItem = useCallback(() => {
+		if (!externalIssue) {
+			return null
+		}
+
+		const previewStart = new Date(0)
+		const previewEnd = new Date(EXTERNAL_DRAG_DEFAULT_DURATION_MS)
+		const startedIso = new Date().toISOString()
+
+		return {
+			id: `external-${externalIssue.id}`,
+			title: `${externalIssue.key} • ${externalIssue.summary}`,
+			start: previewStart,
+			end: previewEnd,
+			resource: {
+				issueKey: externalIssue.key,
+				issueSummary: externalIssue.summary,
+				projectName: externalIssue.projectName,
+				authorName: currentUserName ?? 'Current User',
+				authorAccountId: currentUserAccountId ?? '',
+				timeSpentSeconds: Math.floor(EXTERNAL_DRAG_DEFAULT_DURATION_MS / 1000),
+				started: startedIso
+			}
+		} as WorklogCalendarEvent
+	}, [externalIssue, currentUserName, currentUserAccountId])
 
 	// Dialog save handler
 	const handleDialogSave = useCallback(
@@ -262,6 +330,7 @@ export function WorklogsCalendar({
 	}, [localEvents, draftEvent])
 
 	// Calculate dynamic min/max based on local events with 30min padding
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: time-range normalization handles multiple edge cases for calendar display
 	const dynamicMinMax = useMemo(() => {
 		const base = date ?? new Date()
 
@@ -354,7 +423,7 @@ export function WorklogsCalendar({
 
 	return (
 		<>
-			<div className='flex flex-col'>
+			<div className='flex h-full flex-col'>
 				<WorklogCalendarActions
 					changesSummary={changesSummary}
 					onSave={handleSave}
@@ -390,6 +459,8 @@ export function WorklogsCalendar({
 								onSelectSlot={handleSelectSlot}
 								onDoubleClickEvent={handleDoubleClickEvent}
 								onDropFromOutside={handleDropFromOutside}
+								onDragOver={handleDragOver}
+								dragFromOutsideItem={dragFromOutsideItem}
 								eventPropGetter={customEventPropGetter}
 								dayPropGetter={dayPropGetter}
 								slotPropGetter={slotPropGetter}

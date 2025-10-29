@@ -250,15 +250,10 @@ export function useCalendarEventsState({
 			authorAccountId: change.modifiedEvent.resource.authorAccountId
 		}))
 
-		try {
-			await mutation.mutateAsync({ updates })
+		await mutation.mutateAsync({ updates })
 
-			// Clear changes after successful save
-			setChanges(new Map())
-		} catch (error) {
-			// Error is handled by mutation state, don't clear changes
-			throw error
-		}
+		// Clear changes after successful save
+		setChanges(new Map())
 	}, [changes, mutation])
 
 	// Cancel handler - revert to original
