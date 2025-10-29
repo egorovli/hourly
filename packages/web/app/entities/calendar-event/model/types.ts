@@ -12,6 +12,7 @@ export interface WorklogCalendarEvent {
 		issueSummary: string
 		projectName: string
 		authorName: string
+		authorAccountId: string
 		timeSpentSeconds: number
 		started: string
 	}

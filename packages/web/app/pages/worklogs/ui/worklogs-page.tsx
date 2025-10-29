@@ -355,6 +355,7 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 									slotPropGetter={calendarSlotPropGetter}
 									compactMode={calendarCompactMode}
 									onCompactModeChange={handleCompactModeChange}
+									currentUserAccountId={loaderData.user?.atlassian?.id}
 								/>
 							</div>
 						</>

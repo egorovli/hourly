@@ -71,7 +71,6 @@ export function useCalendarEventsState({
 		// Find original event for comparison
 		const originalEvent = originalEventsRef.current.find(e => e.id === event.id)
 		if (!originalEvent) {
-			console.warn('Original event not found for resize:', event.id)
 			return
 		}
 
@@ -114,7 +113,6 @@ export function useCalendarEventsState({
 		// Find original event for comparison
 		const originalEvent = originalEventsRef.current.find(e => e.id === event.id)
 		if (!originalEvent) {
-			console.warn('Original event not found for drop:', event.id)
 			return
 		}
 
@@ -149,27 +147,21 @@ export function useCalendarEventsState({
 
 	// Save handler using mutation
 	const handleSave = useCallback(async () => {
-		console.log('=== SAVE CHANGES ===')
-		console.log('Total changes:', changes.size)
-
 		// Convert changes to API format
 		const updates = Array.from(changes.values()).map(change => ({
 			eventId: change.modifiedEvent.id,
 			issueKey: change.modifiedEvent.resource.issueKey,
 			started: change.modifiedEvent.start.toISOString(),
-			timeSpentSeconds: change.modifiedEvent.resource.timeSpentSeconds
+			timeSpentSeconds: change.modifiedEvent.resource.timeSpentSeconds,
+			authorAccountId: change.modifiedEvent.resource.authorAccountId
 		}))
-
-		console.log('Sending updates:', updates)
 
 		try {
 			await mutation.mutateAsync({ updates })
-			console.log('Changes saved successfully')
 
 			// Clear changes after successful save
 			setChanges(new Map())
 		} catch (error) {
-			console.error('Failed to save changes:', error)
 			// Error is handled by mutation state, don't clear changes
 			throw error
 		}
@@ -177,9 +169,6 @@ export function useCalendarEventsState({
 
 	// Cancel handler - revert to original
 	const handleCancel = useCallback(() => {
-		console.log('=== CANCEL CHANGES ===')
-		console.log('Reverting', changes.size, 'changes')
-
 		// Restore original events
 		const eventsCopy = originalEventsRef.current.map(event => ({
 			...event,
@@ -190,9 +179,7 @@ export function useCalendarEventsState({
 
 		setLocalEvents(eventsCopy)
 		setChanges(new Map())
-
-		console.log('Changes cancelled')
-	}, [changes.size])
+	}, [])
 
 	// Compute changes summary
 	const changesSummary = useMemo<EventChangesSummary>(

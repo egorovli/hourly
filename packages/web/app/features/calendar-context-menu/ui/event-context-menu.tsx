@@ -12,33 +12,47 @@ interface EventContextMenuProps {
 	event: WorklogCalendarEvent
 	onEdit: (event: WorklogCalendarEvent) => void
 	onDelete: (event: WorklogCalendarEvent) => void
+	currentUserAccountId?: string
 }
 
 export function EventContextMenu({
 	children,
 	event,
 	onEdit,
-	onDelete
+	onDelete,
+	currentUserAccountId
 }: EventContextMenuProps): React.ReactNode {
+	const isOwnedByUser = currentUserAccountId
+		? event.resource.authorAccountId === currentUserAccountId
+		: false
+
 	const handleEdit = () => {
-		onEdit(event)
+		if (isOwnedByUser) {
+			onEdit(event)
+		}
 	}
 
 	const handleDelete = () => {
-		onDelete(event)
+		if (isOwnedByUser) {
+			onDelete(event)
+		}
 	}
 
 	return (
 		<ContextMenu>
 			{children}
 			<ContextMenuContent>
-				<ContextMenuItem onSelect={handleEdit}>
+				<ContextMenuItem
+					onSelect={handleEdit}
+					disabled={!isOwnedByUser}
+				>
 					<EditIcon className='size-4' />
 					Edit Event
 				</ContextMenuItem>
 				<ContextMenuItem
 					variant='destructive'
 					onSelect={handleDelete}
+					disabled={!isOwnedByUser}
 				>
 					<Trash2Icon className='size-4' />
 					Delete Event

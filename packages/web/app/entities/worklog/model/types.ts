@@ -22,6 +22,7 @@ export interface WorklogDebugEntry {
 	summary: string
 	projectName: string
 	authorName: string
+	authorAccountId: string
 	started?: string
 	timeSpentSeconds: number
 }

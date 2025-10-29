@@ -189,6 +189,7 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 				projectName: entry.project?.name ?? entry.project?.key ?? 'Unknown project',
 				authorName:
 					entry.worklog.author?.displayName ?? entry.worklog.author?.accountId ?? 'Unknown author',
+				authorAccountId: entry.worklog.author?.accountId ?? '',
 				started: entry.worklog.started,
 				timeSpentSeconds: entry.worklog.timeSpentSeconds ?? 0
 			}))
@@ -278,6 +279,7 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 						issueSummary: entry.summary,
 						projectName: entry.projectName,
 						authorName: entry.authorName,
+						authorAccountId: entry.authorAccountId,
 						timeSpentSeconds: entry.timeSpentSeconds,
 						started: entry.started ?? new Date().toISOString()
 					}

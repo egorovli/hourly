@@ -42,6 +42,7 @@ export interface WorklogsCalendarProps {
 	slotPropGetter?: SlotPropGetter
 	compactMode?: CalendarCompactMode
 	onCompactModeChange?: (mode: CalendarCompactMode) => void
+	currentUserAccountId?: string
 }
 
 export function WorklogsCalendar({
@@ -60,7 +61,8 @@ export function WorklogsCalendar({
 	eventPropGetter,
 	slotPropGetter,
 	compactMode = 'standard',
-	onCompactModeChange
+	onCompactModeChange,
+	currentUserAccountId
 }: WorklogsCalendarProps): React.ReactNode {
 	// Use local state management with change tracking
 	const {
@@ -133,6 +135,7 @@ export function WorklogsCalendar({
 					event={eventProps.event}
 					onEdit={handleEditEvent}
 					onDelete={handleDeleteEvent}
+					currentUserAccountId={currentUserAccountId}
 				>
 					<ContextMenuTrigger asChild>
 						<div className='h-full w-full'>
@@ -142,7 +145,7 @@ export function WorklogsCalendar({
 				</EventContextMenu>
 			)
 		},
-		[handleEditEvent, handleDeleteEvent]
+		[handleEditEvent, handleDeleteEvent, currentUserAccountId]
 	)
 
 	const mergedComponents: CalendarProps<WorklogCalendarEvent>['components'] = {
@@ -193,7 +196,11 @@ export function WorklogsCalendar({
 								max={max}
 								tooltipAccessor={event => event.title}
 								resizable
-								draggableAccessor={() => true}
+								draggableAccessor={event =>
+									currentUserAccountId
+										? event.resource.authorAccountId === currentUserAccountId
+										: false
+								}
 							/>
 						</div>
 					</ContextMenuTrigger>

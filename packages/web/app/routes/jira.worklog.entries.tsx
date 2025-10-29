@@ -50,7 +50,8 @@ const worklogUpdateSchema = z.object({
 	eventId: nonEmptyTrimmedString,
 	issueKey: nonEmptyTrimmedString,
 	started: z.string().datetime(),
-	timeSpentSeconds: z.number().int().positive()
+	timeSpentSeconds: z.number().int().positive(),
+	authorAccountId: nonEmptyTrimmedString
 })
 
 const updateWorklogsActionSchema = z.object({
@@ -166,6 +167,25 @@ export async function action({ request }: Route.ActionArgs) {
 			status: 400,
 			headers: { 'Content-Type': 'application/json' }
 		})
+	}
+
+	// Authorization check: ensure user can only modify their own worklogs
+	const currentUserAccountId = user.atlassian.id
+	const unauthorizedUpdates = parsed.data.updates.filter(
+		update => update.authorAccountId !== currentUserAccountId
+	)
+
+	if (unauthorizedUpdates.length > 0) {
+		throw new Response(
+			JSON.stringify({
+				error: 'Unauthorized',
+				message: 'You can only modify your own worklog entries'
+			}),
+			{
+				status: 403,
+				headers: { 'Content-Type': 'application/json' }
+			}
+		)
 	}
 
 	// Fake processing: simulate 5 second delay

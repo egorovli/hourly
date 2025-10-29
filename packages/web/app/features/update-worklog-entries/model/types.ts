@@ -7,6 +7,7 @@ export interface WorklogUpdate {
 	issueKey: string
 	started: string
 	timeSpentSeconds: number
+	authorAccountId: string
 }
 
 export interface UpdateWorklogsRequest {
