@@ -428,9 +428,7 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 							<div className='h-16 w-16 rounded-full bg-destructive/10 flex items-center justify-center'>
 								<span className='text-2xl text-destructive'>✕</span>
 							</div>
-							<h2 className='text-xl font-semibold text-foreground'>
-								Failed to load worklogs
-							</h2>
+							<h2 className='text-xl font-semibold text-foreground'>Failed to load worklogs</h2>
 							<p className='text-sm text-muted-foreground max-w-md'>
 								{getErrorMessage(worklogEntriesQuery.error)}
 							</p>
@@ -475,28 +473,28 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 
 									return (
 										<div className='flex flex-wrap items-center gap-3 pb-3 border-b'>
-										<span className='text-xs font-medium text-muted-foreground uppercase tracking-wide'>
-											Projects:
-										</span>
-										{uniqueProjects.map(projectName => {
-											const colors = generateColorFromString(projectName)
-											return (
-												<div
-													key={projectName}
-													className='flex items-center gap-1.5 text-xs'
-												>
+											<span className='text-xs font-medium text-muted-foreground uppercase tracking-wide'>
+												Projects:
+											</span>
+											{uniqueProjects.map(projectName => {
+												const colors = generateColorFromString(projectName)
+												return (
 													<div
-														className='w-3 h-3 rounded-sm border'
-														style={{
-															backgroundColor: colors.backgroundColor,
-															borderColor: colors.borderColor
-														}}
-													/>
-													<span className='font-medium text-foreground'>{projectName}</span>
-												</div>
-											)
-										})}
-									</div>
+														key={projectName}
+														className='flex items-center gap-1.5 text-xs'
+													>
+														<div
+															className='w-3 h-3 rounded-sm border'
+															style={{
+																backgroundColor: colors.backgroundColor,
+																borderColor: colors.borderColor
+															}}
+														/>
+														<span className='font-medium text-foreground'>{projectName}</span>
+													</div>
+												)
+											})}
+										</div>
 									)
 								})()}
 							</div>

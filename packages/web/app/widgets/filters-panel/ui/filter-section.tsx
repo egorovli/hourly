@@ -15,9 +15,7 @@ export function FilterSection({
 		<section className='flex flex-col gap-4'>
 			<div className='flex flex-col gap-2'>
 				<div className='flex items-center gap-2'>
-					<span className='text-sm font-semibold text-foreground'>
-						{title}
-					</span>
+					<span className='text-sm font-semibold text-foreground'>{title}</span>
 					{dependencyHint ? (
 						<span className='rounded-sm border border-border bg-muted/50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground'>
 							{dependencyHint}
@@ -25,9 +23,7 @@ export function FilterSection({
 					) : null}
 				</div>
 				{description ? (
-					<p className='text-xs leading-relaxed text-muted-foreground'>
-						{description}
-					</p>
+					<p className='text-xs leading-relaxed text-muted-foreground'>{description}</p>
 				) : null}
 			</div>
 			<div className='flex flex-wrap items-center gap-4'>{children}</div>
