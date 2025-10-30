@@ -7,12 +7,18 @@ Guidance for Claude Code when working in this repo.
 - Stack: Bun, React Router v7 (SSR), React 19, Tailwind 4, shadcn/ui, Radix, TanStack Query v5, SQLite + MikroORM 6, Remix Auth (Atlassian+GitLab), Zod, Conform, Jest/Testing Library/Playwright
 - **Troubleshooting**: If encountering errors, consult `TROUBLESHOOTING.md` for common issues and solutions
 
+## Serena MCP Project Activation (Mandatory)
+- **Always activate Serena MCP project at the start of new agent interactions** (if not already activated)
+- Use `mcp_serena_activate_project` with project name `'working-hours'` or project path
+- Check activation status with `mcp_serena_get_current_config` if unsure
+- Serena provides semantic coding tools for efficient code exploration and editing
+
 ## Doc Search (Mandatory)
 Use all three before new/unknown APIs; cross‑check findings:
 1) Context7: resolve library → get docs (topic optional)
 2) DDG Search: articles/guides/StackOverflow
 3) Perplexity: AI w/ recency filter
-Example: infinite scroll → Context7 “useInfiniteQuery”, DDG “React Router v7 infinite scroll”, Perplexity recency="week".
+Example: infinite scroll → Context7 "useInfiniteQuery", DDG "React Router v7 infinite scroll", Perplexity recency="week".
 
 ## Commands
 ```bash

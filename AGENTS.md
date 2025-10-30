@@ -5,6 +5,12 @@
 - React Router v7 file routes in `app/routes`; shared UI in `app/components`; domain in `app/domain`
 - Entries: `app/entry.client.tsx`, `app/entry.server.tsx`; global styles in `app/styles`; public assets in `public`
 
+## Serena MCP Project Activation (Required)
+- **Always activate Serena MCP project at the start of new agent interactions** (if not already activated)
+- Use `mcp_serena_activate_project` with project name `'working-hours'` or project path
+- Check activation status with `mcp_serena_get_current_config` if unsure
+- Serena provides semantic coding tools for efficient code exploration and editing
+
 ## Documentation Search (Required)
 Before using unfamiliar libs/APIs, consult all three and cross‑reference:
 1) Context7 MCP → resolve library → fetch docs (optionally by topic)
