@@ -96,11 +96,11 @@ export interface PaginatedResult<T> {
 export class GitLabClient {
 	private readonly baseUrl: string
 	private readonly accessToken: string
-	private readonly refreshToken?: string
+	// private readonly refreshToken?: string
 
 	constructor(options: Options) {
 		this.accessToken = options.accessToken
-		this.refreshToken = options.refreshToken
+		// this.refreshToken = options.refreshToken
 		this.baseUrl = this.normalizeBaseUrl(options.baseUrl ?? 'https://gitlab.com/api/v4')
 	}
 

@@ -11,6 +11,7 @@ export interface ProviderAuth {
 	tokenExpiresAt?: string
 	avatarUrl?: string
 	hasRefreshToken?: boolean
+	baseUrl?: string
 }
 
 export interface SessionUser {

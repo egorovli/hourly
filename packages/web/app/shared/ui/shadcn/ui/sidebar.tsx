@@ -91,8 +91,18 @@ function SidebarProvider({
 					'cookieStore' in window &&
 					typeof (window as unknown as { cookieStore?: unknown }).cookieStore === 'object'
 				) {
-					// @ts-expect-error Cookie Store API types may not be present
-					void window.cookieStore.set({
+					void (
+						window as unknown as {
+							cookieStore: {
+								set: (options: {
+									name: string
+									value: string
+									path: string
+									expires: number
+								}) => Promise<void>
+							}
+						}
+					).cookieStore.set({
 						name: SIDEBAR_COOKIE_NAME,
 						value: String(openState),
 						path: '/',

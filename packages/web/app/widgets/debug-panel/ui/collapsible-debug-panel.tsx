@@ -25,17 +25,6 @@ export function CollapsibleDebugPanel({
 }: CollapsibleDebugPanelProps) {
 	const [open, setOpen] = useState(false)
 
-	const formatted = JSON.stringify(
-		data,
-		(_key, value) => {
-			if (value instanceof Temporal.PlainDate) {
-				return value.toString()
-			}
-			return value
-		},
-		2
-	)
-
 	return (
 		<Collapsible
 			open={open}

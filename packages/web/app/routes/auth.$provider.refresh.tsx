@@ -6,6 +6,7 @@ import { data } from 'react-router'
 import { z } from 'zod'
 
 import { refreshAtlassianToken, refreshGitLabToken } from '~/features/auth/index.ts'
+import type { RefreshTokenResult } from '~/features/auth/index.ts'
 import { orm } from '~/lib/mikro-orm/index.ts'
 import { Token } from '~/lib/mikro-orm/entities/index.ts'
 import * as sessionStorage from '~/lib/session/storage.ts'

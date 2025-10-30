@@ -1,5 +1,4 @@
 import { useQuery } from '@tanstack/react-query'
-import type { InferQueryKeyParams } from '~/shared/index.ts'
 import type { loader as jiraIssuesLoader } from '~/routes/jira.issues.tsx'
 import { searchJiraIssuesKeys } from '../model/query-keys.ts'
 
@@ -23,8 +22,20 @@ export function useSearchJiraIssuesQuery({
 		queryKey: searchJiraIssuesKeys.byQuery(userId, projectIds, searchText),
 
 		async queryFn({ queryKey, signal }) {
-			const [, , , params] = queryKey as InferQueryKeyParams<typeof queryKey>
-			const { projectIds, searchText } = params as { projectIds: string[]; searchText: string }
+			const queryKeyArray = queryKey as readonly unknown[]
+			if (queryKeyArray.length < 4) {
+				throw new Error('Invalid query key structure')
+			}
+			const params = queryKeyArray[3] as { projectIds: string[]; searchText: string } | undefined
+			if (
+				!params ||
+				typeof params !== 'object' ||
+				!Array.isArray(params.projectIds) ||
+				typeof params.searchText !== 'string'
+			) {
+				throw new Error('Invalid query key parameters')
+			}
+			const { projectIds, searchText } = params
 
 			const searchParams = new URLSearchParams([
 				...projectIds.map((id: string) => ['project-id', id]),

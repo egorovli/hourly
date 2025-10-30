@@ -223,13 +223,18 @@ export function WorklogsCalendar({
 
 	// Handle external drop (from search panel)
 	const handleDropFromOutside = useCallback(
-		(args: { start: Date; end: Date; allDay: boolean }) => {
+		(args: { start: Date | string; end: Date | string; allDay: boolean }) => {
 			if (!onDropFromOutside) {
 				return
 			}
 
+			const start = typeof args.start === 'string' ? new Date(args.start) : args.start
+			const end = typeof args.end === 'string' ? new Date(args.end) : args.end
+
 			onDropFromOutside({
-				...args,
+				start,
+				end,
+				allDay: args.allDay,
 				issue: externalIssue
 			})
 		},
@@ -250,7 +255,7 @@ export function WorklogsCalendar({
 		[externalIssue]
 	)
 
-	const dragFromOutsideItem = useCallback(() => {
+	const dragFromOutsideItem = useCallback((): WorklogCalendarEvent | null => {
 		if (!externalIssue) {
 			return null
 		}
@@ -460,7 +465,7 @@ export function WorklogsCalendar({
 								onDoubleClickEvent={handleDoubleClickEvent}
 								onDropFromOutside={handleDropFromOutside}
 								onDragOver={handleDragOver}
-								dragFromOutsideItem={dragFromOutsideItem}
+								dragFromOutsideItem={dragFromOutsideItem as () => WorklogCalendarEvent}
 								eventPropGetter={customEventPropGetter}
 								dayPropGetter={dayPropGetter}
 								slotPropGetter={slotPropGetter}

@@ -1,14 +1,17 @@
+import type { WorklogCalendarEvent } from '~/entities/index.ts'
+import type { ChartConfig } from '~/shared/ui/shadcn/ui/chart.tsx'
+
 import { useMemo } from 'react'
 import { format } from 'date-fns'
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
-
-import type { WorklogCalendarEvent } from '~/entities/index.ts'
 
 import { generateColorFromString } from '~/shared/index.ts'
 import { formatDurationFromSeconds } from '~/shared/lib/formats/index.ts'
 import { cn } from '~/lib/util/index.ts'
 import { Badge } from '~/shared/ui/shadcn/ui/badge.tsx'
-import type { ChartConfig } from '~/shared/ui/shadcn/ui/chart.tsx'
+import { Separator } from '~/shared/ui/shadcn/ui/separator.tsx'
+import { Spinner } from '~/shared/ui/shadcn/ui/spinner.tsx'
+
 import {
 	ChartContainer,
 	ChartLegend,
@@ -16,8 +19,6 @@ import {
 	ChartTooltip,
 	ChartTooltipContent
 } from '~/shared/ui/shadcn/ui/chart.tsx'
-import { Separator } from '~/shared/ui/shadcn/ui/separator.tsx'
-import { Spinner } from '~/shared/ui/shadcn/ui/spinner.tsx'
 
 import { aggregateWorklogStats } from '../model/worklog-stats.ts'
 
@@ -151,7 +152,7 @@ export function WorklogCalendarStats({
 							</header>
 							<div className='rounded-xl border bg-card/40 p-4'>
 								<ChartContainer
-									className='aspect-[16/9] min-h-[260px]'
+									className='aspect-video min-h-[260px]'
 									config={authorChartConfig}
 								>
 									<BarChart
@@ -214,7 +215,7 @@ export function WorklogCalendarStats({
 												</span>
 											</div>
 											<ChartContainer
-												className='aspect-[4/3] min-h-[200px]'
+												className='aspect-4/3 min-h-[200px]'
 												config={authorChartConfig}
 											>
 												<BarChart

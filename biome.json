@@ -61,7 +61,8 @@
 				"useSimplifiedLogicExpression": "off",
 				"noUselessEscapeInRegex": "error",
 				"noUselessStringRaw": "error",
-				"useFlatMap": "off"
+				"useFlatMap": "off",
+				"useLiteralKeys": "off"
 			},
 			"correctness": {
 				"noConstantMathMinMaxClamp": "error",

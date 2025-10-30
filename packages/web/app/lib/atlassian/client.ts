@@ -228,10 +228,9 @@ export class AtlassianClient {
 	}
 
 	private async requestJson<T>(url: string, init?: RequestInit): Promise<T> {
-		const urlObj = new URL(url)
+		// const urlObj = new URL(url)
 		// this.logJiraRequest(urlObj, init)
-		const method = (init?.method ?? 'GET').toUpperCase()
-		const startedAt = Date.now()
+		// const method = (init?.method ?? 'GET').toUpperCase()
 		const response = await fetch(url, {
 			...init,
 			headers: {
@@ -240,7 +239,7 @@ export class AtlassianClient {
 				...(init?.headers ?? {})
 			}
 		})
-		const durationMs = Date.now() - startedAt
+		// const durationMs = Date.now() - startedAt
 		// process.stdout.write(
 		// 	`[Jira] ${method} ${urlObj.pathname} -> ${response.status} (${durationMs} ms)\n`
 		// )
@@ -1003,6 +1002,8 @@ function buildIssueKeyJql(issueKeys: string[]) {
 	return `issuekey in (${clauses.join(', ')}) ORDER BY created DESC`
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+// @ts-expect-error - Unused function kept for potential future use
 function buildIssueIdJql(issueIds: string[]) {
 	const clauses = issueIds.map(id => `"${escapeJqlString(id)}"`)
 	return `id in (${clauses.join(', ')}) ORDER BY created DESC`
@@ -1186,6 +1187,7 @@ function chunkArray<T>(items: T[], size: number): T[][] {
 }
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
+// @ts-expect-error - Unused function kept for potential future use
 function splitIntoDailyWindows(since: number, until: number): { since: number; until: number }[] {
 	if (until <= since) {
 		return []

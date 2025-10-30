@@ -259,7 +259,18 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 	])
 
 	const handleIssueDropOnCalendar = useCallback(
-		(args: { start: Date; end: Date; allDay: boolean; issue: DraggableIssue | null }) => {
+		(args: {
+			start: Date
+			end: Date
+			allDay: boolean
+			issue: {
+				id: string
+				key: string
+				summary: string
+				projectKey: string
+				projectName: string
+			} | null
+		}) => {
 			if (!args.issue) {
 				return
 			}
