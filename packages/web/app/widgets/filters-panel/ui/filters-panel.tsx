@@ -30,7 +30,7 @@ export function FiltersPanel({
 	hasCompleteDateRange
 }: FiltersPanelProps): React.ReactNode {
 	return (
-		<div className='flex flex-col gap-6 pb-4 border-b'>
+		<div className='flex flex-col gap-8 pb-6 border-b'>
 			<FilterSection
 				title='Date range'
 				description='Independent range shared by Jira worklogs and GitLab contributors.'
@@ -42,8 +42,8 @@ export function FiltersPanel({
 				/>
 			</FilterSection>
 
-			<div className='flex flex-col xl:flex-row gap-6'>
-				<div className='grow basis-2/5'>
+			<div className='flex flex-col xl:flex-row gap-8'>
+				<div className='flex-1 xl:max-w-[45%]'>
 					<FilterSection
 						title='Jira'
 						description='Pick projects first, then load users to pull worklogs.'
@@ -91,7 +91,7 @@ export function FiltersPanel({
 					</FilterSection>
 				</div>
 
-				<div className='grow basis-3/5'>
+				<div className='flex-1 xl:max-w-[55%]'>
 					<FilterSection
 						title='GitLab'
 						description='Contributors become available after selecting projects and a date range.'

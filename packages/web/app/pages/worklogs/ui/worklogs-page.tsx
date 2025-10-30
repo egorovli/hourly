@@ -370,14 +370,14 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 				</div>
 			)}
 
-			<div className='flex flex-col gap-4'>
+			<div className='flex flex-col gap-6'>
 				<div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
-						<div className='flex flex-col gap-1'>
-							<h1 className='text-3xl font-bold'>Worklogs</h1>
-							<p className='text-sm text-muted-foreground'>
-								Apply filters to view and manage Jira worklogs
-							</p>
-						</div>
+					<div className='flex flex-col gap-1'>
+						<h1 className='text-3xl font-bold'>Worklogs</h1>
+						<p className='text-sm text-muted-foreground'>
+							Apply filters to view and manage Jira worklogs
+						</p>
+					</div>
 					{isDebugPresetAvailable ? (
 						<Button
 							type='button'
