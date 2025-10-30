@@ -125,7 +125,7 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 	const [draggedIssue, setDraggedIssue] = useState<DraggableIssue | null>(null)
 	const [calendarStatsEvents, setCalendarStatsEvents] =
 		useState<WorklogCalendarEvent[]>(calendarEvents)
-	const [isInsightsOpen, setIsInsightsOpen] = useState(true)
+	const [isInsightsOpen, setIsInsightsOpen] = useState(false)
 
 	useEffect(() => {
 		setCalendarStatsEvents(calendarEvents)
@@ -372,12 +372,12 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 
 			<div className='flex flex-col gap-4'>
 				<div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
-					<div>
-						<h1 className='text-3xl font-bold'>Worklogs</h1>
-						<p className='mt-1 text-sm text-muted-foreground'>
-							Apply filters to view and manage Jira worklogs
-						</p>
-					</div>
+						<div className='flex flex-col gap-1'>
+							<h1 className='text-3xl font-bold'>Worklogs</h1>
+							<p className='text-sm text-muted-foreground'>
+								Apply filters to view and manage Jira worklogs
+							</p>
+						</div>
 					{isDebugPresetAvailable ? (
 						<Button
 							type='button'
@@ -416,21 +416,19 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 			<div className='flex flex-col gap-4 grow'>
 				{canLoadWorklogs ? (
 					worklogEntriesQuery.status === 'pending' ? (
-						<div className='flex flex-col items-center justify-center py-24 text-center'>
-							<div className='mb-4'>
-								<div className='h-16 w-16 rounded-full border-4 border-primary/20 border-t-primary animate-spin' />
-							</div>
-							<h2 className='text-xl font-semibold text-foreground mb-2'>Loading worklogs...</h2>
+						<div className='flex flex-col items-center justify-center gap-4 py-24 text-center'>
+							<div className='h-16 w-16 rounded-full border-4 border-primary/20 border-t-primary animate-spin' />
+							<h2 className='text-xl font-semibold text-foreground'>Loading worklogs...</h2>
 							<p className='text-sm text-muted-foreground'>
 								Fetching {totalWorklogEntries > 0 ? `${totalWorklogEntries} ` : ''}worklog entries
 							</p>
 						</div>
 					) : worklogEntriesQuery.status === 'error' ? (
-						<div className='flex flex-col items-center justify-center py-24 text-center'>
-							<div className='h-16 w-16 rounded-full bg-destructive/10 flex items-center justify-center mb-4'>
+						<div className='flex flex-col items-center justify-center gap-4 py-24 text-center'>
+							<div className='h-16 w-16 rounded-full bg-destructive/10 flex items-center justify-center'>
 								<span className='text-2xl text-destructive'>✕</span>
 							</div>
-							<h2 className='text-xl font-semibold text-foreground mb-2'>
+							<h2 className='text-xl font-semibold text-foreground'>
 								Failed to load worklogs
 							</h2>
 							<p className='text-sm text-muted-foreground max-w-md'>
@@ -438,11 +436,11 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 							</p>
 						</div>
 					) : worklogDebugEntries.length === 0 ? (
-						<div className='flex flex-col items-center justify-center py-24 text-center'>
-							<div className='h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4'>
+						<div className='flex flex-col items-center justify-center gap-4 py-24 text-center'>
+							<div className='h-16 w-16 rounded-full bg-muted flex items-center justify-center'>
 								<CalendarDays className='h-8 w-8 text-muted-foreground' />
 							</div>
-							<h2 className='text-xl font-semibold text-foreground mb-2'>No worklogs found</h2>
+							<h2 className='text-xl font-semibold text-foreground'>No worklogs found</h2>
 							<p className='text-sm text-muted-foreground max-w-md'>
 								No worklog entries match your current filters. Try adjusting the date range or
 								selected users.
@@ -450,32 +448,33 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 						</div>
 					) : (
 						<>
-							<div className='flex items-center justify-between mb-3'>
-								<div>
-									<h2 className='text-xl font-semibold'>Worklog Calendar</h2>
-									<p className='text-sm text-muted-foreground'>
-										Showing {worklogDebugEntries.length} worklog{' '}
-										{worklogDebugEntries.length === 1 ? 'entry' : 'entries'}
-									</p>
+							<div className='flex flex-col gap-4'>
+								<div className='flex items-center justify-between'>
+									<div className='flex flex-col gap-1'>
+										<h2 className='text-xl font-semibold'>Worklog Calendar</h2>
+										<p className='text-sm text-muted-foreground'>
+											Showing {worklogDebugEntries.length} worklog{' '}
+											{worklogDebugEntries.length === 1 ? 'entry' : 'entries'}
+										</p>
+									</div>
+									<AutoLoadProgress
+										isLoading={worklogAutoLoad.isAutoLoading}
+										pagesLoaded={worklogAutoLoad.pagesLoaded}
+										totalPages={worklogAutoLoad.totalPages}
+										progressPercent={worklogAutoLoad.progressPercent}
+									/>
 								</div>
-								<AutoLoadProgress
-									isLoading={worklogAutoLoad.isAutoLoading}
-									pagesLoaded={worklogAutoLoad.pagesLoaded}
-									totalPages={worklogAutoLoad.totalPages}
-									progressPercent={worklogAutoLoad.progressPercent}
-								/>
-							</div>
-							{(() => {
-								const uniqueProjects = Array.from(
-									new Set(worklogDebugEntries.map(e => e.projectName))
-								).sort()
+								{(() => {
+									const uniqueProjects = Array.from(
+										new Set(worklogDebugEntries.map(e => e.projectName))
+									).sort()
 
-								if (uniqueProjects.length <= 2) {
-									return null
-								}
+									if (uniqueProjects.length <= 2) {
+										return null
+									}
 
-								return (
-									<div className='flex flex-wrap items-center gap-3 mb-3 pb-3 border-b'>
+									return (
+										<div className='flex flex-wrap items-center gap-3 pb-3 border-b'>
 										<span className='text-xs font-medium text-muted-foreground uppercase tracking-wide'>
 											Projects:
 										</span>
@@ -498,9 +497,10 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 											)
 										})}
 									</div>
-								)
-							})()}
-							<div className='flex gap-4 grow h-[calc(100vh-12rem)] min-h-[calc(100vh-12rem)] overflow-hidden'>
+									)
+								})()}
+							</div>
+							<div className='flex gap-6 grow h-[calc(100vh-12rem)] min-h-[calc(100vh-12rem)] overflow-hidden'>
 								<div className='w-80 rounded-lg border bg-card shadow-sm shrink-0 flex flex-col h-full'>
 									<JiraIssueSearchPanel
 										userId={loaderData.user.atlassian.id}
@@ -544,56 +544,12 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 									/>
 								</div>
 							</div>
-
-							<CollapsibleSection
-								title='Worklog Insights'
-								description='Analytics for the currently loaded worklogs'
-								open={isInsightsOpen}
-								onOpenChange={setIsInsightsOpen}
-								meta={
-									calendarStatsSummary.totalEntries > 0 ? (
-										<div className='flex flex-wrap items-center gap-2'>
-											<Badge
-												variant='secondary'
-												className='rounded-sm px-2 text-[11px] uppercase'
-											>
-												{calendarStatsSummary.totalEntries} entries
-											</Badge>
-											<Badge
-												variant='outline'
-												className='rounded-sm px-2 text-[11px] uppercase'
-											>
-												{formatDurationFromSeconds(calendarStatsSummary.totalSeconds)}
-											</Badge>
-										</div>
-									) : null
-								}
-							>
-								{calendarStatsSummary.totalEntries > 0 ? (
-									<WorklogCalendarStats
-										events={calendarStatsEvents}
-										statuses={insightStatuses}
-										unstyled
-									/>
-								) : (
-									<div className='border-border/60 bg-muted/40 text-xs text-muted-foreground flex items-center gap-2 rounded-lg border px-3 py-2'>
-										{insightStatuses.some(status => status.isLoading) ? (
-											<Spinner className='size-3' />
-										) : null}
-										<span>
-											{insightStatuses.some(status => status.isLoading)
-												? 'Fetching worklogs…'
-												: 'No worklog data yet for the current filters.'}
-										</span>
-									</div>
-								)}
-							</CollapsibleSection>
 						</>
 					)
 				) : (
-					<div className='flex flex-col items-center justify-center py-24 text-center'>
-						<CalendarDays className='h-16 w-16 text-muted-foreground/40 mb-4' />
-						<h2 className='text-xl font-semibold text-foreground mb-2'>No filters selected</h2>
+					<div className='flex flex-col items-center justify-center gap-4 py-24 text-center'>
+						<CalendarDays className='h-16 w-16 text-muted-foreground/40' />
+						<h2 className='text-xl font-semibold text-foreground'>No filters selected</h2>
 						<p className='text-sm text-muted-foreground max-w-md'>
 							Select Jira projects, users, and a date range above to load and visualize your worklog
 							entries on the calendar.
@@ -601,6 +557,49 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 					</div>
 				)}
 			</div>
+
+			<CollapsibleSection
+				title='Worklog Insights'
+				description='Analytics for the currently loaded worklogs'
+				open={isInsightsOpen}
+				onOpenChange={setIsInsightsOpen}
+				meta={
+					calendarStatsSummary.totalEntries > 0 ? (
+						<div className='flex flex-wrap items-center gap-2'>
+							<Badge
+								variant='secondary'
+								className='rounded-sm px-2 text-[11px] uppercase'
+							>
+								{calendarStatsSummary.totalEntries} entries
+							</Badge>
+							<Badge
+								variant='outline'
+								className='rounded-sm px-2 text-[11px] uppercase'
+							>
+								{formatDurationFromSeconds(calendarStatsSummary.totalSeconds)}
+							</Badge>
+						</div>
+					) : null
+				}
+			>
+				{calendarStatsSummary.totalEntries > 0 ? (
+					<WorklogCalendarStats
+						events={calendarStatsEvents}
+						statuses={insightStatuses}
+					/>
+				) : (
+					<div className='border-border/60 bg-muted/40 text-xs text-muted-foreground flex items-center gap-2 rounded-lg border px-3 py-2'>
+						{insightStatuses.some(status => status.isLoading) ? (
+							<Spinner className='size-3' />
+						) : null}
+						<span>
+							{insightStatuses.some(status => status.isLoading)
+								? 'Fetching worklogs…'
+								: 'No worklog data yet for the current filters.'}
+						</span>
+					</div>
+				)}
+			</CollapsibleSection>
 
 			{/* Collapsible debug panels */}
 			<CollapsibleSection
@@ -755,7 +754,7 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 					</section>
 				</div>
 
-				<div className='grid gap-4 xl:grid-cols-2 mt-4'>
+				<div className='grid gap-6 xl:grid-cols-2'>
 					<section className='flex flex-col gap-3 rounded-lg border bg-card/30 p-4 shadow-sm'>
 						<div className='flex items-center justify-between gap-2'>
 							<div className='flex flex-col gap-1'>
@@ -869,7 +868,7 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 				</div>
 
 				{/* Calendar Worklog Editor POC - kept for future reference */}
-				<div className='flex flex-col gap-4 rounded-lg border bg-card/30 p-4 shadow-sm mt-4'>
+				<div className='flex flex-col gap-4 rounded-lg border bg-card/30 p-4 shadow-sm'>
 					<div>
 						<h2 className='text-lg font-semibold'>Calendar Worklog Editor (POC)</h2>
 						<p className='text-xs text-muted-foreground'>
@@ -958,9 +957,8 @@ function CollapsibleSection({
 }: CollapsibleSectionProps): React.ReactNode {
 	return (
 		<details
-			className='group rounded-lg border bg-card/30 shadow-sm'
-			open={open}
-			defaultOpen={defaultOpen}
+			className='group rounded-xl border bg-card/30 shadow-sm'
+			open={open ?? defaultOpen}
 			onToggle={event => onOpenChange?.(event.currentTarget.open)}
 		>
 			<summary className='flex cursor-pointer items-center justify-between p-4 transition-colors hover:bg-muted/50'>
@@ -973,7 +971,7 @@ function CollapsibleSection({
 				</div>
 				{meta ? <div className='flex flex-wrap items-center gap-2'>{meta}</div> : null}
 			</summary>
-			<div className='border-t p-4'>{children}</div>
+			<div className='border-t p-6'>{children}</div>
 		</details>
 	)
 }
