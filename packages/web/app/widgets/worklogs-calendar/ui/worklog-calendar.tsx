@@ -6,6 +6,7 @@ import type {
 	View,
 	EventProps
 } from 'react-big-calendar'
+import type { EventInteractionArgs } from 'react-big-calendar/lib/addons/dragAndDrop'
 
 import type { DragEvent as ReactDragEvent, ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -104,6 +105,7 @@ export function WorklogsCalendar({
 		handleEventDrop,
 		handleCreateEvent,
 		handleDeleteEvent: handleDeleteEventFromState,
+		handleDeleteAllEvents,
 		handleSave,
 		handleCancel,
 		isSaving,
@@ -117,6 +119,76 @@ export function WorklogsCalendar({
 
 	// Draft event state (for visual feedback while dragging)
 	const [draftEvent, setDraftEvent] = useState<WorklogCalendarEvent | null>(null)
+
+	// Track Alt/Option key state for duplication
+	const [isAltKeyPressed, setIsAltKeyPressed] = useState(false)
+
+	// Track dragging state for duplication preview
+	const [draggedEventForDuplication, setDraggedEventForDuplication] = useState<{
+		event: WorklogCalendarEvent
+		originalStart: Date
+		originalEnd: Date
+	} | null>(null)
+
+	// Track current drag position for preview
+	const [currentDragPosition, setCurrentDragPosition] = useState<{ start: Date; end: Date } | null>(
+		null
+	)
+
+	// Track Alt/Option key for duplication
+	useEffect(() => {
+		const handleKeyDown = (e: KeyboardEvent) => {
+			// Alt key on Windows/Linux, Option key on Mac (both report as 'Alt')
+			if (e.key === 'Alt') {
+				setIsAltKeyPressed(true)
+			}
+		}
+
+		const handleKeyUp = (e: KeyboardEvent) => {
+			if (e.key === 'Alt') {
+				setIsAltKeyPressed(false)
+				// Clear duplication preview when Alt is released
+				setDraggedEventForDuplication(null)
+				setCurrentDragPosition(null)
+			}
+		}
+
+		const handleBlur = () => {
+			// Reset on window blur (user switches tabs/apps)
+			setIsAltKeyPressed(false)
+			setDraggedEventForDuplication(null)
+			setCurrentDragPosition(null)
+		}
+
+		window.addEventListener('keydown', handleKeyDown)
+		window.addEventListener('keyup', handleKeyUp)
+		window.addEventListener('blur', handleBlur)
+
+		return () => {
+			window.removeEventListener('keydown', handleKeyDown)
+			window.removeEventListener('keyup', handleKeyUp)
+			window.removeEventListener('blur', handleBlur)
+		}
+	}, [])
+
+	// Handle drag start - capture original position when Alt is pressed
+	const handleDragStart = useCallback(
+		(args: { event: WorklogCalendarEvent; action: string; direction: string }) => {
+			// Clear any previous drag state when starting a new drag
+			setDraggedEventForDuplication(null)
+			setCurrentDragPosition(null)
+
+			if (isAltKeyPressed) {
+				// Store original event and position for duplication preview
+				setDraggedEventForDuplication({
+					event: args.event,
+					originalStart: new Date(args.event.start),
+					originalEnd: new Date(args.event.end)
+				})
+			}
+		},
+		[isAltKeyPressed]
+	)
 
 	useEffect(() => {
 		if (!onLocalEventsChange) {
@@ -220,6 +292,104 @@ export function WorklogsCalendar({
 		setDialogMode('edit')
 		setDialogOpen(true)
 	}, [])
+
+	// Track drag position during Alt+drag
+	useEffect(() => {
+		if (!draggedEventForDuplication) {
+			setCurrentDragPosition(null)
+			return
+		}
+
+		// Find the dragged event in localEvents to get current drag position
+		const draggedEvent = localEvents.find(e => e.id === draggedEventForDuplication.event.id)
+		if (draggedEvent) {
+			const hasMoved =
+				draggedEvent.start.getTime() !== draggedEventForDuplication.originalStart.getTime() ||
+				draggedEvent.end.getTime() !== draggedEventForDuplication.originalEnd.getTime()
+
+			if (hasMoved) {
+				// Update preview position during drag
+				setCurrentDragPosition({
+					start: new Date(draggedEvent.start),
+					end: new Date(draggedEvent.end)
+				})
+			}
+		}
+	}, [localEvents, draggedEventForDuplication])
+
+	// Handle event drop with Alt/Option key detection for duplication
+	const handleEventDropWithDuplication = useCallback(
+		(args: EventInteractionArgs<WorklogCalendarEvent>) => {
+			const { event, start } = args
+
+			// Convert start to Date if it's a string
+			const startDate = start instanceof Date ? start : new Date(start)
+
+			// Check if Alt/Option is currently pressed (check actual key state at drop time)
+			// Note: This checks the tracked state, which should be accurate if Alt is held during drag
+			if (isAltKeyPressed && draggedEventForDuplication) {
+				// Restore original event position (prevent move)
+				const originalDuration =
+					draggedEventForDuplication.originalEnd.getTime() -
+					draggedEventForDuplication.originalStart.getTime()
+				const restoredEvent: WorklogCalendarEvent = {
+					...event,
+					start: draggedEventForDuplication.originalStart,
+					end: draggedEventForDuplication.originalEnd,
+					resource: {
+						...event.resource,
+						timeSpentSeconds: Math.floor(originalDuration / 1000),
+						started: draggedEventForDuplication.originalStart.toISOString()
+					}
+				}
+
+				// Restore original position in local events
+				handleEventDrop({
+					...args,
+					event: restoredEvent,
+					start: draggedEventForDuplication.originalStart,
+					end: draggedEventForDuplication.originalEnd
+				})
+
+				// Calculate duration for duplicate
+				const duplicateDuration =
+					draggedEventForDuplication.originalEnd.getTime() -
+					draggedEventForDuplication.originalStart.getTime()
+				const newEnd = new Date(startDate.getTime() + duplicateDuration)
+
+				// Create duplicate event with same issue data
+				handleCreateEvent(
+					startDate,
+					newEnd,
+					currentUserAccountId ?? '',
+					currentUserName ?? 'Current User',
+					event.resource.projectName,
+					{
+						issueKey: event.resource.issueKey,
+						issueSummary: event.resource.issueSummary
+					}
+				)
+
+				// Clear duplication preview (but keep Alt key state - it's handled by keyup handler)
+				setDraggedEventForDuplication(null)
+				setCurrentDragPosition(null)
+			} else {
+				// Clear duplication preview if it exists
+				setDraggedEventForDuplication(null)
+				setCurrentDragPosition(null)
+				// Normal move behavior
+				handleEventDrop(args)
+			}
+		},
+		[
+			isAltKeyPressed,
+			draggedEventForDuplication,
+			currentUserAccountId,
+			currentUserName,
+			handleCreateEvent,
+			handleEventDrop
+		]
+	)
 
 	// Handle external drop (from search panel)
 	const handleDropFromOutside = useCallback(
@@ -353,8 +523,41 @@ export function WorklogsCalendar({
 
 	// Merge draft event with local events for display
 	const displayEvents = useMemo(() => {
-		return draftEvent ? [...localEvents, draftEvent] : localEvents
-	}, [localEvents, draftEvent])
+		let events = [...localEvents]
+
+		// If Alt+drag is active, keep original event in place and show preview
+		if (draggedEventForDuplication) {
+			// Restore original event position (prevent visual move)
+			events = events.map(e => {
+				if (e.id === draggedEventForDuplication.event.id) {
+					return {
+						...e,
+						start: draggedEventForDuplication.originalStart,
+						end: draggedEventForDuplication.originalEnd
+					}
+				}
+				return e
+			})
+
+			// Add duplication preview at current drag position
+			if (currentDragPosition) {
+				const previewEvent: WorklogCalendarEvent = {
+					...draggedEventForDuplication.event,
+					id: `duplicate-preview-${draggedEventForDuplication.event.id}`,
+					start: currentDragPosition.start,
+					end: currentDragPosition.end
+				}
+				events = [...events, previewEvent]
+			}
+		}
+
+		// Add draft event for new event creation
+		if (draftEvent) {
+			events = [...events, draftEvent]
+		}
+
+		return events
+	}, [localEvents, draftEvent, draggedEventForDuplication, currentDragPosition])
 
 	// Calculate dynamic min/max based on local events with 30min padding
 	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: time-range normalization handles multiple edge cases for calendar display
@@ -436,6 +639,19 @@ export function WorklogsCalendar({
 					}
 				}
 			}
+
+			// Apply duplication preview styling
+			if (event.id.startsWith('duplicate-preview-')) {
+				return {
+					className: 'worklog-calendar__event--duplicate-preview',
+					style: {
+						backgroundColor: 'rgba(34, 197, 94, 0.3)',
+						border: '2px dashed rgba(34, 197, 94, 0.8)',
+						opacity: 0.8
+					}
+				}
+			}
+
 			// Use the original event prop getter for other events
 			return eventPropGetter?.(event, start, end, isSelected) ?? {}
 		},
@@ -455,10 +671,16 @@ export function WorklogsCalendar({
 					changesSummary={changesSummary}
 					onSave={handleSave}
 					onCancel={handleCancel}
+					onDeleteAll={handleDeleteAllEvents}
+					localEventsCount={localEvents.length}
 					isSaving={isSaving}
 					saveError={saveError}
 				/>
-				<SlotContextMenu onCreate={handleCreateEventClick}>
+				<SlotContextMenu
+					onCreate={handleCreateEventClick}
+					onDeleteAll={handleDeleteAllEvents}
+					localEventsCount={localEvents.length}
+				>
 					<ContextMenuTrigger asChild>
 						<div className='flex-1 overflow-hidden'>
 							<DragAndDropCalendar
@@ -481,7 +703,8 @@ export function WorklogsCalendar({
 								onNavigate={onNavigate}
 								onRangeChange={onRangeChange}
 								onEventResize={handleEventResize}
-								onEventDrop={handleEventDrop}
+								onEventDrop={handleEventDropWithDuplication}
+								onDragStart={handleDragStart}
 								onSelecting={handleSelecting}
 								onSelectSlot={handleSelectSlot}
 								onDoubleClickEvent={handleDoubleClickEvent}

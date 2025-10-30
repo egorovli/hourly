@@ -27,6 +27,7 @@ interface UseCalendarEventsStateResult {
 		}
 	) => WorklogCalendarEvent
 	handleDeleteEvent: (eventId: string) => void
+	handleDeleteAllEvents: () => void
 	handleSave: () => Promise<void>
 	handleCancel: () => void
 	isSaving: boolean
@@ -250,6 +251,37 @@ export function useCalendarEventsState({
 		[changes]
 	)
 
+	// Handle delete all events
+	const handleDeleteAllEvents = useCallback(() => {
+		// Track all events as deleted
+		const newChanges = new Map<string, EventChange>()
+
+		for (const event of localEvents) {
+			const originalEvent = originalEventsRef.current.find(e => e.id === event.id)
+			const existingChange = changes.get(event.id)
+
+			// If it's a newly created event, just remove it (no need to track)
+			if (existingChange?.changeType === 'create') {
+				continue
+			}
+
+			// For existing events, track as deleted
+			if (originalEvent) {
+				newChanges.set(event.id, {
+					eventId: event.id,
+					originalEvent,
+					modifiedEvent: originalEvent,
+					changeType: 'delete',
+					timestamp: Date.now()
+				})
+			}
+		}
+
+		// Clear all local events
+		setLocalEvents([])
+		setChanges(newChanges)
+	}, [localEvents, changes])
+
 	// Save handler using mutation
 	const handleSave = useCallback(async () => {
 		// Convert changes to API format
@@ -298,6 +330,7 @@ export function useCalendarEventsState({
 		handleEventDrop,
 		handleCreateEvent,
 		handleDeleteEvent,
+		handleDeleteAllEvents,
 		handleSave,
 		handleCancel,
 		isSaving: mutation.isPending,
