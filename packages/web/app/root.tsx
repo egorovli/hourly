@@ -17,6 +17,7 @@ import {
 } from 'react-router'
 
 import * as cookies from '~/lib/cookies/index.ts'
+import { mergePreferencesWithDefaults } from '~/lib/preferences/defaults.ts'
 import { cn } from '~/lib/util/index.ts'
 import { AppProviders } from '~/providers/index.ts'
 
@@ -40,7 +41,7 @@ export function Layout({ children }: LayoutProps): React.ReactNode {
 
 	return (
 		<html
-			lang={data?.locale ?? 'ru'}
+			lang={data?.locale ?? data?.preferences?.locale ?? 'en'}
 			className={cn(
 				'min-h-screen bg-background text-foreground',
 				data?.preferences?.theme === 'light' && 'light',
@@ -138,8 +139,10 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const url = new URL(request.url)
 	const header = request.headers.get('Cookie')
 
-	const locale = url.searchParams.get('locale') ?? 'ru'
-	const preferences: Partial<Preferences> = (await cookies.preferences.parse(header)) ?? {}
+	const rawPreferences: Partial<Preferences> = (await cookies.preferences.parse(header)) ?? {}
+	const preferences = mergePreferencesWithDefaults(rawPreferences, request)
+
+	const locale = url.searchParams.get('locale') ?? preferences.locale ?? 'en'
 
 	const env = {
 		VERSION: process.env.VERSION

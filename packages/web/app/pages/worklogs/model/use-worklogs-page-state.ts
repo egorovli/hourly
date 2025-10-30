@@ -36,12 +36,14 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 	// Narrow to string types for linter and type-safety
 	const atlassianUserId = atlassianUserIdRaw as string
 	const gitlabUserId = gitlabUserIdRaw as string
-	// Preferences
+
+	// Preferences - loaderData.preferences already has defaults merged from root loader
 	const preferences = loaderData.preferences ?? {}
-	const weekStartsOn = preferences?.weekStartsOn ?? 0
-	const workingDayStartTime = preferences?.workingDayStartTime ?? '09:00'
-	const workingDayEndTime = preferences?.workingDayEndTime ?? '18:00'
-	const calendarCompactMode = preferences?.calendarCompactMode ?? 'standard'
+
+	const weekStartsOn = preferences.weekStartsOn ?? 1
+	const workingDayStartTime = preferences.workingDayStartTime ?? '09:00'
+	const workingDayEndTime = preferences.workingDayEndTime ?? '18:00'
+	const calendarCompactMode = preferences.calendarCompactMode ?? 'standard'
 
 	// Localizer per user settings
 	const luxonFirstDayOfWeek = weekStartsOn === 0 ? 7 : weekStartsOn

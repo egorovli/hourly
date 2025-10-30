@@ -2,7 +2,7 @@ import type { SessionUser } from '~/lib/session/storage.ts'
 import type { Route as RootRoute } from '../../../../../+types/root.ts'
 
 import { CalendarIcon, Clock10Icon, ClockIcon, Loader2, Settings, TimerIcon } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useFetcher, useRouteLoaderData } from 'react-router'
 
 import { Button } from '~/shared/ui/shadcn/ui/button.tsx'
@@ -69,6 +69,31 @@ export function AppSidebar({ sessionUser, ...props }: AppSidebarProps) {
 		email: primary?.email ?? 'Not connected',
 		avatar: primary?.avatarUrl ?? ''
 	}
+
+	// Use preferences from root data (which already has defaults merged from server)
+	// Enhance timezone on client-side if it's UTC (server default)
+	const serverPreferences = rootData?.preferences ?? {}
+	const [browserTimezone, setBrowserTimezone] = useState<string | null>(null)
+
+	useEffect(() => {
+		// Detect browser timezone on client-side only
+		if (typeof window !== 'undefined' && serverPreferences.timezone === 'UTC') {
+			try {
+				const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+				setBrowserTimezone(tz)
+			} catch {
+				// Keep UTC if detection fails
+			}
+		}
+	}, [serverPreferences.timezone])
+
+	const preferences = useMemo(() => {
+		const timezone = browserTimezone ?? serverPreferences.timezone ?? 'UTC'
+		return {
+			...serverPreferences,
+			timezone
+		}
+	}, [serverPreferences, browserTimezone])
 
 	const [isOpen, setIsOpen] = useState(false)
 	const [isLoading, setIsLoading] = useState(false)
@@ -188,7 +213,7 @@ export function AppSidebar({ sessionUser, ...props }: AppSidebarProps) {
 									<Label htmlFor='timezone'>Timezone</Label>
 									<Select
 										name='timezone'
-										defaultValue={rootData?.preferences?.timezone ?? 'Europe/Moscow'}
+										defaultValue={preferences.timezone}
 									>
 										<SelectTrigger
 											id='timezone'
@@ -225,7 +250,7 @@ export function AppSidebar({ sessionUser, ...props }: AppSidebarProps) {
 									<Label htmlFor='week-starts'>Week starts on</Label>
 									<Select
 										name='weekStartsOn'
-										defaultValue={rootData?.preferences?.weekStartsOn?.toString(10) ?? '1'}
+										defaultValue={preferences.weekStartsOn?.toString(10)}
 									>
 										<SelectTrigger
 											id='week-starts'
@@ -262,7 +287,7 @@ export function AppSidebar({ sessionUser, ...props }: AppSidebarProps) {
 													name='workingDayStartTime'
 													type='time'
 													step='60'
-													defaultValue={rootData?.preferences?.workingDayStartTime ?? '09:00'}
+													defaultValue={preferences.workingDayStartTime}
 													className='font-mono'
 													required
 												/>
@@ -280,7 +305,7 @@ export function AppSidebar({ sessionUser, ...props }: AppSidebarProps) {
 													name='workingDayEndTime'
 													type='time'
 													step='60'
-													defaultValue={rootData?.preferences?.workingDayEndTime ?? '18:00'}
+													defaultValue={preferences.workingDayEndTime}
 													className='font-mono'
 													required
 												/>
@@ -305,9 +330,7 @@ export function AppSidebar({ sessionUser, ...props }: AppSidebarProps) {
 												type='number'
 												min='1'
 												max='480'
-												defaultValue={
-													rootData?.preferences?.minimumDurationMinutes?.toString(10) ?? '60'
-												}
+												defaultValue={preferences.minimumDurationMinutes?.toString(10)}
 												className='flex-1'
 												required
 											/>

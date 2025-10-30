@@ -22,6 +22,12 @@ Example: infinite scroll → Context7 "TanStack Query useInfiniteQuery"; DDG "Re
 - Biome: single quotes, tabs (vw=2), 100 cols, named exports (no default), `~/` alias, kebab-case filenames
 - TS strict; prefer explicit return types for shared utils; keep enums/zod/XState in `app/domain`
 
+## Testing & Validation
+- **Always run after making changes**: `bun run lint:fix` and `bun run --filter @hourly/web types:check`
+- These commands must pass before considering changes complete
+- Lint fixes formatting and catches common issues
+- Type check ensures TypeScript compilation succeeds
+
 ### Connection singletons (dev-safe)
 ```ts
 export let connection: ConnectionType

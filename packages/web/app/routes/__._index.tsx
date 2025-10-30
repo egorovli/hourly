@@ -3,6 +3,7 @@ import type { Preferences } from '~/domain/preferences.ts'
 
 import { WorklogsPage } from '~/pages/worklogs/index.ts'
 import * as cookies from '~/lib/cookies/index.ts'
+import { mergePreferencesWithDefaults } from '~/lib/preferences/defaults.ts'
 import { orm, Token } from '~/lib/mikro-orm/index.ts'
 import { getSession } from '~/lib/session/storage.ts'
 
@@ -28,9 +29,10 @@ export async function loader({ request }: Route.LoaderArgs) {
 		throw new Error('Atlassian access token not found. Please reconnect your account.')
 	}
 
-	// Load user preferences from cookie
+	// Load user preferences from cookie and merge with defaults
 	const header = request.headers.get('Cookie')
-	const preferences: Partial<Preferences> = (await cookies.preferences.parse(header)) ?? {}
+	const rawPreferences: Partial<Preferences> = (await cookies.preferences.parse(header)) ?? {}
+	const preferences = mergePreferencesWithDefaults(rawPreferences, request)
 
 	return {
 		user,
