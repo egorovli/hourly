@@ -645,299 +645,301 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 					</div>
 				}
 			>
-				<div className='grid gap-4 xl:grid-cols-2'>
-					<section className='flex flex-col gap-3 rounded-lg border bg-card/30 p-4 shadow-sm'>
-						<div className='flex items-center justify-between gap-2'>
-							<div className='flex flex-col gap-1'>
-								<p className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
-									Jira worklog entries
-								</p>
-								<p className='text-xs text-muted-foreground'>
-									Loaded {worklogDebugEntries.length} of {totalWorklogEntries} worklogs
-								</p>
-								<AutoLoadProgress
-									isLoading={worklogAutoLoad.isAutoLoading}
-									pagesLoaded={worklogAutoLoad.pagesLoaded}
-									totalPages={worklogAutoLoad.totalPages}
-									progressPercent={worklogAutoLoad.progressPercent}
-								/>
+				<div className='flex flex-col gap-6'>
+					<div className='grid gap-6 xl:grid-cols-2'>
+						<section className='flex flex-col gap-3 rounded-lg border bg-card/30 p-4 shadow-sm'>
+							<div className='flex items-center justify-between gap-2'>
+								<div className='flex flex-col gap-1'>
+									<p className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
+										Jira worklog entries
+									</p>
+									<p className='text-xs text-muted-foreground'>
+										Loaded {worklogDebugEntries.length} of {totalWorklogEntries} worklogs
+									</p>
+									<AutoLoadProgress
+										isLoading={worklogAutoLoad.isAutoLoading}
+										pagesLoaded={worklogAutoLoad.pagesLoaded}
+										totalPages={worklogAutoLoad.totalPages}
+										progressPercent={worklogAutoLoad.progressPercent}
+									/>
+								</div>
+								{totalWorklogEntries > 0 ? (
+									<Badge
+										variant='secondary'
+										className='rounded-sm px-2 text-[11px] font-semibold uppercase tracking-wide'
+									>
+										{totalWorklogEntries} logs
+									</Badge>
+								) : null}
 							</div>
-							{totalWorklogEntries > 0 ? (
-								<Badge
-									variant='secondary'
-									className='rounded-sm px-2 text-[11px] font-semibold uppercase tracking-wide'
-								>
-									{totalWorklogEntries} logs
-								</Badge>
-							) : null}
-						</div>
 
-						{canLoadWorklogs ? (
-							worklogEntriesQuery.status === 'pending' ? (
+							{canLoadWorklogs ? (
+								worklogEntriesQuery.status === 'pending' ? (
+									<div className='space-y-2'>
+										<Skeleton className='h-20 w-full rounded-md' />
+										<Skeleton className='h-20 w-full rounded-md' />
+									</div>
+								) : worklogEntriesQuery.status === 'error' ? (
+									<ErrorPlaceholder
+										message={`Worklogs error: ${getErrorMessage(worklogEntriesQuery.error)}`}
+										className='w-full'
+									/>
+								) : worklogDebugEntries.length === 0 ? (
+									<p className='text-xs text-muted-foreground'>
+										No worklog entries for the current filters.
+									</p>
+								) : (
+									<div className='flex max-h-96 flex-col gap-2 overflow-y-auto pr-1'>
+										{worklogDebugEntries.map(entry => (
+											<WorklogEntryDebugCard
+												key={entry.id}
+												entry={entry}
+											/>
+										))}
+									</div>
+								)
+							) : (
+								<FilterDependencyMessage>
+									Select Jira projects, users, and a date range to inspect worklog entries
+								</FilterDependencyMessage>
+							)}
+						</section>
+
+						<section className='flex flex-col gap-3 rounded-lg border bg-card/30 p-4 shadow-sm'>
+							<div className='flex items-center justify-between gap-2'>
+								<div className='flex flex-col gap-1'>
+									<p className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
+										Relevant Jira issues
+									</p>
+									<p className='text-xs text-muted-foreground'>
+										Loaded {relevantIssueDebugEntries.length} of {totalRelevantIssues} issues
+									</p>
+									<AutoLoadProgress
+										isLoading={jiraIssuesAutoLoad.isAutoLoading}
+										pagesLoaded={jiraIssuesAutoLoad.pagesLoaded}
+										totalPages={jiraIssuesAutoLoad.totalPages}
+										progressPercent={jiraIssuesAutoLoad.progressPercent}
+									/>
+								</div>
+								{totalRelevantIssues > 0 ? (
+									<Badge
+										variant='secondary'
+										className='rounded-sm px-2 text-[11px] font-semibold uppercase tracking-wide'
+									>
+										{totalRelevantIssues} issues
+									</Badge>
+								) : null}
+							</div>
+
+							{canLoadRelevantIssues ? (
+								jiraIssuesQuery.status === 'pending' ? (
+									<div className='space-y-2'>
+										<Skeleton className='h-20 w-full rounded-md' />
+										<Skeleton className='h-20 w-full rounded-md' />
+									</div>
+								) : jiraIssuesQuery.status === 'error' ? (
+									<ErrorPlaceholder
+										message={`Issues error: ${getErrorMessage(jiraIssuesQuery.error)}`}
+										className='w-full'
+									/>
+								) : relevantIssueDebugEntries.length === 0 ? (
+									<p className='text-xs text-muted-foreground'>
+										No issues matched the current filters.
+									</p>
+								) : (
+									<div className='flex max-h-96 flex-col gap-2 overflow-y-auto pr-1'>
+										{relevantIssueDebugEntries.map(issue => (
+											<RelevantIssueDebugCard
+												key={issue.id}
+												issue={issue}
+											/>
+										))}
+									</div>
+								)
+							) : (
+								<FilterDependencyMessage>
+									Select Jira projects, users, and a date range to load relevant issues
+								</FilterDependencyMessage>
+							)}
+						</section>
+					</div>
+
+					<div className='grid gap-6 xl:grid-cols-2'>
+						<section className='flex flex-col gap-3 rounded-lg border bg-card/30 p-4 shadow-sm'>
+							<div className='flex items-center justify-between gap-2'>
+								<div className='flex flex-col gap-1'>
+									<p className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
+										GitLab commits
+									</p>
+									<p className='text-xs text-muted-foreground'>
+										Loaded {gitlabCommitsDebugEntries.length} of {totalGitlabCommits} commits
+									</p>
+									<AutoLoadProgress
+										isLoading={gitlabCommitsAutoLoad.isAutoLoading}
+										pagesLoaded={gitlabCommitsAutoLoad.pagesLoaded}
+										totalPages={gitlabCommitsAutoLoad.totalPages}
+										progressPercent={gitlabCommitsAutoLoad.progressPercent}
+									/>
+								</div>
+								{totalGitlabCommits > 0 ? (
+									<Badge
+										variant='secondary'
+										className='rounded-sm px-2 text-[11px] font-semibold uppercase tracking-wide'
+									>
+										{totalGitlabCommits} commits
+									</Badge>
+								) : null}
+							</div>
+
+							{canLoadGitlabCommits ? (
+								gitlabCommitsQuery.status === 'pending' ? (
+									<div className='space-y-2'>
+										<Skeleton className='h-20 w-full rounded-md' />
+										<Skeleton className='h-20 w-full rounded-md' />
+									</div>
+								) : gitlabCommitsQuery.status === 'error' ? (
+									<ErrorPlaceholder
+										message={`GitLab commits error: ${getErrorMessage(gitlabCommitsQuery.error)}`}
+										className='w-full'
+									/>
+								) : gitlabCommitsDebugEntries.length === 0 ? (
+									<p className='text-xs text-muted-foreground'>
+										No commits matched the current filters.
+									</p>
+								) : (
+									<div className='flex max-h-96 flex-col gap-2 overflow-y-auto pr-1'>
+										{gitlabCommitsDebugEntries.map(commit => (
+											<GitlabCommitDebugCard
+												key={commit.id}
+												commit={commit}
+											/>
+										))}
+									</div>
+								)
+							) : (
+								<FilterDependencyMessage>
+									Select GitLab projects, contributors, and a date range to load commits
+								</FilterDependencyMessage>
+							)}
+						</section>
+
+						<section className='flex flex-col gap-3 rounded-lg border bg-card/30 p-4 shadow-sm'>
+							<div className='flex items-center justify-between gap-2'>
+								<div className='flex flex-col gap-1'>
+									<p className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
+										Issues referenced in commits
+									</p>
+									<p className='text-xs text-muted-foreground'>
+										Loaded {commitIssueDebugEntries.length} of {totalCommitReferencedIssues}{' '}
+										references
+									</p>
+									<AutoLoadProgress
+										isLoading={commitIssuesAutoLoad.isAutoLoading}
+										pagesLoaded={commitIssuesAutoLoad.pagesLoaded}
+										totalPages={commitIssuesAutoLoad.totalPages}
+										progressPercent={commitIssuesAutoLoad.progressPercent}
+									/>
+								</div>
+								{totalCommitReferencedIssues > 0 ? (
+									<Badge
+										variant='secondary'
+										className='rounded-sm px-2 text-[11px] font-semibold uppercase tracking-wide'
+									>
+										{totalCommitReferencedIssues} issues
+									</Badge>
+								) : null}
+							</div>
+
+							{commitIssueDebugEntries.length === 0 ? (
+								<p className='text-xs text-muted-foreground'>
+									No recognizable Jira issue references were found in the selected commits.
+								</p>
+							) : commitIssuesFromGitlabQuery.status === 'pending' ? (
 								<div className='space-y-2'>
 									<Skeleton className='h-20 w-full rounded-md' />
 									<Skeleton className='h-20 w-full rounded-md' />
 								</div>
-							) : worklogEntriesQuery.status === 'error' ? (
+							) : commitIssuesFromGitlabQuery.status === 'error' ? (
 								<ErrorPlaceholder
-									message={`Worklogs error: ${getErrorMessage(worklogEntriesQuery.error)}`}
+									message={`Commit issues error: ${getErrorMessage(commitIssuesFromGitlabQuery.error)}`}
 									className='w-full'
 								/>
-							) : worklogDebugEntries.length === 0 ? (
-								<p className='text-xs text-muted-foreground'>
-									No worklog entries for the current filters.
-								</p>
 							) : (
 								<div className='flex max-h-96 flex-col gap-2 overflow-y-auto pr-1'>
-									{worklogDebugEntries.map(entry => (
-										<WorklogEntryDebugCard
-											key={entry.id}
-											entry={entry}
-										/>
-									))}
-								</div>
-							)
-						) : (
-							<FilterDependencyMessage>
-								Select Jira projects, users, and a date range to inspect worklog entries
-							</FilterDependencyMessage>
-						)}
-					</section>
-
-					<section className='flex flex-col gap-3 rounded-lg border bg-card/30 p-4 shadow-sm'>
-						<div className='flex items-center justify-between gap-2'>
-							<div className='flex flex-col gap-1'>
-								<p className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
-									Relevant Jira issues
-								</p>
-								<p className='text-xs text-muted-foreground'>
-									Loaded {relevantIssueDebugEntries.length} of {totalRelevantIssues} issues
-								</p>
-								<AutoLoadProgress
-									isLoading={jiraIssuesAutoLoad.isAutoLoading}
-									pagesLoaded={jiraIssuesAutoLoad.pagesLoaded}
-									totalPages={jiraIssuesAutoLoad.totalPages}
-									progressPercent={jiraIssuesAutoLoad.progressPercent}
-								/>
-							</div>
-							{totalRelevantIssues > 0 ? (
-								<Badge
-									variant='secondary'
-									className='rounded-sm px-2 text-[11px] font-semibold uppercase tracking-wide'
-								>
-									{totalRelevantIssues} issues
-								</Badge>
-							) : null}
-						</div>
-
-						{canLoadRelevantIssues ? (
-							jiraIssuesQuery.status === 'pending' ? (
-								<div className='space-y-2'>
-									<Skeleton className='h-20 w-full rounded-md' />
-									<Skeleton className='h-20 w-full rounded-md' />
-								</div>
-							) : jiraIssuesQuery.status === 'error' ? (
-								<ErrorPlaceholder
-									message={`Issues error: ${getErrorMessage(jiraIssuesQuery.error)}`}
-									className='w-full'
-								/>
-							) : relevantIssueDebugEntries.length === 0 ? (
-								<p className='text-xs text-muted-foreground'>
-									No issues matched the current filters.
-								</p>
-							) : (
-								<div className='flex max-h-96 flex-col gap-2 overflow-y-auto pr-1'>
-									{relevantIssueDebugEntries.map(issue => (
+									{commitIssueDebugEntries.map(issue => (
 										<RelevantIssueDebugCard
 											key={issue.id}
 											issue={issue}
 										/>
 									))}
 								</div>
-							)
-						) : (
-							<FilterDependencyMessage>
-								Select Jira projects, users, and a date range to load relevant issues
-							</FilterDependencyMessage>
-						)}
-					</section>
-				</div>
+							)}
+						</section>
+					</div>
 
-				<div className='grid gap-6 xl:grid-cols-2'>
-					<section className='flex flex-col gap-3 rounded-lg border bg-card/30 p-4 shadow-sm'>
-						<div className='flex items-center justify-between gap-2'>
-							<div className='flex flex-col gap-1'>
-								<p className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
-									GitLab commits
-								</p>
-								<p className='text-xs text-muted-foreground'>
-									Loaded {gitlabCommitsDebugEntries.length} of {totalGitlabCommits} commits
-								</p>
-								<AutoLoadProgress
-									isLoading={gitlabCommitsAutoLoad.isAutoLoading}
-									pagesLoaded={gitlabCommitsAutoLoad.pagesLoaded}
-									totalPages={gitlabCommitsAutoLoad.totalPages}
-									progressPercent={gitlabCommitsAutoLoad.progressPercent}
-								/>
-							</div>
-							{totalGitlabCommits > 0 ? (
-								<Badge
-									variant='secondary'
-									className='rounded-sm px-2 text-[11px] font-semibold uppercase tracking-wide'
-								>
-									{totalGitlabCommits} commits
-								</Badge>
-							) : null}
+					{/* Calendar Worklog Editor POC - kept for future reference */}
+					<div className='flex flex-col gap-4 rounded-lg border bg-card/30 p-4 shadow-sm'>
+						<div>
+							<h2 className='text-lg font-semibold'>Calendar Worklog Editor (POC)</h2>
+							<p className='text-xs text-muted-foreground'>
+								Quick proof of concept for local worklog editing with apply/revert
+							</p>
 						</div>
 
-						{canLoadGitlabCommits ? (
-							gitlabCommitsQuery.status === 'pending' ? (
-								<div className='space-y-2'>
-									<Skeleton className='h-20 w-full rounded-md' />
-									<Skeleton className='h-20 w-full rounded-md' />
-								</div>
-							) : gitlabCommitsQuery.status === 'error' ? (
-								<ErrorPlaceholder
-									message={`GitLab commits error: ${getErrorMessage(gitlabCommitsQuery.error)}`}
-									className='w-full'
-								/>
-							) : gitlabCommitsDebugEntries.length === 0 ? (
-								<p className='text-xs text-muted-foreground'>
-									No commits matched the current filters.
-								</p>
+						<div className='flex flex-wrap gap-3'>
+							<DateRangeFilter
+								value={state.calendarViewDateRange}
+								onChange={handleCalendarViewDateRangeChange}
+							/>
+
+							<WorklogChangesActions
+								worklogChanges={worklogChanges}
+								onApply={handleWorklogApply}
+								onRevert={handleWorklogRevert}
+							/>
+						</div>
+
+						<WorklogChangesSummary worklogChanges={worklogChanges} />
+
+						<div className='flex flex-col gap-2'>
+							<p className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
+								Local Entries ({state.localWorklogEntries.size})
+							</p>
+							{state.localWorklogEntries.size === 0 ? (
+								<p className='text-xs text-muted-foreground'>No worklog entries loaded yet</p>
 							) : (
-								<div className='flex max-h-96 flex-col gap-2 overflow-y-auto pr-1'>
-									{gitlabCommitsDebugEntries.map(commit => (
-										<GitlabCommitDebugCard
-											key={commit.id}
-											commit={commit}
-										/>
+								<div className='max-h-64 space-y-1 overflow-y-auto text-xs'>
+									{Array.from(state.localWorklogEntries.values()).map(entry => (
+										<div
+											key={entry.localId}
+											className='flex items-center justify-between rounded border px-2 py-1'
+										>
+											<div className='flex-1'>
+												<span className='font-medium'>{entry.issueKey}</span>
+												<span className='mx-2 text-muted-foreground'>•</span>
+												<span>{formatDurationFromSeconds(entry.timeSpentSeconds)}</span>
+												{entry.isNew && (
+													<Badge
+														variant='outline'
+														className='ml-2 h-4 px-1 text-[10px]'
+													>
+														new
+													</Badge>
+												)}
+											</div>
+											<Button
+												size='sm'
+												variant='ghost'
+												onClick={() => handleWorklogDelete(entry.localId)}
+												className='h-6 px-2'
+											>
+												Delete
+											</Button>
+										</div>
 									))}
 								</div>
-							)
-						) : (
-							<FilterDependencyMessage>
-								Select GitLab projects, contributors, and a date range to load commits
-							</FilterDependencyMessage>
-						)}
-					</section>
-
-					<section className='flex flex-col gap-3 rounded-lg border bg-card/30 p-4 shadow-sm'>
-						<div className='flex items-center justify-between gap-2'>
-							<div className='flex flex-col gap-1'>
-								<p className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
-									Issues referenced in commits
-								</p>
-								<p className='text-xs text-muted-foreground'>
-									Loaded {commitIssueDebugEntries.length} of {totalCommitReferencedIssues}{' '}
-									references
-								</p>
-								<AutoLoadProgress
-									isLoading={commitIssuesAutoLoad.isAutoLoading}
-									pagesLoaded={commitIssuesAutoLoad.pagesLoaded}
-									totalPages={commitIssuesAutoLoad.totalPages}
-									progressPercent={commitIssuesAutoLoad.progressPercent}
-								/>
-							</div>
-							{totalCommitReferencedIssues > 0 ? (
-								<Badge
-									variant='secondary'
-									className='rounded-sm px-2 text-[11px] font-semibold uppercase tracking-wide'
-								>
-									{totalCommitReferencedIssues} issues
-								</Badge>
-							) : null}
+							)}
 						</div>
-
-						{commitIssueDebugEntries.length === 0 ? (
-							<p className='text-xs text-muted-foreground'>
-								No recognizable Jira issue references were found in the selected commits.
-							</p>
-						) : commitIssuesFromGitlabQuery.status === 'pending' ? (
-							<div className='space-y-2'>
-								<Skeleton className='h-20 w-full rounded-md' />
-								<Skeleton className='h-20 w-full rounded-md' />
-							</div>
-						) : commitIssuesFromGitlabQuery.status === 'error' ? (
-							<ErrorPlaceholder
-								message={`Commit issues error: ${getErrorMessage(commitIssuesFromGitlabQuery.error)}`}
-								className='w-full'
-							/>
-						) : (
-							<div className='flex max-h-96 flex-col gap-2 overflow-y-auto pr-1'>
-								{commitIssueDebugEntries.map(issue => (
-									<RelevantIssueDebugCard
-										key={issue.id}
-										issue={issue}
-									/>
-								))}
-							</div>
-						)}
-					</section>
-				</div>
-
-				{/* Calendar Worklog Editor POC - kept for future reference */}
-				<div className='flex flex-col gap-4 rounded-lg border bg-card/30 p-4 shadow-sm'>
-					<div>
-						<h2 className='text-lg font-semibold'>Calendar Worklog Editor (POC)</h2>
-						<p className='text-xs text-muted-foreground'>
-							Quick proof of concept for local worklog editing with apply/revert
-						</p>
-					</div>
-
-					<div className='flex flex-wrap gap-3'>
-						<DateRangeFilter
-							value={state.calendarViewDateRange}
-							onChange={handleCalendarViewDateRangeChange}
-						/>
-
-						<WorklogChangesActions
-							worklogChanges={worklogChanges}
-							onApply={handleWorklogApply}
-							onRevert={handleWorklogRevert}
-						/>
-					</div>
-
-					<WorklogChangesSummary worklogChanges={worklogChanges} />
-
-					<div className='flex flex-col gap-2'>
-						<p className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
-							Local Entries ({state.localWorklogEntries.size})
-						</p>
-						{state.localWorklogEntries.size === 0 ? (
-							<p className='text-xs text-muted-foreground'>No worklog entries loaded yet</p>
-						) : (
-							<div className='max-h-64 space-y-1 overflow-y-auto text-xs'>
-								{Array.from(state.localWorklogEntries.values()).map(entry => (
-									<div
-										key={entry.localId}
-										className='flex items-center justify-between rounded border px-2 py-1'
-									>
-										<div className='flex-1'>
-											<span className='font-medium'>{entry.issueKey}</span>
-											<span className='mx-2 text-muted-foreground'>•</span>
-											<span>{formatDurationFromSeconds(entry.timeSpentSeconds)}</span>
-											{entry.isNew && (
-												<Badge
-													variant='outline'
-													className='ml-2 h-4 px-1 text-[10px]'
-												>
-													new
-												</Badge>
-											)}
-										</div>
-										<Button
-											size='sm'
-											variant='ghost'
-											onClick={() => handleWorklogDelete(entry.localId)}
-											className='h-6 px-2'
-										>
-											Delete
-										</Button>
-									</div>
-								))}
-							</div>
-						)}
 					</div>
 				</div>
 			</CollapsibleSection>
