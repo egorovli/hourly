@@ -5,7 +5,7 @@ import type { WorklogsPageProps } from '../model/types.ts'
 import { useWorklogsPageState } from '../model/use-worklogs-page-state.ts'
 
 import type { ReactNode } from 'react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BugIcon, CalendarDays, ChevronDown, GitBranch, Calendar } from 'lucide-react'
 import { Views } from 'react-big-calendar'
 
@@ -13,7 +13,10 @@ import { Badge } from '~/shared/ui/shadcn/ui/badge.tsx'
 import { Button } from '~/shared/ui/shadcn/ui/button.tsx'
 import { Skeleton } from '~/shared/ui/shadcn/ui/skeleton.tsx'
 import { Spinner } from '~/shared/ui/shadcn/ui/spinner.tsx'
+import { Progress } from '~/shared/ui/shadcn/ui/progress.tsx'
 import { AutoLoadProgress } from '~/shared/index.ts'
+import { toast } from 'sonner'
+import { cn } from '~/lib/util/index.ts'
 import type { WorklogDataStatus } from '~/widgets/worklogs-calendar/index.ts'
 import {
 	WorklogCalendarStats,
@@ -378,9 +381,17 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 			return []
 		}
 
+		// Create a map to deduplicate by issue ID (in case same issue appears in multiple pages)
+		const issuesMap = new Map<string, (typeof allIssues)[0]>()
+		for (const issue of allIssues) {
+			if (issue.id && !issuesMap.has(issue.id)) {
+				issuesMap.set(issue.id, issue)
+			}
+		}
+
 		// Sort by createdAt (descending), then by issue key (ascending) as fallback
-		const sortedIssues = allIssues
-			.slice()
+		// Include ALL commit-referenced issues, not just first 10
+		const sortedIssues = Array.from(issuesMap.values())
 			.sort((a, b) => {
 				const aCreated = a.fields.created ? new Date(a.fields.created).getTime() : 0
 				const bCreated = b.fields.created ? new Date(b.fields.created).getTime() : 0
@@ -390,7 +401,6 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 				// Fallback to issue key if createdAt is the same or missing
 				return (a.key ?? '').localeCompare(b.key ?? '')
 			})
-			.slice(0, 10)
 			.map(issue => {
 				const normalizedKey = issue.key?.toUpperCase()
 				const reasons: DraggableIssue['reasons'] = ['commit']
@@ -412,9 +422,279 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 		return sortedIssues
 	}, [commitIssuesFromGitlabQuery.data?.pages, issueKeysWithWorklogs])
 
+	const loadingStatuses = useMemo(() => {
+		const statuses: Array<{
+			label: string
+			detail?: string
+			isLoading: boolean
+			pagesLoaded?: number
+			totalPages?: number | null
+			progressPercent?: number | null
+			currentCount?: number
+			totalCount?: number
+		}> = []
+		if (projectsQuery.isLoading || projectsQuery.isFetching) {
+			statuses.push({
+				label: 'Jira projects',
+				detail: 'Fetching project list',
+				isLoading: true
+			})
+		}
+		if (usersQuery.isLoading || usersQuery.isFetching) {
+			statuses.push({
+				label: 'Jira users',
+				detail: 'Fetching user list for selected projects',
+				isLoading: true
+			})
+		}
+		if (
+			worklogEntriesQuery.isLoading ||
+			worklogEntriesQuery.isFetching ||
+			worklogAutoLoad.isAutoLoading
+		) {
+			const hasPagination = worklogAutoLoad.isAutoLoading && worklogAutoLoad.totalPages
+			const detail = hasPagination
+				? `Loading page ${worklogAutoLoad.pagesLoaded} of ${worklogAutoLoad.totalPages}`
+				: worklogEntriesQuery.isLoading || worklogEntriesQuery.status === 'pending'
+					? 'Initializing worklog fetch'
+					: 'Fetching worklog entries'
+			statuses.push({
+				label: 'Worklogs',
+				detail,
+				isLoading: true,
+				pagesLoaded: worklogAutoLoad.pagesLoaded,
+				totalPages: worklogAutoLoad.totalPages,
+				progressPercent: worklogAutoLoad.progressPercent,
+				currentCount: worklogDebugEntries.length,
+				totalCount: totalWorklogEntries
+			})
+		}
+		if (
+			jiraIssuesQuery.isLoading ||
+			jiraIssuesQuery.isFetching ||
+			jiraIssuesAutoLoad.isAutoLoading
+		) {
+			const hasPagination = jiraIssuesAutoLoad.isAutoLoading && jiraIssuesAutoLoad.totalPages
+			const detail = hasPagination
+				? `Loading page ${jiraIssuesAutoLoad.pagesLoaded} of ${jiraIssuesAutoLoad.totalPages}`
+				: jiraIssuesQuery.isLoading || jiraIssuesQuery.status === 'pending'
+					? 'Initializing issue fetch'
+					: 'Fetching relevant issues'
+			statuses.push({
+				label: 'Issues',
+				detail,
+				isLoading: true,
+				pagesLoaded: jiraIssuesAutoLoad.pagesLoaded,
+				totalPages: jiraIssuesAutoLoad.totalPages,
+				progressPercent: jiraIssuesAutoLoad.progressPercent,
+				currentCount: relevantIssueDebugEntries.length,
+				totalCount: totalRelevantIssues
+			})
+		}
+		if (gitlabProjectsQuery.isLoading || gitlabProjectsQuery.isFetching) {
+			statuses.push({
+				label: 'GitLab projects',
+				detail: 'Fetching project list',
+				isLoading: true
+			})
+		}
+		if (gitlabContributorsQuery.isLoading || gitlabContributorsQuery.isFetching) {
+			statuses.push({
+				label: 'GitLab contributors',
+				detail: 'Fetching contributors for selected projects and date range',
+				isLoading: true
+			})
+		}
+		if (
+			gitlabCommitsQuery.isLoading ||
+			gitlabCommitsQuery.isFetching ||
+			gitlabCommitsAutoLoad.isAutoLoading
+		) {
+			const hasPagination = gitlabCommitsAutoLoad.isAutoLoading && gitlabCommitsAutoLoad.totalPages
+			const detail = hasPagination
+				? `Loading page ${gitlabCommitsAutoLoad.pagesLoaded} of ${gitlabCommitsAutoLoad.totalPages}`
+				: gitlabCommitsQuery.isLoading || gitlabCommitsQuery.status === 'pending'
+					? 'Initializing commit fetch'
+					: 'Fetching GitLab commits'
+			statuses.push({
+				label: 'Commits',
+				detail,
+				isLoading: true,
+				pagesLoaded: gitlabCommitsAutoLoad.pagesLoaded,
+				totalPages: gitlabCommitsAutoLoad.totalPages,
+				progressPercent: gitlabCommitsAutoLoad.progressPercent,
+				currentCount: gitlabCommitsDebugEntries.length,
+				totalCount: totalGitlabCommits
+			})
+		}
+		if (
+			commitIssuesFromGitlabQuery.isLoading ||
+			commitIssuesFromGitlabQuery.isFetching ||
+			commitIssuesAutoLoad.isAutoLoading
+		) {
+			const hasPagination = commitIssuesAutoLoad.isAutoLoading && commitIssuesAutoLoad.totalPages
+			const detail = hasPagination
+				? `Loading page ${commitIssuesAutoLoad.pagesLoaded} of ${commitIssuesAutoLoad.totalPages}`
+				: commitIssuesFromGitlabQuery.isLoading || commitIssuesFromGitlabQuery.status === 'pending'
+					? 'Initializing issue fetch'
+					: 'Fetching issues referenced in commits'
+			statuses.push({
+				label: 'Commit issues',
+				detail,
+				isLoading: true,
+				pagesLoaded: commitIssuesAutoLoad.pagesLoaded,
+				totalPages: commitIssuesAutoLoad.totalPages,
+				progressPercent: commitIssuesAutoLoad.progressPercent,
+				currentCount: commitIssueDebugEntries.length,
+				totalCount: totalCommitReferencedIssues
+			})
+		}
+		return statuses
+	}, [
+		projectsQuery.isLoading,
+		projectsQuery.isFetching,
+		usersQuery.isLoading,
+		usersQuery.isFetching,
+		worklogEntriesQuery.isLoading,
+		worklogEntriesQuery.isFetching,
+		worklogEntriesQuery.status,
+		worklogAutoLoad.isAutoLoading,
+		worklogAutoLoad.pagesLoaded,
+		worklogAutoLoad.totalPages,
+		worklogAutoLoad.progressPercent,
+		totalWorklogEntries,
+		worklogDebugEntries.length,
+		jiraIssuesQuery.isLoading,
+		jiraIssuesQuery.isFetching,
+		jiraIssuesQuery.status,
+		jiraIssuesAutoLoad.isAutoLoading,
+		jiraIssuesAutoLoad.pagesLoaded,
+		jiraIssuesAutoLoad.totalPages,
+		jiraIssuesAutoLoad.progressPercent,
+		totalRelevantIssues,
+		relevantIssueDebugEntries.length,
+		gitlabProjectsQuery.isLoading,
+		gitlabProjectsQuery.isFetching,
+		gitlabContributorsQuery.isLoading,
+		gitlabContributorsQuery.isFetching,
+		gitlabCommitsQuery.isLoading,
+		gitlabCommitsQuery.isFetching,
+		gitlabCommitsQuery.status,
+		gitlabCommitsAutoLoad.isAutoLoading,
+		gitlabCommitsAutoLoad.pagesLoaded,
+		gitlabCommitsAutoLoad.totalPages,
+		gitlabCommitsAutoLoad.progressPercent,
+		totalGitlabCommits,
+		gitlabCommitsDebugEntries.length,
+		commitIssuesFromGitlabQuery.isLoading,
+		commitIssuesFromGitlabQuery.isFetching,
+		commitIssuesFromGitlabQuery.status,
+		commitIssuesAutoLoad.isAutoLoading,
+		commitIssuesAutoLoad.pagesLoaded,
+		commitIssuesAutoLoad.totalPages,
+		commitIssuesAutoLoad.progressPercent,
+		totalCommitReferencedIssues,
+		commitIssueDebugEntries.length
+	])
+
+	// Toast notification for loading states
+	const toastIdRef = useRef<string | number | null>(null)
+
+	useEffect(() => {
+		if (loadingStatuses.length > 0) {
+			// Custom loading toast component with list and progress bars
+			const LoadingToastContent = () => (
+				<div className='flex flex-col gap-2 w-full'>
+					<div className='space-y-1.5'>
+						{loadingStatuses.map((status, idx) => {
+							const hasPagination = status.totalPages !== null && status.totalPages !== undefined
+							const hasCounts = status.totalCount !== undefined && status.totalCount > 0
+							const progressValue = status.progressPercent ?? null
+
+							return (
+								<div
+									key={`${status.label}-${idx}`}
+									className='flex flex-col gap-1'
+								>
+									<div className='flex items-center justify-between gap-2'>
+										<span className='text-xs font-medium text-foreground'>{status.label}</span>
+										{hasCounts && (
+											<span className='text-xs text-muted-foreground'>
+												{status.currentCount} / {status.totalCount}
+											</span>
+										)}
+									</div>
+									{status.detail && (
+										<p className='text-xs text-muted-foreground leading-tight'>{status.detail}</p>
+									)}
+									{hasPagination && (
+										<div className='flex flex-col gap-0.5'>
+											<Progress
+												value={progressValue ?? undefined}
+												className={cn(
+													'h-1',
+													progressValue === null ? 'progress-indeterminate' : ''
+												)}
+											/>
+											{status.pagesLoaded !== undefined && (
+												<p className='text-xs text-muted-foreground leading-tight'>
+													Page {status.pagesLoaded}
+													{status.totalPages ? ` of ${status.totalPages}` : ''}
+													{progressValue !== null ? ` • ${progressValue}%` : ''}
+												</p>
+											)}
+										</div>
+									)}
+								</div>
+							)
+						})}
+					</div>
+				</div>
+			)
+
+			if (toastIdRef.current === null) {
+				toastIdRef.current = toast.custom(
+					() => (
+						<div className='flex items-start gap-2 p-3 rounded-lg border bg-card shadow-lg min-w-[280px] max-w-[360px]'>
+							<Spinner className='size-3.5 shrink-0 mt-0.5' />
+							<div className='flex-1 min-w-0'>
+								<p className='text-sm font-semibold text-foreground mb-1.5'>Loading data...</p>
+								<LoadingToastContent />
+							</div>
+						</div>
+					),
+					{
+						duration: Number.POSITIVE_INFINITY,
+						position: 'bottom-right'
+					}
+				)
+			} else {
+				toast.custom(
+					() => (
+						<div className='flex items-start gap-2 p-3 rounded-lg border bg-card shadow-lg min-w-[280px] max-w-[360px]'>
+							<Spinner className='size-3.5 shrink-0 mt-0.5' />
+							<div className='flex-1 min-w-0'>
+								<p className='text-sm font-semibold text-foreground mb-1.5'>Loading data...</p>
+								<LoadingToastContent />
+							</div>
+						</div>
+					),
+					{
+						id: toastIdRef.current,
+						duration: Number.POSITIVE_INFINITY
+					}
+				)
+			}
+		} else if (toastIdRef.current !== null) {
+			toast.dismiss(toastIdRef.current)
+			toastIdRef.current = null
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [loadingStatuses])
+
 	return (
 		<div className='flex flex-col gap-6 grow bg-background'>
-			{/* Subtle loading indicator */}
+			{/* Subtle top loading bar */}
 			{isAnyQueryLoading && (
 				<div className='fixed top-0 left-0 right-0 z-50 h-0.5 bg-primary/20'>
 					<div className='h-full bg-primary animate-pulse' />
@@ -517,60 +797,99 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 			<div className='flex flex-col gap-4 grow'>
 				{canLoadWorklogs ? (
 					<>
-						{worklogDebugEntries.length > 0 ? (
-							<div className='flex flex-col gap-4'>
-								<div className='flex items-center justify-between'>
-									<div className='flex flex-col gap-1'>
+						<div className='flex flex-col gap-4'>
+							<div className='flex items-center justify-between gap-4'>
+								<div className='flex flex-col gap-1 flex-1'>
+									<div className='flex items-center gap-2'>
 										<h2 className='text-xl font-semibold'>Worklog Calendar</h2>
-										<p className='text-sm text-muted-foreground'>
-											Showing {worklogDebugEntries.length} worklog{' '}
-											{worklogDebugEntries.length === 1 ? 'entry' : 'entries'}
-										</p>
+										{worklogEntriesQuery.isLoading ||
+										worklogEntriesQuery.isFetching ||
+										worklogAutoLoad.isAutoLoading ? (
+											<Badge
+												variant='secondary'
+												className='gap-1.5'
+											>
+												<Spinner className='size-3' />
+												Loading
+											</Badge>
+										) : null}
+										{worklogDebugEntries.length > 0 ? (
+											<Badge variant='outline'>
+												{worklogDebugEntries.length}{' '}
+												{worklogDebugEntries.length === 1 ? 'entry' : 'entries'}
+											</Badge>
+										) : worklogEntriesQuery.status === 'success' ? (
+											<Badge variant='outline'>No entries</Badge>
+										) : null}
 									</div>
-									<AutoLoadProgress
-										isLoading={worklogAutoLoad.isAutoLoading}
-										pagesLoaded={worklogAutoLoad.pagesLoaded}
-										totalPages={worklogAutoLoad.totalPages}
-										progressPercent={worklogAutoLoad.progressPercent}
-									/>
-								</div>
-								{(() => {
-									const uniqueProjects = Array.from(
-										new Set(worklogDebugEntries.map(e => e.projectName))
-									).sort()
-
-									if (uniqueProjects.length <= 2) {
-										return null
-									}
-
-									return (
-										<div className='flex flex-wrap items-center gap-3 pb-3 border-b'>
-											<span className='text-xs font-medium text-muted-foreground uppercase tracking-wide'>
-												Projects:
-											</span>
-											{uniqueProjects.map(projectName => {
-												const colors = generateColorFromString(projectName)
-												return (
-													<div
-														key={projectName}
-														className='flex items-center gap-1.5 text-xs'
-													>
-														<div
-															className='w-3 h-3 rounded-sm border'
-															style={{
-																backgroundColor: colors.backgroundColor,
-																borderColor: colors.borderColor
-															}}
-														/>
-														<span className='font-medium text-foreground'>{projectName}</span>
-													</div>
-												)
-											})}
+									{worklogEntriesQuery.isLoading ||
+									worklogEntriesQuery.isFetching ||
+									worklogAutoLoad.isAutoLoading ? (
+										<div className='flex flex-col gap-1'>
+											<p className='text-sm text-muted-foreground'>
+												{worklogEntriesQuery.isLoading || worklogEntriesQuery.status === 'pending'
+													? 'Initializing worklog data fetch...'
+													: worklogAutoLoad.isAutoLoading
+														? `Loading page ${worklogAutoLoad.pagesLoaded}${worklogAutoLoad.totalPages ? ` of ${worklogAutoLoad.totalPages}` : ''}...`
+														: 'Fetching worklog entries...'}
+											</p>
+											{totalWorklogEntries > 0 ? (
+												<p className='text-xs text-muted-foreground'>
+													{worklogDebugEntries.length} of {totalWorklogEntries} entries loaded
+												</p>
+											) : null}
 										</div>
-									)
-								})()}
+									) : worklogEntriesQuery.status === 'success' ? (
+										<p className='text-sm text-muted-foreground'>
+											{worklogDebugEntries.length > 0
+												? `Showing ${worklogDebugEntries.length} worklog ${worklogDebugEntries.length === 1 ? 'entry' : 'entries'}`
+												: 'No worklog entries found. Drag issues from the panel or click on the calendar to create new entries.'}
+										</p>
+									) : null}
+								</div>
+								<AutoLoadProgress
+									isLoading={worklogAutoLoad.isAutoLoading}
+									pagesLoaded={worklogAutoLoad.pagesLoaded}
+									totalPages={worklogAutoLoad.totalPages}
+									progressPercent={worklogAutoLoad.progressPercent}
+								/>
 							</div>
-						) : null}
+							{(() => {
+								const uniqueProjects = Array.from(
+									new Set(worklogDebugEntries.map(e => e.projectName))
+								).sort()
+
+								if (uniqueProjects.length <= 2) {
+									return null
+								}
+
+								return (
+									<div className='flex flex-wrap items-center gap-3 pb-3 border-b'>
+										<span className='text-xs font-medium text-muted-foreground uppercase tracking-wide'>
+											Projects:
+										</span>
+										{uniqueProjects.map(projectName => {
+											const colors = generateColorFromString(projectName)
+											return (
+												<div
+													key={projectName}
+													className='flex items-center gap-1.5 text-xs'
+												>
+													<div
+														className='w-3 h-3 rounded-sm border'
+														style={{
+															backgroundColor: colors.backgroundColor,
+															borderColor: colors.borderColor
+														}}
+													/>
+													<span className='font-medium text-foreground'>{projectName}</span>
+												</div>
+											)
+										})}
+									</div>
+								)
+							})()}
+						</div>
 						<div className='flex gap-6 grow h-[calc(100vh-12rem)] min-h-[calc(100vh-12rem)] overflow-hidden'>
 							<div className='w-80 rounded-lg border bg-card shadow-sm shrink-0 flex flex-col h-full'>
 								<JiraIssueSearchPanel
@@ -583,17 +902,37 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 									onIssueDragEnd={handleIssueDragEnd}
 								/>
 							</div>
-							<div className='flex-1 rounded-lg border bg-card shadow-sm overflow-hidden flex flex-col'>
-								{worklogEntriesQuery.status === 'pending' ? (
-									<div className='flex flex-col items-center justify-center gap-4 h-full text-center'>
+							<div className='flex-1 rounded-lg border bg-card shadow-sm overflow-hidden flex flex-col relative'>
+								{worklogEntriesQuery.status === 'pending' ||
+								worklogEntriesQuery.isLoading ||
+								worklogAutoLoad.isAutoLoading ? (
+									<div className='absolute inset-0 bg-background/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center gap-4 text-center'>
 										<div className='h-16 w-16 rounded-full border-4 border-primary/20 border-t-primary animate-spin' />
-										<h2 className='text-xl font-semibold text-foreground'>Loading worklogs...</h2>
-										<p className='text-sm text-muted-foreground'>
-											Fetching {totalWorklogEntries > 0 ? `${totalWorklogEntries} ` : ''}worklog
-											entries
-										</p>
+										<div className='flex flex-col gap-2'>
+											<h2 className='text-xl font-semibold text-foreground'>Loading worklogs...</h2>
+											<p className='text-sm text-muted-foreground'>
+												{worklogEntriesQuery.status === 'pending'
+													? 'Initializing worklog data fetch...'
+													: worklogAutoLoad.isAutoLoading
+														? `Loading page ${worklogAutoLoad.pagesLoaded}${worklogAutoLoad.totalPages ? ` of ${worklogAutoLoad.totalPages}` : ''}...`
+														: 'Fetching worklog entries...'}
+											</p>
+											{totalWorklogEntries > 0 ? (
+												<p className='text-xs text-muted-foreground'>
+													{worklogDebugEntries.length} of {totalWorklogEntries} entries loaded so
+													far
+												</p>
+											) : null}
+											<AutoLoadProgress
+												isLoading={worklogAutoLoad.isAutoLoading}
+												pagesLoaded={worklogAutoLoad.pagesLoaded}
+												totalPages={worklogAutoLoad.totalPages}
+												progressPercent={worklogAutoLoad.progressPercent}
+											/>
+										</div>
 									</div>
-								) : worklogEntriesQuery.status === 'error' ? (
+								) : null}
+								{worklogEntriesQuery.status === 'error' ? (
 									<div className='flex flex-col items-center justify-center gap-4 h-full text-center'>
 										<div className='h-16 w-16 rounded-full bg-destructive/10 flex items-center justify-center'>
 											<span className='text-2xl text-destructive'>✕</span>
@@ -603,17 +942,6 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 										</h2>
 										<p className='text-sm text-muted-foreground max-w-md'>
 											{getErrorMessage(worklogEntriesQuery.error)}
-										</p>
-									</div>
-								) : worklogDebugEntries.length === 0 ? (
-									<div className='flex flex-col items-center justify-center gap-4 h-full text-center'>
-										<div className='h-16 w-16 rounded-full bg-muted flex items-center justify-center'>
-											<CalendarDays className='h-8 w-8 text-muted-foreground' />
-										</div>
-										<h2 className='text-xl font-semibold text-foreground'>No worklogs found</h2>
-										<p className='text-sm text-muted-foreground max-w-md'>
-											No worklog entries match your current filters. Try adjusting the date range or
-											selected users, or drag issues from the panel to create worklogs.
 										</p>
 									</div>
 								) : (
