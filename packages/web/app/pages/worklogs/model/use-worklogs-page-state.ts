@@ -27,6 +27,7 @@ import { compareWorklogEntries, useWorklogState } from '~/features/manage-worklo
 
 import { generateColorFromString } from '~/shared/index.ts'
 import { useAutoLoadInfiniteQuery } from '~/shared/lib/query/index.ts'
+import { calculateWorklogsFromCommits } from '../lib/calculate-worklogs-from-commits.ts'
 
 export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 	invariant(loaderData.user?.atlassian?.id, 'Atlassian profile ID is required in loader data')
@@ -180,23 +181,58 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 	)
 
 	const worklogDebugEntries = useMemo(() => {
-		if (!worklogEntriesQuery.data?.pages) {
-			return []
+		const loadedEntries =
+			worklogEntriesQuery.data?.pages.flatMap(page =>
+				page.entries
+					// Only include entries for the current user
+					.filter(entry => entry.worklog.author?.accountId === atlassianUserId)
+					.map(entry => ({
+						id: entry.id,
+						issueKey: entry.issueKey,
+						summary: entry.summary ?? 'Untitled issue',
+						projectName: entry.project?.name ?? entry.project?.key ?? 'Unknown project',
+						authorName:
+							entry.worklog.author?.displayName ??
+							entry.worklog.author?.accountId ??
+							'Unknown author',
+						authorAccountId: entry.worklog.author?.accountId ?? '',
+						started: entry.worklog.started,
+						timeSpentSeconds: entry.worklog.timeSpentSeconds ?? 0
+					}))
+			) ?? []
+
+		// Convert local worklog entries to debug entries format
+		// Only include entries for the current user
+		const localEntries = Array.from(state.localWorklogEntries.values()).map(entry => ({
+			id: entry.id ?? entry.localId,
+			issueKey: entry.issueKey,
+			summary: entry.summary,
+			projectName: entry.projectName,
+			authorName: entry.authorName,
+			authorAccountId: atlassianUserId,
+			started: entry.started,
+			timeSpentSeconds: entry.timeSpentSeconds
+		}))
+
+		// Merge loaded and local entries, with local entries taking precedence for duplicates
+		const entriesMap = new Map<string, (typeof loadedEntries)[0]>()
+
+		// Add loaded entries first
+		for (const entry of loadedEntries) {
+			if (entry.id) {
+				entriesMap.set(entry.id, entry)
+			}
 		}
-		return worklogEntriesQuery.data.pages.flatMap(page =>
-			page.entries.map(entry => ({
-				id: entry.id,
-				issueKey: entry.issueKey,
-				summary: entry.summary ?? 'Untitled issue',
-				projectName: entry.project?.name ?? entry.project?.key ?? 'Unknown project',
-				authorName:
-					entry.worklog.author?.displayName ?? entry.worklog.author?.accountId ?? 'Unknown author',
-				authorAccountId: entry.worklog.author?.accountId ?? '',
-				started: entry.worklog.started,
-				timeSpentSeconds: entry.worklog.timeSpentSeconds ?? 0
-			}))
-		)
-	}, [worklogEntriesQuery.data])
+
+		// Add/override with local entries
+		// Use localId as fallback key for entries that don't have an id yet
+		for (const entry of localEntries) {
+			const key = entry.id || `local-${entry.issueKey}-${entry.started}`
+			entriesMap.set(key, entry)
+		}
+
+		return Array.from(entriesMap.values())
+	}, [worklogEntriesQuery.data, state.localWorklogEntries, atlassianUserId])
 
 	const relevantIssueDebugEntries = useMemo(() => {
 		if (!jiraIssuesQuery.data?.pages) {
@@ -241,19 +277,30 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 		if (!commitIssuesFromGitlabQuery.data?.pages) {
 			return []
 		}
-		return commitIssuesFromGitlabQuery.data.pages.flatMap(page =>
-			page.issues.map(issue => ({
-				id: issue.id,
-				key: issue.key,
-				summary: issue.fields.summary ?? 'Untitled issue',
-				projectName: issue.fields.project?.name ?? issue.fields.project?.key ?? 'Unknown project',
-				status: issue.fields.status?.name ?? 'Unknown status',
-				assignee:
-					issue.fields.assignee?.displayName ?? issue.fields.assignee?.accountId ?? 'Unassigned',
-				updated: issue.fields.updated ?? issue.fields.created,
-				created: issue.fields.created
-			}))
-		)
+		const allIssues = commitIssuesFromGitlabQuery.data.pages.flatMap(page => page.issues)
+
+		// Sort by createdAt (descending), then by issue key (ascending) as fallback
+		const sortedIssues = allIssues.slice().sort((a, b) => {
+			const aCreated = a.fields.created ? new Date(a.fields.created).getTime() : 0
+			const bCreated = b.fields.created ? new Date(b.fields.created).getTime() : 0
+			if (aCreated !== bCreated) {
+				return bCreated - aCreated // Descending (newest first)
+			}
+			// Fallback to issue key if createdAt is the same or missing
+			return (a.key ?? '').localeCompare(b.key ?? '')
+		})
+
+		return sortedIssues.map(issue => ({
+			id: issue.id,
+			key: issue.key,
+			summary: issue.fields.summary ?? 'Untitled issue',
+			projectName: issue.fields.project?.name ?? issue.fields.project?.key ?? 'Unknown project',
+			status: issue.fields.status?.name ?? 'Unknown status',
+			assignee:
+				issue.fields.assignee?.displayName ?? issue.fields.assignee?.accountId ?? 'Unassigned',
+			updated: issue.fields.updated ?? issue.fields.created,
+			created: issue.fields.created
+		}))
 	}, [commitIssuesFromGitlabQuery.data])
 
 	const totalWorklogEntries = worklogEntriesQuery.data?.pages?.[0]?.pageInfo.total ?? 0
@@ -464,6 +511,120 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 		[handleCalendarViewDateRangeChange]
 	)
 
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Complex idempotent logic for creating worklog entries from commits
+	const handleApplyWorklogsFromCommits = useCallback(() => {
+		// Get all commits from pages
+		const commits = gitlabCommitsQuery.data?.pages.flatMap(page => page.commits) ?? []
+
+		// Get all issues from commit issues query
+		const issuesMap = new Map<string, { key: string; summary: string; projectName: string }>()
+		for (const page of commitIssuesFromGitlabQuery.data?.pages ?? []) {
+			for (const issue of page.issues) {
+				issuesMap.set(issue.key.toUpperCase(), {
+					key: issue.key,
+					summary: issue.fields.summary ?? 'Untitled issue',
+					projectName: issue.fields.project?.name ?? issue.fields.project?.key ?? 'Unknown project'
+				})
+			}
+		}
+
+		// Get current user info
+		const authorName = loaderData.user?.atlassian?.email ?? 'Current User'
+		const authorAccountId = atlassianUserId
+
+		// Calculate worklogs from commits
+		const worklogEntries = calculateWorklogsFromCommits(
+			commits.map(commit => ({
+				createdAt: commit.createdAt,
+				issueKeys: commit.issueKeys ?? []
+			})),
+			issuesMap,
+			preferences,
+			authorName,
+			authorAccountId
+		)
+
+		// Check for existing entries to avoid duplicates
+		// Create a set of existing entry signatures: issueKey + started (rounded to minute) + timeSpentSeconds
+		const existingEntries = new Set<string>()
+
+		// Check loaded entries
+		for (const page of worklogEntriesQuery.data?.pages ?? []) {
+			for (const entry of page.entries) {
+				// Only check entries for current user
+				if (entry.worklog.author?.accountId !== atlassianUserId) {
+					continue
+				}
+				if (entry.worklog.started) {
+					const startedDate = new Date(entry.worklog.started)
+					const roundedStarted = new Date(
+						startedDate.getFullYear(),
+						startedDate.getMonth(),
+						startedDate.getDate(),
+						startedDate.getHours(),
+						startedDate.getMinutes(),
+						0
+					)
+					const signature = `${entry.issueKey}|${roundedStarted.toISOString()}|${entry.worklog.timeSpentSeconds ?? 0}`
+					existingEntries.add(signature)
+				}
+			}
+		}
+
+		// Check local entries
+		for (const entry of state.localWorklogEntries.values()) {
+			// Round started time to minute for comparison
+			const startedDate = new Date(entry.started)
+			const roundedStarted = new Date(
+				startedDate.getFullYear(),
+				startedDate.getMonth(),
+				startedDate.getDate(),
+				startedDate.getHours(),
+				startedDate.getMinutes(),
+				0
+			)
+			const signature = `${entry.issueKey}|${roundedStarted.toISOString()}|${entry.timeSpentSeconds}`
+			existingEntries.add(signature)
+		}
+
+		// Only create entries that don't already exist
+		for (const entry of worklogEntries) {
+			// Round started time to minute for comparison
+			const startedDate = new Date(entry.started)
+			const roundedStarted = new Date(
+				startedDate.getFullYear(),
+				startedDate.getMonth(),
+				startedDate.getDate(),
+				startedDate.getHours(),
+				startedDate.getMinutes(),
+				0
+			)
+			const signature = `${entry.issueKey}|${roundedStarted.toISOString()}|${entry.timeSpentSeconds}`
+
+			if (!existingEntries.has(signature)) {
+				dispatch({ type: 'worklog.create', payload: entry })
+			}
+		}
+	}, [
+		dispatch,
+		gitlabCommitsQuery.data,
+		commitIssuesFromGitlabQuery.data,
+		preferences,
+		loaderData.user?.atlassian?.email,
+		atlassianUserId,
+		state.localWorklogEntries,
+		worklogEntriesQuery.data
+	])
+
+	// Check if we can apply worklogs from commits
+	const canApplyWorklogsFromCommits = useMemo(() => {
+		const hasCommits =
+			(gitlabCommitsQuery.data?.pages.flatMap(page => page.commits) ?? []).length > 0
+		const hasCommitIssues =
+			(commitIssuesFromGitlabQuery.data?.pages.flatMap(page => page.issues) ?? []).length > 0
+		return hasCommits && hasCommitIssues && canLoadGitlabCommits
+	}, [gitlabCommitsQuery.data, commitIssuesFromGitlabQuery.data, canLoadGitlabCommits])
+
 	return {
 		// preferences
 		workingDayStartTime,
@@ -523,6 +684,8 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 		handleCalendarViewDateRangeChange,
 		handleControlledCalendarViewChange,
 		handleControlledCalendarNavigate,
-		handleControlledCalendarRangeChange
+		handleControlledCalendarRangeChange,
+		handleApplyWorklogsFromCommits,
+		canApplyWorklogsFromCommits
 	}
 }

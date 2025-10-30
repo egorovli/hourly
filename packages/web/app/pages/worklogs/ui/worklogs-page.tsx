@@ -6,7 +6,7 @@ import { useWorklogsPageState } from '../model/use-worklogs-page-state.ts'
 
 import type { ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { BugIcon, CalendarDays, ChevronDown } from 'lucide-react'
+import { BugIcon, CalendarDays, ChevronDown, GitBranch, Calendar } from 'lucide-react'
 import { Views } from 'react-big-calendar'
 
 import { Badge } from '~/shared/ui/shadcn/ui/badge.tsx'
@@ -116,7 +116,9 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 		handleCalendarViewDateRangeChange,
 		handleControlledCalendarViewChange,
 		handleControlledCalendarNavigate,
-		handleControlledCalendarRangeChange
+		handleControlledCalendarRangeChange,
+		handleApplyWorklogsFromCommits,
+		canApplyWorklogsFromCommits
 	} = useWorklogsPageState(loaderData)
 
 	const [isDebugOpen, setIsDebugOpen] = useState(false)
@@ -269,6 +271,24 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 		setCalendarView
 	])
 
+	const handleSetCurrentMonth = useCallback(() => {
+		const now = new Date()
+		const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
+		const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+
+		handleDateRangeChange({
+			from: firstDay,
+			to: lastDay
+		})
+		handleCalendarViewDateRangeChange({
+			from: new Date(firstDay.getTime()),
+			to: new Date(lastDay.getTime())
+		})
+
+		setCalendarView(Views.WEEK)
+		setCalendarDate(firstDay)
+	}, [handleCalendarViewDateRangeChange, handleDateRangeChange, setCalendarDate, setCalendarView])
+
 	const handleIssueDropOnCalendar = useCallback(
 		(args: {
 			start: Date
@@ -352,28 +372,44 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 	}, [issueKeysWithWorklogs, jiraIssuesQuery.data?.pages])
 
 	const searchPanelReferencedIssues = useMemo(() => {
-		return (
-			commitIssuesFromGitlabQuery.data?.pages
-				.flatMap(page => page.issues)
-				.slice(0, 10)
-				.map(issue => {
-					const normalizedKey = issue.key?.toUpperCase()
-					const reasons: DraggableIssue['reasons'] = ['commit']
+		const allIssues = commitIssuesFromGitlabQuery.data?.pages.flatMap(page => page.issues) ?? []
 
-					if (normalizedKey && issueKeysWithWorklogs.has(normalizedKey)) {
-						reasons.push('worklog')
-					}
+		if (allIssues.length === 0) {
+			return []
+		}
 
-					return {
-						id: issue.id,
-						key: issue.key,
-						summary: issue.fields.summary ?? 'No summary',
-						projectKey: issue.fields.project?.key ?? '',
-						projectName: issue.fields.project?.name ?? '',
-						reasons
-					}
-				}) ?? []
-		)
+		// Sort by createdAt (descending), then by issue key (ascending) as fallback
+		const sortedIssues = allIssues
+			.slice()
+			.sort((a, b) => {
+				const aCreated = a.fields.created ? new Date(a.fields.created).getTime() : 0
+				const bCreated = b.fields.created ? new Date(b.fields.created).getTime() : 0
+				if (aCreated !== bCreated) {
+					return bCreated - aCreated // Descending (newest first)
+				}
+				// Fallback to issue key if createdAt is the same or missing
+				return (a.key ?? '').localeCompare(b.key ?? '')
+			})
+			.slice(0, 10)
+			.map(issue => {
+				const normalizedKey = issue.key?.toUpperCase()
+				const reasons: DraggableIssue['reasons'] = ['commit']
+
+				if (normalizedKey && issueKeysWithWorklogs.has(normalizedKey)) {
+					reasons.push('worklog')
+				}
+
+				return {
+					id: issue.id,
+					key: issue.key,
+					summary: issue.fields.summary ?? 'No summary',
+					projectKey: issue.fields.project?.key ?? '',
+					projectName: issue.fields.project?.name ?? '',
+					reasons
+				}
+			})
+
+		return sortedIssues
 	}, [commitIssuesFromGitlabQuery.data?.pages, issueKeysWithWorklogs])
 
 	return (
@@ -393,17 +429,28 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 							Apply filters to view and manage Jira worklogs
 						</p>
 					</div>
-					{isDebugPresetAvailable ? (
+					<div className='flex items-center gap-2'>
 						<Button
 							type='button'
 							variant='outline'
 							size='sm'
-							onClick={handleApplyDebugPreset}
+							onClick={handleSetCurrentMonth}
 						>
-							<BugIcon />
-							Load Debug Preset
+							<Calendar className='h-3 w-3' />
+							This Month
 						</Button>
-					) : null}
+						{isDebugPresetAvailable ? (
+							<Button
+								type='button'
+								variant='outline'
+								size='sm'
+								onClick={handleApplyDebugPreset}
+							>
+								<BugIcon className='h-3 w-3' />
+								Debug
+							</Button>
+						) : null}
+					</div>
 				</div>
 
 				<FiltersPanel
@@ -425,42 +472,52 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 					hasGitlabProjectsSelected={hasGitlabProjectsSelected}
 					hasCompleteDateRange={hasCompleteDateRange}
 				/>
+
+				{canApplyWorklogsFromCommits ? (
+					<div className='flex flex-col gap-2 rounded-lg border bg-card p-4'>
+						<div className='flex items-start justify-between gap-4'>
+							<div className='flex flex-col gap-1'>
+								<div className='flex items-center gap-2'>
+									<GitBranch className='h-4 w-4 text-muted-foreground' />
+									<h3 className='text-sm font-semibold'>Auto-generate worklogs from commits</h3>
+								</div>
+								<p className='text-xs text-muted-foreground'>
+									Automatically create worklog entries based on commits that reference Jira issues.
+									Worklogs are split by day and distributed across issues worked on each day,
+									respecting your work hours ({workingDayStartTime}–{workingDayEndTime}) and minimum
+									duration ({loaderData.preferences?.minimumDurationMinutes ?? 60} min).
+								</p>
+								<p className='mt-1 text-xs text-muted-foreground'>
+									{gitlabCommitsDebugEntries.length} commit
+									{gitlabCommitsDebugEntries.length === 1 ? '' : 's'} found •{' '}
+									{totalCommitReferencedIssues} issue{totalCommitReferencedIssues === 1 ? '' : 's'}{' '}
+									referenced
+								</p>
+							</div>
+							<Button
+								type='button'
+								variant='default'
+								size='sm'
+								onClick={handleApplyWorklogsFromCommits}
+								disabled={
+									gitlabCommitsAutoLoad.isAutoLoading ||
+									commitIssuesAutoLoad.isAutoLoading ||
+									!canApplyWorklogsFromCommits
+								}
+							>
+								<GitBranch className='mr-2 h-4 w-4' />
+								Apply from Commits
+							</Button>
+						</div>
+					</div>
+				) : null}
 			</div>
 
 			{/* Main calendar view */}
 			<div className='flex flex-col gap-4 grow'>
 				{canLoadWorklogs ? (
-					worklogEntriesQuery.status === 'pending' ? (
-						<div className='flex flex-col items-center justify-center gap-4 py-24 text-center'>
-							<div className='h-16 w-16 rounded-full border-4 border-primary/20 border-t-primary animate-spin' />
-							<h2 className='text-xl font-semibold text-foreground'>Loading worklogs...</h2>
-							<p className='text-sm text-muted-foreground'>
-								Fetching {totalWorklogEntries > 0 ? `${totalWorklogEntries} ` : ''}worklog entries
-							</p>
-						</div>
-					) : worklogEntriesQuery.status === 'error' ? (
-						<div className='flex flex-col items-center justify-center gap-4 py-24 text-center'>
-							<div className='h-16 w-16 rounded-full bg-destructive/10 flex items-center justify-center'>
-								<span className='text-2xl text-destructive'>✕</span>
-							</div>
-							<h2 className='text-xl font-semibold text-foreground'>Failed to load worklogs</h2>
-							<p className='text-sm text-muted-foreground max-w-md'>
-								{getErrorMessage(worklogEntriesQuery.error)}
-							</p>
-						</div>
-					) : worklogDebugEntries.length === 0 ? (
-						<div className='flex flex-col items-center justify-center gap-4 py-24 text-center'>
-							<div className='h-16 w-16 rounded-full bg-muted flex items-center justify-center'>
-								<CalendarDays className='h-8 w-8 text-muted-foreground' />
-							</div>
-							<h2 className='text-xl font-semibold text-foreground'>No worklogs found</h2>
-							<p className='text-sm text-muted-foreground max-w-md'>
-								No worklog entries match your current filters. Try adjusting the date range or
-								selected users.
-							</p>
-						</div>
-					) : (
-						<>
+					<>
+						{worklogDebugEntries.length > 0 ? (
 							<div className='flex flex-col gap-4'>
 								<div className='flex items-center justify-between'>
 									<div className='flex flex-col gap-1'>
@@ -513,19 +570,53 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 									)
 								})()}
 							</div>
-							<div className='flex gap-6 grow h-[calc(100vh-12rem)] min-h-[calc(100vh-12rem)] overflow-hidden'>
-								<div className='w-80 rounded-lg border bg-card shadow-sm shrink-0 flex flex-col h-full'>
-									<JiraIssueSearchPanel
-										userId={loaderData.user.atlassian.id}
-										projectIds={state.selectedJiraProjectIds}
-										relevantIssues={searchPanelRelevantIssues}
-										referencedIssues={searchPanelReferencedIssues}
-										issueKeysInCalendar={issueKeysInCalendar}
-										onIssueDragStart={handleIssueDragStart}
-										onIssueDragEnd={handleIssueDragEnd}
-									/>
-								</div>
-								<div className='flex-1 rounded-lg border bg-card shadow-sm overflow-hidden flex flex-col'>
+						) : null}
+						<div className='flex gap-6 grow h-[calc(100vh-12rem)] min-h-[calc(100vh-12rem)] overflow-hidden'>
+							<div className='w-80 rounded-lg border bg-card shadow-sm shrink-0 flex flex-col h-full'>
+								<JiraIssueSearchPanel
+									userId={loaderData.user.atlassian.id}
+									projectIds={state.selectedJiraProjectIds}
+									relevantIssues={searchPanelRelevantIssues}
+									referencedIssues={searchPanelReferencedIssues}
+									issueKeysInCalendar={issueKeysInCalendar}
+									onIssueDragStart={handleIssueDragStart}
+									onIssueDragEnd={handleIssueDragEnd}
+								/>
+							</div>
+							<div className='flex-1 rounded-lg border bg-card shadow-sm overflow-hidden flex flex-col'>
+								{worklogEntriesQuery.status === 'pending' ? (
+									<div className='flex flex-col items-center justify-center gap-4 h-full text-center'>
+										<div className='h-16 w-16 rounded-full border-4 border-primary/20 border-t-primary animate-spin' />
+										<h2 className='text-xl font-semibold text-foreground'>Loading worklogs...</h2>
+										<p className='text-sm text-muted-foreground'>
+											Fetching {totalWorklogEntries > 0 ? `${totalWorklogEntries} ` : ''}worklog
+											entries
+										</p>
+									</div>
+								) : worklogEntriesQuery.status === 'error' ? (
+									<div className='flex flex-col items-center justify-center gap-4 h-full text-center'>
+										<div className='h-16 w-16 rounded-full bg-destructive/10 flex items-center justify-center'>
+											<span className='text-2xl text-destructive'>✕</span>
+										</div>
+										<h2 className='text-xl font-semibold text-foreground'>
+											Failed to load worklogs
+										</h2>
+										<p className='text-sm text-muted-foreground max-w-md'>
+											{getErrorMessage(worklogEntriesQuery.error)}
+										</p>
+									</div>
+								) : worklogDebugEntries.length === 0 ? (
+									<div className='flex flex-col items-center justify-center gap-4 h-full text-center'>
+										<div className='h-16 w-16 rounded-full bg-muted flex items-center justify-center'>
+											<CalendarDays className='h-8 w-8 text-muted-foreground' />
+										</div>
+										<h2 className='text-xl font-semibold text-foreground'>No worklogs found</h2>
+										<p className='text-sm text-muted-foreground max-w-md'>
+											No worklog entries match your current filters. Try adjusting the date range or
+											selected users, or drag issues from the panel to create worklogs.
+										</p>
+									</div>
+								) : (
 									<WorklogsCalendar
 										date={calendarDate}
 										view={calendarView}
@@ -556,10 +647,10 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 										externalIssue={draggedIssue}
 										onLocalEventsChange={setCalendarStatsEvents}
 									/>
-								</div>
+								)}
 							</div>
-						</>
-					)
+						</div>
+					</>
 				) : (
 					<div className='flex flex-col items-center justify-center gap-4 py-24 text-center'>
 						<CalendarDays className='h-16 w-16 text-muted-foreground/40' />
