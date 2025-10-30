@@ -14,6 +14,7 @@ export interface JiraIssueSearchPanelProps {
 	projectIds: string[]
 	relevantIssues?: DraggableIssue[]
 	referencedIssues?: DraggableIssue[]
+	issueKeysInCalendar?: Set<string>
 	className?: string
 	onIssueDragStart?: (issue: DraggableIssue) => void
 	onIssueDragEnd?: () => void

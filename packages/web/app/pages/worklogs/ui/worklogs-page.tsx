@@ -136,6 +136,17 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 		[calendarStatsEvents]
 	)
 
+	// Track issue keys from calendar events (including local changes)
+	const issueKeysInCalendar = useMemo(() => {
+		const keys = new Set<string>()
+		for (const event of calendarStatsEvents) {
+			if (event.resource.issueKey) {
+				keys.add(event.resource.issueKey.toUpperCase())
+			}
+		}
+		return keys
+	}, [calendarStatsEvents])
+
 	const issueKeysWithWorklogs = useMemo(() => {
 		if (worklogDebugEntries.length === 0) {
 			return new Set<string>()
@@ -271,14 +282,7 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 				projectName: string
 			} | null
 		}) => {
-			if (!args.issue) {
-				return
-			}
-
-			alert(
-				`Creating worklog for ${args.issue.key}: ${args.issue.summary}\nFrom: ${new Date(args.start).toLocaleString()}\nTo: ${new Date(args.end).toLocaleString()}`
-			)
-
+			// Clear dragged issue state - the calendar component handles worklog creation
 			setDraggedIssue(null)
 		},
 		[]
@@ -516,6 +520,7 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 										projectIds={state.selectedJiraProjectIds}
 										relevantIssues={searchPanelRelevantIssues}
 										referencedIssues={searchPanelReferencedIssues}
+										issueKeysInCalendar={issueKeysInCalendar}
 										onIssueDragStart={handleIssueDragStart}
 										onIssueDragEnd={handleIssueDragEnd}
 									/>

@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react'
-import { Search, GripVertical, Sparkles, GitCommit, Timer } from 'lucide-react'
+import { Search, GripVertical, Sparkles, GitCommit, Timer, CheckCircle2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Input } from '~/shared/ui/shadcn/ui/input.tsx'
 import { Badge } from '~/shared/ui/shadcn/ui/badge.tsx'
@@ -13,7 +13,7 @@ import type {
 } from '../model/types.ts'
 
 const ISSUE_REASON_TAG_BASE_CLASS =
-	'inline-flex items-center gap-1 rounded-sm border px-2 py-0.5 text-xs font-medium'
+	'inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium'
 
 const ISSUE_REASON_ORDER: JiraIssueMatchReason[] = ['activity', 'worklog', 'commit', 'search']
 
@@ -48,6 +48,7 @@ export function JiraIssueSearchPanel({
 	projectIds,
 	relevantIssues = [],
 	referencedIssues = [],
+	issueKeysInCalendar = new Set(),
 	className,
 	onIssueDragStart,
 	onIssueDragEnd
@@ -142,6 +143,7 @@ export function JiraIssueSearchPanel({
 							) : searchIssues.length > 0 ? (
 								<IssuesList
 									issues={searchIssues}
+									issueKeysInCalendar={issueKeysInCalendar}
 									onIssueDragStart={onIssueDragStart}
 									onIssueDragEnd={onIssueDragEnd}
 								/>
@@ -159,6 +161,7 @@ export function JiraIssueSearchPanel({
 						<div className='flex-1 overflow-y-auto px-4 pb-4 pt-3'>
 							<IssuesList
 								issues={defaultIssues}
+								issueKeysInCalendar={issueKeysInCalendar}
 								onIssueDragStart={onIssueDragStart}
 								onIssueDragEnd={onIssueDragEnd}
 							/>
@@ -192,17 +195,24 @@ function SectionHeader({ title, description }: SectionHeaderProps) {
 
 interface IssuesListProps {
 	issues: DraggableIssue[]
+	issueKeysInCalendar?: Set<string>
 	onIssueDragStart?: (issue: DraggableIssue) => void
 	onIssueDragEnd?: () => void
 }
 
-function IssuesList({ issues, onIssueDragStart, onIssueDragEnd }: IssuesListProps) {
+function IssuesList({
+	issues,
+	issueKeysInCalendar = new Set(),
+	onIssueDragStart,
+	onIssueDragEnd
+}: IssuesListProps) {
 	return (
-		<div className='space-y-2.5'>
+		<div className='space-y-2'>
 			{issues.map(issue => (
 				<DraggableIssueItem
 					key={issue.id}
 					issue={issue}
+					isInCalendar={issueKeysInCalendar.has(issue.key.toUpperCase())}
 					onDragStart={onIssueDragStart}
 					onDragEnd={onIssueDragEnd}
 				/>
@@ -213,11 +223,17 @@ function IssuesList({ issues, onIssueDragStart, onIssueDragEnd }: IssuesListProp
 
 interface DraggableIssueItemProps {
 	issue: DraggableIssue
+	isInCalendar?: boolean
 	onDragStart?: (issue: DraggableIssue) => void
 	onDragEnd?: () => void
 }
 
-function DraggableIssueItem({ issue, onDragStart, onDragEnd }: DraggableIssueItemProps) {
+function DraggableIssueItem({
+	issue,
+	isInCalendar = false,
+	onDragStart,
+	onDragEnd
+}: DraggableIssueItemProps) {
 	const handleDragStart = useCallback(
 		(e: React.DragEvent<HTMLButtonElement>) => {
 			onDragStart?.(issue)
@@ -252,28 +268,36 @@ function DraggableIssueItem({ issue, onDragStart, onDragEnd }: DraggableIssueIte
 			onDragStart={handleDragStart}
 			onDragEnd={handleDragEnd}
 			className={cn(
-				'group flex w-full cursor-grab items-start gap-3 rounded-md border bg-card p-3 transition-all text-left',
+				'group flex w-full cursor-grab items-center gap-3 rounded-lg border bg-card px-3 py-2.5 transition-all text-left',
 				'hover:border-primary/50 hover:bg-accent/50 hover:shadow-sm',
 				'active:cursor-grabbing active:scale-[0.98]'
 			)}
 		>
-			<GripVertical className='mt-1 h-4 w-4 flex-none text-muted-foreground/60 transition-colors group-hover:text-primary' />
+			<GripVertical className='h-4 w-4 flex-none text-muted-foreground/40 transition-colors group-hover:text-primary shrink-0' />
 
-			<div className='min-w-0 flex-1 space-y-1.5'>
-				<div className='flex items-start gap-2'>
+			<div className='min-w-0 flex-1 flex flex-col gap-1.5'>
+				<div className='flex items-center gap-2'>
 					<Badge
 						variant='secondary'
-						className='flex-none text-[11px] font-semibold px-1.5 py-0.5'
+						className='flex-none text-xs font-semibold px-2 py-[3px]'
 					>
 						{issue.key}
 					</Badge>
+					<IssueReasonTags reasons={issue.reasons} />
+					{isInCalendar && (
+						<CheckCircle2
+							className='h-3.5 w-3.5 text-primary flex-none ml-auto'
+							aria-label='Already in calendar'
+						/>
+					)}
 				</div>
-				<p className='line-clamp-2 text-sm font-medium leading-snug text-foreground'>
+				<p className='line-clamp-1 text-sm font-medium leading-snug text-foreground'>
 					{issue.summary}
 				</p>
-				<IssueReasonTags reasons={issue.reasons} />
 				{issue.projectName && (
-					<p className='text-xs text-muted-foreground/80 truncate'>{issue.projectName}</p>
+					<p className='text-[10px] font-medium uppercase text-muted-foreground truncate tracking-normal'>
+						{issue.projectName}
+					</p>
 				)}
 			</div>
 		</button>
@@ -292,16 +316,13 @@ function IssueReasonTags({ reasons }: { reasons: DraggableIssue['reasons'] }) {
 		return null
 	}
 
-	return (
-		<div className='flex flex-wrap gap-1.5 pt-1'>
-			{orderedReasons.map(reason => (
-				<IssueReasonTag
-					key={reason}
-					reason={reason}
-				/>
-			))}
-		</div>
-	)
+	// Show only the first reason tag to save space
+	const primaryReason = orderedReasons[0]
+	if (!primaryReason) {
+		return null
+	}
+
+	return <IssueReasonTag reason={primaryReason} />
 }
 
 function IssueReasonTag({ reason }: { reason: JiraIssueMatchReason }) {
@@ -309,10 +330,16 @@ function IssueReasonTag({ reason }: { reason: JiraIssueMatchReason }) {
 	const Icon = config.icon
 
 	return (
-		<span className={cn(ISSUE_REASON_TAG_BASE_CLASS, config.className)}>
+		<span
+			className={cn(
+				ISSUE_REASON_TAG_BASE_CLASS,
+				config.className,
+				'px-1.5 py-[3px] flex items-center'
+			)}
+		>
 			<Icon
 				aria-hidden
-				className='h-3.5 w-3.5'
+				className='size-3.5'
 			/>
 		</span>
 	)
@@ -324,11 +351,11 @@ function SearchLoadingState() {
 			{['a', 'b', 'c', 'd', 'e'].map(skeletonKey => (
 				<div
 					key={`skeleton-${skeletonKey}`}
-					className='flex gap-2 rounded-lg border p-3'
+					className='flex items-center gap-3 rounded-lg border bg-card px-3 py-2.5'
 				>
-					<Skeleton className='h-4 w-4 flex-none' />
-					<div className='min-w-0 flex-1 space-y-2'>
-						<Skeleton className='h-4 w-20' />
+					<Skeleton className='h-4 w-4 flex-none shrink-0' />
+					<div className='min-w-0 flex-1 flex flex-col gap-1.5'>
+						<Skeleton className='h-5 w-24' />
 						<Skeleton className='h-4 w-full' />
 						<Skeleton className='h-3 w-32' />
 					</div>

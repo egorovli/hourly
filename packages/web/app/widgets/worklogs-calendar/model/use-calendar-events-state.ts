@@ -20,7 +20,11 @@ interface UseCalendarEventsStateResult {
 		end: Date,
 		currentUserAccountId: string,
 		currentUserName: string,
-		projectName?: string
+		projectName?: string,
+		issueData?: {
+			issueKey: string
+			issueSummary: string
+		}
 	) => WorklogCalendarEvent
 	handleDeleteEvent: (eventId: string) => void
 	handleSave: () => Promise<void>
@@ -156,7 +160,11 @@ export function useCalendarEventsState({
 			end: Date,
 			currentUserAccountId: string,
 			currentUserName: string,
-			projectName = ''
+			projectName = '',
+			issueData?: {
+				issueKey: string
+				issueSummary: string
+			}
 		): WorklogCalendarEvent => {
 			// Generate a temporary ID for the new event
 			const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
@@ -164,15 +172,18 @@ export function useCalendarEventsState({
 			// Calculate time spent in seconds
 			const timeSpentSeconds = Math.floor((end.getTime() - start.getTime()) / 1000)
 
+			// Determine title based on issue data
+			const title = issueData ? `${issueData.issueKey} • ${issueData.issueSummary}` : 'New Event'
+
 			// Create new event with default values
 			const newEvent: WorklogCalendarEvent = {
 				id: tempId,
-				title: 'New Event',
+				title,
 				start,
 				end,
 				resource: {
-					issueKey: '',
-					issueSummary: '',
+					issueKey: issueData?.issueKey ?? '',
+					issueSummary: issueData?.issueSummary ?? '',
 					projectName,
 					authorName: currentUserName,
 					authorAccountId: currentUserAccountId,

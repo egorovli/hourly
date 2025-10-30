@@ -224,21 +224,43 @@ export function WorklogsCalendar({
 	// Handle external drop (from search panel)
 	const handleDropFromOutside = useCallback(
 		(args: { start: Date | string; end: Date | string; allDay: boolean }) => {
-			if (!onDropFromOutside) {
+			// Only create if user is authenticated and issue is available
+			if (!currentUserAccountId || !externalIssue) {
 				return
 			}
 
 			const start = typeof args.start === 'string' ? new Date(args.start) : args.start
 			const end = typeof args.end === 'string' ? new Date(args.end) : args.end
 
-			onDropFromOutside({
+			// Ensure minimum duration of 15 minutes
+			const minDuration = 15 * 60 * 1000 // 15 minutes in milliseconds
+			const actualEnd =
+				end.getTime() - start.getTime() < minDuration
+					? new Date(start.getTime() + minDuration)
+					: end
+
+			// Create the event with issue data
+			handleCreateEvent(
 				start,
-				end,
+				actualEnd,
+				currentUserAccountId,
+				currentUserName ?? 'Current User',
+				externalIssue.projectName,
+				{
+					issueKey: externalIssue.key,
+					issueSummary: externalIssue.summary
+				}
+			)
+
+			// Notify parent component if callback is provided
+			onDropFromOutside?.({
+				start,
+				end: actualEnd,
 				allDay: args.allDay,
 				issue: externalIssue
 			})
 		},
-		[onDropFromOutside, externalIssue]
+		[onDropFromOutside, externalIssue, currentUserAccountId, currentUserName, handleCreateEvent]
 	)
 
 	const handleDragOver = useCallback(
