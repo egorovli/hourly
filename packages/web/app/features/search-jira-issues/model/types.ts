@@ -7,6 +7,11 @@ export interface DraggableIssue {
 	projectKey: string
 	projectName: string
 	reasons: JiraIssueMatchReason[]
+	status?: string
+	assignee?: string
+	reporter?: string
+	created?: string
+	updated?: string
 }
 
 export interface JiraIssueSearchPanelProps {

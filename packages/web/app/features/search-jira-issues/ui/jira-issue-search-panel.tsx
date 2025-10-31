@@ -1,10 +1,23 @@
 import { useState, useCallback, useMemo } from 'react'
-import { Search, GripVertical, Sparkles, GitCommit, Timer, CheckCircle2 } from 'lucide-react'
+import {
+	Search,
+	GripVertical,
+	Sparkles,
+	GitCommit,
+	Timer,
+	CheckCircle2,
+	User,
+	Calendar,
+	UserCircle,
+	Clock
+} from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { useRouteLoaderData } from 'react-router'
 import { Input } from '~/shared/ui/shadcn/ui/input.tsx'
 import { Badge } from '~/shared/ui/shadcn/ui/badge.tsx'
 import { Skeleton } from '~/shared/ui/shadcn/ui/skeleton.tsx'
 import { cn } from '~/lib/util/index.ts'
+import { formatDateTimeLabel } from '~/shared/lib/formats/format-date-time.ts'
 import { useSearchJiraIssuesQuery } from '../api/use-search-jira-issues-query.ts'
 import type {
 	JiraIssueSearchPanelProps,
@@ -81,7 +94,19 @@ export function JiraIssueSearchPanel({
 			const mergedReasons = Array.from(new Set([...existing.reasons, ...issue.reasons]))
 			deduped.set(issue.id, { ...existing, reasons: mergedReasons })
 		}
-		return Array.from(deduped.values())
+
+		// Sort by created date (descending), then by issue key (ascending) as fallback
+		const sorted = Array.from(deduped.values()).sort((a, b) => {
+			const aCreated = a.created ? new Date(a.created).getTime() : 0
+			const bCreated = b.created ? new Date(b.created).getTime() : 0
+			if (aCreated !== bCreated) {
+				return bCreated - aCreated // Descending (newest first)
+			}
+			// Fallback to issue key if createdAt is the same or missing
+			return (a.key ?? '').localeCompare(b.key ?? '')
+		})
+
+		return sorted
 	}, [relevantIssues, referencedIssues])
 
 	const defaultIssueReasonMap = useMemo(() => {
@@ -105,7 +130,12 @@ export function JiraIssueSearchPanel({
 				summary: issue.fields.summary ?? 'No summary',
 				projectKey: issue.fields.project?.key ?? '',
 				projectName: issue.fields.project?.name ?? '',
-				reasons: Array.from(reasons)
+				reasons: Array.from(reasons),
+				status: issue.fields.status?.name,
+				assignee: issue.fields.assignee?.displayName ?? issue.fields.assignee?.accountId,
+				reporter: issue.fields.reporter?.displayName ?? issue.fields.reporter?.accountId,
+				created: issue.fields.created,
+				updated: issue.fields.updated
 			}
 		})
 	}, [defaultIssueReasonMap, searchResults?.issues])
@@ -234,6 +264,9 @@ function DraggableIssueItem({
 	onDragStart,
 	onDragEnd
 }: DraggableIssueItemProps) {
+	const rootData = useRouteLoaderData('root') as { preferences?: { timezone?: string } } | undefined
+	const timezone = rootData?.preferences?.timezone ?? 'UTC'
+
 	const handleDragStart = useCallback(
 		(e: React.DragEvent<HTMLButtonElement>) => {
 			onDragStart?.(issue)
@@ -268,36 +301,69 @@ function DraggableIssueItem({
 			onDragStart={handleDragStart}
 			onDragEnd={handleDragEnd}
 			className={cn(
-				'group flex w-full cursor-grab items-center gap-3 rounded-lg border bg-card px-3 py-2.5 transition-all text-left',
+				'group relative flex w-full cursor-grab flex-col gap-2 rounded-lg border bg-card p-3 text-left transition-all',
 				'hover:border-primary/50 hover:bg-accent/50 hover:shadow-sm',
 				'active:cursor-grabbing active:scale-[0.98]'
 			)}
 		>
-			<GripVertical className='h-4 w-4 flex-none text-muted-foreground/40 transition-colors group-hover:text-primary shrink-0' />
-
-			<div className='min-w-0 flex-1 flex flex-col gap-1.5'>
-				<div className='flex items-center gap-2'>
+			{/* Header: Key, Status, Reason, Calendar indicator */}
+			<div className='flex items-start justify-between gap-2'>
+				<div className='flex min-w-0 flex-1 items-center gap-2'>
+					<GripVertical className='h-3.5 w-3.5 shrink-0 text-muted-foreground/30 transition-colors group-hover:text-primary' />
 					<Badge
 						variant='secondary'
-						className='flex-none text-xs font-semibold px-2 py-[3px]'
+						className='font-mono text-xs font-semibold'
 					>
 						{issue.key}
 					</Badge>
-					<IssueReasonTags reasons={issue.reasons} />
-					{isInCalendar && (
-						<CheckCircle2
-							className='h-3.5 w-3.5 text-primary flex-none ml-auto'
-							aria-label='Already in calendar'
-						/>
+					{issue.status && (
+						<Badge
+							variant='outline'
+							className='text-xs'
+						>
+							{issue.status}
+						</Badge>
 					)}
+					<IssueReasonTags reasons={issue.reasons} />
 				</div>
-				<p className='line-clamp-1 text-sm font-medium leading-snug text-foreground'>
-					{issue.summary}
-				</p>
-				{issue.projectName && (
-					<p className='text-[10px] font-medium uppercase text-muted-foreground truncate tracking-normal'>
-						{issue.projectName}
-					</p>
+				{isInCalendar && (
+					<CheckCircle2
+						className='h-4 w-4 shrink-0 text-primary'
+						aria-label='Already in calendar'
+					/>
+				)}
+			</div>
+
+			{/* Summary */}
+			<p className='line-clamp-2 text-sm font-medium leading-snug text-foreground'>
+				{issue.summary}
+			</p>
+
+			{/* Metadata grid */}
+			<div className='grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground'>
+				{issue.assignee && (
+					<div className='flex items-center gap-1.5 truncate'>
+						<User className='h-3 w-3 shrink-0' />
+						<span className='truncate'>{issue.assignee}</span>
+					</div>
+				)}
+				{issue.reporter && (
+					<div className='flex items-center gap-1.5 truncate'>
+						<UserCircle className='h-3 w-3 shrink-0' />
+						<span className='truncate'>{issue.reporter}</span>
+					</div>
+				)}
+				{issue.created && (
+					<div className='flex items-center gap-1.5 truncate'>
+						<Calendar className='h-3 w-3 shrink-0' />
+						<span className='truncate'>{formatDateTimeLabel(issue.created, timezone)}</span>
+					</div>
+				)}
+				{issue.updated && issue.updated !== issue.created && (
+					<div className='flex items-center gap-1.5 truncate'>
+						<Clock className='h-3 w-3 shrink-0' />
+						<span className='truncate'>{formatDateTimeLabel(issue.updated, timezone)}</span>
+					</div>
 				)}
 			</div>
 		</button>

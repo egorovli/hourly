@@ -351,28 +351,49 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 	}, [projectsQuery.data?.byResource])
 
 	const searchPanelRelevantIssues = useMemo(() => {
-		return (
-			jiraIssuesQuery.data?.pages
-				.flatMap(page => page.issues)
-				.slice(0, 10)
-				.map(issue => {
-					const normalizedKey = issue.key?.toUpperCase()
-					const reasons: DraggableIssue['reasons'] = ['activity']
+		const allIssues = jiraIssuesQuery.data?.pages.flatMap(page => page.issues) ?? []
 
-					if (normalizedKey && issueKeysWithWorklogs.has(normalizedKey)) {
-						reasons.push('worklog')
-					}
+		if (allIssues.length === 0) {
+			return []
+		}
 
-					return {
-						id: issue.id,
-						key: issue.key,
-						summary: issue.fields.summary ?? 'No summary',
-						projectKey: issue.fields.project?.key ?? '',
-						projectName: issue.fields.project?.name ?? '',
-						reasons
-					}
-				}) ?? []
-		)
+		// Sort by created date (descending), then by issue key (ascending) as fallback
+		const sortedIssues = allIssues
+			.slice()
+			.sort((a, b) => {
+				const aCreated = a.fields.created ? DateTime.fromISO(a.fields.created).toMillis() : 0
+				const bCreated = b.fields.created ? DateTime.fromISO(b.fields.created).toMillis() : 0
+				if (aCreated !== bCreated) {
+					return bCreated - aCreated // Descending (newest first)
+				}
+				// Fallback to issue key if createdAt is the same or missing
+				return (a.key ?? '').localeCompare(b.key ?? '')
+			})
+			.slice(0, 10)
+			.map(issue => {
+				const normalizedKey = issue.key?.toUpperCase()
+				const reasons: DraggableIssue['reasons'] = ['activity']
+
+				if (normalizedKey && issueKeysWithWorklogs.has(normalizedKey)) {
+					reasons.push('worklog')
+				}
+
+				return {
+					id: issue.id,
+					key: issue.key,
+					summary: issue.fields.summary ?? 'No summary',
+					projectKey: issue.fields.project?.key ?? '',
+					projectName: issue.fields.project?.name ?? '',
+					reasons,
+					status: issue.fields.status?.name,
+					assignee: issue.fields.assignee?.displayName ?? issue.fields.assignee?.accountId,
+					reporter: issue.fields.reporter?.displayName ?? issue.fields.reporter?.accountId,
+					created: issue.fields.created,
+					updated: issue.fields.updated
+				}
+			})
+
+		return sortedIssues
 	}, [issueKeysWithWorklogs, jiraIssuesQuery.data?.pages])
 
 	const searchPanelReferencedIssues = useMemo(() => {
@@ -416,7 +437,12 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 					summary: issue.fields.summary ?? 'No summary',
 					projectKey: issue.fields.project?.key ?? '',
 					projectName: issue.fields.project?.name ?? '',
-					reasons
+					reasons,
+					status: issue.fields.status?.name,
+					assignee: issue.fields.assignee?.displayName ?? issue.fields.assignee?.accountId,
+					reporter: issue.fields.reporter?.displayName ?? issue.fields.reporter?.accountId,
+					created: issue.fields.created,
+					updated: issue.fields.updated
 				}
 			})
 
