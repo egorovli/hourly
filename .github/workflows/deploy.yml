@@ -16,19 +16,26 @@ on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: 'Docker image tag to deploy (e.g., latest, main, sha-abc1234, 1.0.0). Defaults to "latest"'
+        description: "Docker image tag to deploy (e.g., latest, main, sha-abc1234, 1.0.0)"
         required: false
         type: string
-        default: 'latest'
+        default: "latest"
       environment:
-        description: 'Target environment'
+        description: "Target environment"
         required: true
         type: choice
         options:
           - staging
           - production
+  workflow_run:
+    workflows:
+      - "Build and Push"
+    types:
+      - completed
+    branches:
+      - main
 
-run-name: "deploy: ${{ github.event.inputs.environment }} (${{ github.event.inputs.image_tag || 'latest' }}) by @${{ github.actor }}"
+run-name: "deploy: ${{ github.event.inputs.environment || 'auto' }} (${{ github.event.inputs.image_tag || github.event.workflow_run.head_branch || 'latest' }}) by @${{ github.actor }}"
 
 env:
   REGISTRY: ghcr.io
@@ -39,92 +46,80 @@ defaults:
     shell: bash
 
 jobs:
-  verify-build:
-    name: Verify Build Workflow
+  verify-and-deploy:
+    name: Verify and Deploy
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    if: contains('egorovli', github.actor)
+    timeout-minutes: 30
+    if: |
+      contains('egorovli', github.actor) &&
+      (github.event_name == 'workflow_dispatch' || 
+       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'))
+    environment:
+      name: ${{ github.event.inputs.environment || 'production' }}
     outputs:
-      build_sha: ${{ steps.verify.outputs.build_sha }}
-      image_exists: ${{ steps.image-check.outputs.image_exists }}
-      image_digest: ${{ steps.image-check.outputs.image_digest }}
-      resolved_tag: ${{ steps.resolve-final.outputs.resolved_tag }}
-      resolved_sha: ${{ steps.resolve-final.outputs.resolved_sha }}
-      resolved_sha_short: ${{ steps.resolve-final.outputs.resolved_sha_short }}
-      full_image: ghcr.io/${{ github.repository }}/web:${{ inputs.image_tag || 'latest' }}
-
+      build_sha: ${{ steps.resolve-tag.outputs.resolved_sha }}
+      image_tag: ${{ steps.resolve-tag.outputs.resolved_tag }}
+      full_image: ${{ steps.resolve-tag.outputs.full_image }}
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_NAME: ${{ github.repository }}/web
+      IMAGE_TAG: ${{ github.event.inputs.image_tag || github.event.workflow_run.head_branch || 'latest' }}
+      ENVIRONMENT: ${{ github.event.inputs.environment || 'production' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Verify GitHub CLI
+      - name: Determine image tag from workflow run
+        id: resolve-tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          
-          # GitHub CLI is pre-installed and authenticates automatically with GITHUB_TOKEN
-          echo "Verifying GitHub CLI availability..."
-          gh --version
-          
-          # Verify authentication
-          CURRENT_USER=$(gh api user --jq '.login' 2>/dev/null || echo "")
-          if [[ -z "${CURRENT_USER}" ]]; then
-            echo "❌ GitHub CLI authentication failed"
-            exit 1
-          fi
-          echo "✅ Authenticated as: ${CURRENT_USER}"
 
-      - name: Verify build workflow completion
-        id: verify
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          
-          echo "🔍 Finding latest successful build workflow..."
-          
-          WORKFLOW_RUN_ID=$(gh run list \
-            --workflow="build.yml" \
-            --branch="${{ github.ref_name }}" \
-            --status=success \
-            --limit=1 \
-            --json databaseId \
-            --jq '.[0].databaseId' \
-            || echo "")
-          
-          if [[ -z "${WORKFLOW_RUN_ID}" ]]; then
-            echo "❌ No successful build workflow found for branch: ${{ github.ref_name }}"
-            exit 1
+          # If triggered manually, use the provided tag
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            IMAGE_TAG="${IMAGE_TAG}"
+            echo "Using manually specified tag: ${IMAGE_TAG}"
+          # If triggered from workflow_run, try to get tag from the build workflow
+          elif [[ "${{ github.event_name }}" == "workflow_run" && "${{ github.event.workflow_run.conclusion }}" == "success" ]]; then
+            echo "🔍 Build workflow completed successfully, determining image tag..."
+            
+            # Get the commit SHA from the build workflow run
+            BUILD_SHA="${{ github.event.workflow_run.head_sha }}"
+            SHORT_SHA="${BUILD_SHA:0:7}"
+            
+            # Try to use the SHA tag, or fall back to 'latest' if on main branch
+            if [[ "${{ github.event.workflow_run.head_branch }}" == "main" ]]; then
+              IMAGE_TAG="latest"
+              echo "Using 'latest' tag for main branch"
+            else
+              IMAGE_TAG="${SHORT_SHA}"
+              echo "Using SHA tag: ${IMAGE_TAG}"
+            fi
+          else
+            IMAGE_TAG="latest"
+            echo "Defaulting to 'latest' tag"
           fi
-          
-          echo "Found latest successful build: ${WORKFLOW_RUN_ID}"
-          
-          # Verify workflow run exists and succeeded
-          WORKFLOW_STATUS=$(gh run view "${WORKFLOW_RUN_ID}" \
-            --json conclusion \
-            --jq '.conclusion' \
-            || echo "null")
-          
-          if [[ "${WORKFLOW_STATUS}" != "success" ]]; then
-            echo "❌ Build workflow ${WORKFLOW_RUN_ID} did not succeed (status: ${WORKFLOW_STATUS})"
-            exit 1
+
+          FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+
+          # Resolve tag to commit SHA
+          if [[ "${IMAGE_TAG}" =~ ^[0-9a-f]{7,}$ ]]; then
+            RESOLVED_SHA="${IMAGE_TAG}"
+            echo "✅ Tag is commit SHA: ${RESOLVED_SHA}"
+          elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            RESOLVED_SHA="${{ github.event.workflow_run.head_sha }}"
+            echo "✅ Resolved tag '${IMAGE_TAG}' to commit SHA: ${RESOLVED_SHA}"
+          else
+            # For manual dispatch, try to find the latest build SHA
+            echo "⚠️  Could not resolve SHA for tag ${IMAGE_TAG}, using tag as-is"
+            RESOLVED_SHA="${IMAGE_TAG}"
           fi
-          
-          # Get commit SHA from workflow run
-          BUILD_SHA=$(gh run view "${WORKFLOW_RUN_ID}" \
-            --json headSha \
-            --jq '.headSha' \
-            || echo "")
-          
-          if [[ -z "${BUILD_SHA}" ]]; then
-            echo "❌ Could not determine build SHA"
-            exit 1
-          fi
-          
-          echo "✅ Build workflow verified: ${WORKFLOW_RUN_ID}"
-          echo "Build SHA: ${BUILD_SHA}"
-          echo "build_sha=${BUILD_SHA}" >> $GITHUB_OUTPUT
+
+          echo "resolved_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          echo "resolved_sha=${RESOLVED_SHA}" >> $GITHUB_OUTPUT
+          echo "resolved_sha_short=${RESOLVED_SHA:0:7}" >> $GITHUB_OUTPUT
+          echo "full_image=${FULL_IMAGE}" >> $GITHUB_OUTPUT
 
       - name: Setup Docker
         uses: docker/setup-buildx-action@v3.11.1
@@ -134,29 +129,26 @@ jobs:
         env:
           REGISTRY: ghcr.io
           IMAGE_NAME: ${{ github.repository }}/web
-          IMAGE_TAG: ${{ inputs.image_tag || 'latest' }}
         run: |
           set -euo pipefail
-          
+
+          FULL_IMAGE="${{ steps.resolve-tag.outputs.full_image }}"
           echo "🔍 Verifying image exists in registry..."
-          
-          FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
           echo "Checking image: ${FULL_IMAGE}"
-          
+
           # Login to registry
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login "${REGISTRY}" \
             --username "${{ github.actor }}" \
             --password-stdin
-          
+
           # Check if image exists using docker manifest inspect
           if docker manifest inspect "${FULL_IMAGE}" > /dev/null 2>&1; then
             echo "✅ Image found: ${FULL_IMAGE}"
             echo "image_exists=true" >> $GITHUB_OUTPUT
             
-            # Get image digest for verification (jq is pre-installed on GitHub runners)
+            # Get image digest for verification
             MANIFEST_JSON=$(docker manifest inspect "${FULL_IMAGE}" 2>/dev/null || echo "")
             if [[ -n "${MANIFEST_JSON}" ]]; then
-              # Try to extract digest using jq if available
               if command -v jq >/dev/null 2>&1; then
                 IMAGE_DIGEST=$(echo "${MANIFEST_JSON}" | jq -r '.config.digest // empty' 2>/dev/null || echo "")
                 if [[ -n "${IMAGE_DIGEST}" && "${IMAGE_DIGEST}" != "null" ]]; then
@@ -164,9 +156,6 @@ jobs:
                   echo "image_digest=${IMAGE_DIGEST}" >> $GITHUB_OUTPUT
                 fi
               fi
-              
-              # Extract short SHA from manifest for reference
-              echo "Full image reference: ${FULL_IMAGE}"
             fi
           else
             echo "❌ Image not found: ${FULL_IMAGE}"
@@ -174,66 +163,20 @@ jobs:
             exit 1
           fi
 
-      - name: Resolve tag to commit SHA (finalize)
-        id: resolve-final
-        env:
-          IMAGE_TAG: ${{ inputs.image_tag || 'latest' }}
-          BUILD_SHA: ${{ steps.verify.outputs.build_sha }}
-        run: |
-          set -euo pipefail
-          
-          # If tag is already a SHA, use it
-          if [[ "${IMAGE_TAG}" =~ ^[0-9a-f]{7,}$ ]]; then
-            RESOLVED_SHA="${IMAGE_TAG}"
-            echo "✅ Tag is commit SHA: ${RESOLVED_SHA}"
-          else
-            # Otherwise, use the build SHA from the verified workflow
-            RESOLVED_SHA="${BUILD_SHA}"
-            echo "✅ Resolved tag '${IMAGE_TAG}' to commit SHA: ${RESOLVED_SHA}"
-          fi
-          
-          echo "resolved_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
-          echo "resolved_sha=${RESOLVED_SHA}" >> $GITHUB_OUTPUT
-          
-          # Output short SHA for display
-          SHORT_SHA="${RESOLVED_SHA:0:7}"
-          echo "resolved_sha_short=${SHORT_SHA}" >> $GITHUB_OUTPUT
-
-  deploy:
-    name: Deploy Application
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs:
-      - verify-build
-    if: needs.verify-build.outputs.image_exists == 'true'
-    env:
-      REGISTRY: ghcr.io
-      IMAGE_NAME: ${{ github.repository }}/web
-      FULL_IMAGE: ${{ needs.verify-build.outputs.full_image }}
-      IMAGE_TAG: ${{ inputs.image_tag || 'latest' }}
-      RESOLVED_SHA: ${{ needs.verify-build.outputs.resolved_sha }}
-      RESOLVED_SHA_SHORT: ${{ needs.verify-build.outputs.resolved_sha_short }}
-      ENVIRONMENT: ${{ inputs.environment }}
-      BUILD_SHA: ${{ needs.verify-build.outputs.build_sha }}
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-
       - name: Validate deployment parameters
         run: |
           set -euo pipefail
-          
+
           echo "🔍 Validating deployment parameters..."
-          
+
           # Validate image tag format
-          IMAGE_TAG="${IMAGE_TAG}"
+          IMAGE_TAG="${{ steps.resolve-tag.outputs.resolved_tag }}"
           if [[ ! "${IMAGE_TAG}" =~ ^[a-zA-Z0-9._-]+$ ]]; then
             echo "❌ Invalid image tag format: ${IMAGE_TAG}"
             echo "Tag must contain only alphanumeric characters, dots, underscores, and hyphens"
             exit 1
           fi
-          
+
           # Validate environment
           ENVIRONMENT="${ENVIRONMENT}"
           if [[ "${ENVIRONMENT}" != "staging" && "${ENVIRONMENT}" != "production" ]]; then
@@ -241,13 +184,19 @@ jobs:
             echo "Environment must be 'staging' or 'production'"
             exit 1
           fi
-          
+
           echo "✅ All parameters validated"
 
       - name: Display deployment parameters
         run: |
           set -euo pipefail
-          
+
+          FULL_IMAGE="${{ steps.resolve-tag.outputs.full_image }}"
+          RESOLVED_SHA="${{ steps.resolve-tag.outputs.resolved_sha }}"
+          RESOLVED_SHA_SHORT="${{ steps.resolve-tag.outputs.resolved_sha_short }}"
+          IMAGE_TAG="${{ steps.resolve-tag.outputs.resolved_tag }}"
+          IMAGE_DIGEST="${{ steps.image-check.outputs.image_digest }}"
+
           echo "## Deployment Parameters" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Image Information" >> $GITHUB_STEP_SUMMARY
@@ -258,22 +207,21 @@ jobs:
             echo "- **Resolved SHA:** \`${RESOLVED_SHA_SHORT}\` (${RESOLVED_SHA})" >> $GITHUB_STEP_SUMMARY
           fi
           echo "- **Full Image:** \`${FULL_IMAGE}\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Deployment Configuration" >> $GITHUB_STEP_SUMMARY
-          echo "- **Environment:** \`${{ inputs.environment }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Triggered By:** \`${{ github.actor }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Branch:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Commit SHA:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Build Verification" >> $GITHUB_STEP_SUMMARY
-          echo "- **Build Commit SHA:** \`${{ needs.verify-build.outputs.build_sha }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Image Verified:** ✅" >> $GITHUB_STEP_SUMMARY
-          IMAGE_DIGEST="${{ needs.verify-build.outputs.image_digest }}"
           if [[ -n "${IMAGE_DIGEST}" ]]; then
             echo "- **Image Digest:** \`${IMAGE_DIGEST}\`" >> $GITHUB_STEP_SUMMARY
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+          echo "### Deployment Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment:** \`${ENVIRONMENT}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered By:** \`${{ github.actor }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit SHA:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            echo "- **Build Workflow Run:** \`${{ github.event.workflow_run.id }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **Build Commit SHA:** \`${{ github.event.workflow_run.head_sha }}\`" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "🚀 DEPLOYMENT PARAMETERS"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -286,26 +234,33 @@ jobs:
             echo "  Resolved SHA:    ${RESOLVED_SHA_SHORT} (${RESOLVED_SHA})"
           fi
           echo "  Full Image:      ${FULL_IMAGE}"
+          if [[ -n "${IMAGE_DIGEST}" ]]; then
+            echo "  Image Digest:    ${IMAGE_DIGEST}"
+          fi
           echo ""
           echo "Deployment Configuration:"
           echo "  Environment:     ${ENVIRONMENT}"
           echo "  Triggered By:    ${{ github.actor }}"
           echo "  Branch:          ${{ github.ref_name }}"
           echo "  Commit SHA:      ${{ github.sha }}"
-          echo ""
-          echo "Build Verification:"
-          echo "  Build SHA:       ${{ needs.verify-build.outputs.build_sha }}"
-          IMAGE_DIGEST="${{ needs.verify-build.outputs.image_digest }}"
-          if [[ -n "${IMAGE_DIGEST}" ]]; then
-            echo "  Image Digest:   ${IMAGE_DIGEST}"
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            echo "  Build Run ID:    ${{ github.event.workflow_run.id }}"
+            echo "  Build SHA:       ${{ github.event.workflow_run.head_sha }}"
           fi
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
       - name: Execute deployment stub
+        if: steps.image-check.outputs.image_exists == 'true'
+        env:
+          FULL_IMAGE: ${{ steps.resolve-tag.outputs.full_image }}
+          IMAGE_TAG: ${{ steps.resolve-tag.outputs.resolved_tag }}
+          RESOLVED_SHA: ${{ steps.resolve-tag.outputs.resolved_sha }}
+          RESOLVED_SHA_SHORT: ${{ steps.resolve-tag.outputs.resolved_sha_short }}
+          ENVIRONMENT: ${{ env.ENVIRONMENT }}
         run: |
           set -euo pipefail
-          
+
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "🚀 DEPLOYMENT STUB"
@@ -320,7 +275,9 @@ jobs:
           echo "  RESOLVED_SHA=${RESOLVED_SHA}"
           echo "  RESOLVED_SHA_SHORT=${RESOLVED_SHA_SHORT}"
           echo "  ENVIRONMENT=${ENVIRONMENT}"
-          echo "  BUILD_SHA=${BUILD_SHA}"
+          echo ""
+          echo "Environment-specific secrets are available via:"
+          echo "  \${{ secrets.* }}"
           echo ""
           echo "  # Example SSH + Docker:"
           echo "  ssh deploy@target 'docker pull ${FULL_IMAGE} && docker-compose up -d'"
@@ -334,4 +291,3 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "✅ Deployment stub completed"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-

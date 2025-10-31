@@ -20,6 +20,20 @@ on:
     types:
       - published
   workflow_dispatch:
+  workflow_call:
+    outputs:
+      image_version:
+        description: 'Docker image version/tag'
+        value: ${{ jobs.build-and-push.outputs.image_version }}
+      image_tags:
+        description: 'All Docker image tags generated'
+        value: ${{ jobs.build-and-push.outputs.image_tags }}
+      image_digest:
+        description: 'Docker image digest'
+        value: ${{ jobs.build-and-push.outputs.image_digest }}
+      build_sha:
+        description: 'Commit SHA of the build'
+        value: ${{ jobs.build-and-push.outputs.build_sha }}
 
 env:
   REGISTRY: ghcr.io
@@ -37,6 +51,10 @@ jobs:
     outputs:
       trivy-scan-passed: ${{ steps.trivy-scan.outcome == 'success' }}
       trivy-sarif-uploaded: ${{ steps.upload-sarif.outcome == 'success' }}
+      image_version: ${{ steps.version.outputs.version }}
+      image_tags: ${{ steps.meta.outputs.tags }}
+      build_sha: ${{ github.sha }}
+      image_digest: ${{ steps.build-push.outputs.digest }}
 
     steps:
       - name: Checkout repository
@@ -171,6 +189,7 @@ jobs:
           cache-dir: ~/.cache/trivy
 
       - name: Build and push Docker image (multi-platform)
+        id: build-push
         uses: docker/build-push-action@v6.18.0
         with:
           context: .
