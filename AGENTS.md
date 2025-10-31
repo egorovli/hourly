@@ -48,15 +48,12 @@ if (process.env.NODE_ENV !== 'development') { connection = createConnection() }
 - Jest + Testing Library: `bun run --filter @hourly/web test`
 - Co-locate `*.test.tsx` or use `__tests__/`; prefer queries over snapshots
 
-### Dev login shortcut (dev only)
-- Visit `/dev/hijack-session` → sets `session` cookie; redirects `/`; picks latest fully-auth session; 404 if none
-
-## Commits & PRs
-- Conventional Commits; PRs: brief summary, tests (`bun run lint && bun run --filter @hourly/web test`), link tickets; wait green CI
 ## Automation Vision (high level)
 - Reconcile GitLab commits with Jira issues → monthly hours
 - Auth: Atlassian + GitLab via Remix Auth; merged session
 - Pipeline: filter commits (branch/Jira keys), fetch Jira issue data, stage for distribution
+- Worklog sync: Idempotent delete/create strategy in `jira.worklog.entries.tsx` action
+- Commit reconciliation: `calculate-worklogs-from-commits` groups by day/issue, splits workday
 
 ## shadcn/ui in this repo
 - Run CLI from `packages/web`:
@@ -64,18 +61,17 @@ if (process.env.NODE_ENV !== 'development') { connection = createConnection() }
 cd packages/web
 bunx --bun shadcn@latest add button card input label separator field dropdown-menu popover select command calendar tooltip sheet breadcrumb badge avatar skeleton
 ```
-- Files in `app/components/shadcn/ui` (blocks: `app/components/shadcn/blocks`)
+- Files in `app/shared/ui/shadcn/ui` (blocks: `app/shared/ui/shadcn/blocks`)
 - Replace `@/lib/utils` → `~/lib/util/index.ts`; ensure named exports; no `@/` paths
 
-## Schedule-X calendar
-- Import base CSS once: `import '@schedule-x/theme-default/dist/index.css'`
-- Add theme map `app/styles/schedule-x.css`:
-```css
-:root{--sx-color-primary:hsl(var(--primary));--sx-color-on-primary:hsl(var(--primary-foreground));--sx-color-surface:hsl(var(--card));--sx-color-on-surface:hsl(var(--foreground));--sx-color-outline:hsl(var(--border))}
-.dark{--sx-color-surface:hsl(var(--card));--sx-color-on-surface:hsl(var(--foreground))}
-```
-- Prefer user locale/timezone; see docs
-- Range picker in Filters: use shadcn `calendar`, `popover`, `button`, `input`, `command`
+## Calendar (react-big-calendar)
+- Uses `react-big-calendar` with drag-and-drop addon (`react-big-calendar/lib/addons/dragAndDrop`)
+- Luxon localizer: `luxonLocalizer(DateTime)` from `react-big-calendar`
+- Custom styles: `app/styles/react-big-calendar.css`
+- Custom components: toolbar, event content, context menus
+- Views: month, week (day/agenda not currently used)
+- Drag-and-drop: events can be resized, moved, duplicated (Alt/Option key)
+- External drag: issues from search panel can be dropped onto calendar
 
 ## README maintenance
 - Keep README in sync: validate, update features/commands/architecture, prune obsolete, sync env and user-facing changes

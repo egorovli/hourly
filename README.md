@@ -19,7 +19,7 @@ Reconcile GitLab commits with Jira worklogs to automate monthly time allocation.
 ## Stack
 
 **Runtime:** Bun, React Router v7 (SSR), React 19
-**UI:** Tailwind 4, shadcn/ui, Radix, react-big-calendar
+**UI:** Tailwind 4, shadcn/ui, Radix, react-big-calendar (with drag-and-drop)
 **State:** TanStack Query v5, SQLite, MikroORM 6
 **Auth:** Remix Auth (OAuth2 for Atlassian/GitLab)
 **Validation:** Zod 4, Conform
@@ -134,9 +134,20 @@ Import rules enforced: layers only import from layers below.
 ### Data Loading
 
 - Resource routes return JSON for TanStack Query
-- Custom `useAutoLoadInfiniteQuery` for background pagination
-- Handles: worklog entries, Jira issues, GitLab commits
+- Custom `useAutoLoadInfiniteQuery` hook for background pagination
+- Handles: worklog entries, Jira issues, GitLab commits, commit-issue mapping
 - Progress tracked with `AutoLoadProgress` component
+- Infinite queries automatically load next pages in background
+
+### Worklog Synchronization
+
+The app uses an **idempotent sync strategy** for persisting calendar edits to Jira:
+1. Fetch all existing worklogs for the user in the date range
+2. Delete all existing worklogs (for the selected user/date range)
+3. Create new worklogs matching current calendar state
+4. Returns success/failure counts for deletions and creations
+
+This ensures calendar state always matches Jira state after save, while handling concurrent edits gracefully.
 
 ## Configuration
 
@@ -174,9 +185,30 @@ Stored in cookie, configurable via Settings:
 bun run --filter @hourly/web test
 ```
 
-Tests co-located with source files. Dev login shortcut: `GET /dev/hijack-session`
+Tests co-located with source files using Jest and Testing Library.
 
 ## Deployment
+
+### Docker (Recommended)
+
+The project includes a Dockerfile and GitHub Actions workflow for automated builds:
+
+```bash
+# Build Docker image
+docker build -t hourly-web --target web .
+
+# Run container
+docker run -p 3000:3000 \
+  -e ATLASSIAN_CLIENT_ID=... \
+  -e ATLASSIAN_CLIENT_SECRET=... \
+  -e GITLAB_APPLICATION_ID=... \
+  -e GITLAB_APPLICATION_SECRET=... \
+  -e SESSION_SECRET=... \
+  -v $(pwd)/packages/web/data:/app/packages/web/data \
+  hourly-web
+```
+
+### Manual Deployment
 
 ```bash
 # Build
@@ -188,6 +220,8 @@ cd packages/web && bun run db:migrate
 # Start
 bun run --filter @hourly/web start
 ```
+
+**Note:** The database file (`data/database.sqlite3`) must be persisted between deployments.
 
 ## Troubleshooting
 
@@ -220,19 +254,20 @@ bun run db:migrate
 - Infinite query pagination with auto-load
 
 **UI & Interaction**
-- Calendar widget with drag-and-drop editing
-- Multi-view support (month, week, day, agenda)
+- Calendar widget with drag-and-drop editing (react-big-calendar)
+- Multi-view support (month, week views)
 - Filter panel (projects, users, date ranges)
-- Settings & preferences (theme, timezone, locale)
+- Settings & preferences (theme, timezone, locale, working hours)
 - Local worklog editor with change tracking
-
-### 🚧 In Progress
+- Auto-load progress indicators for infinite queries
 
 **Reconciliation Engine**
-- Bidirectional sync: Persist calendar edits to Jira API
-- Commit-to-worklog matching algorithm
-- Conflict resolution workflow
-- Automated time allocation suggestions
+- ✅ Bidirectional sync: Calendar edits persist to Jira API (idempotent sync)
+- ✅ Commit-to-worklog matching algorithm (groups commits by day/issue, splits workday)
+- ✅ Automated worklog suggestions from commit activity
+- ✅ Drag-and-drop from external issue search panel
+
+### 🚧 In Progress
 
 **Data Completeness**
 - Pagination for Jira projects/users endpoints
@@ -267,10 +302,10 @@ bun run db:migrate
 The project will be considered complete when:
 1. ✅ Users can authenticate with both providers
 2. ✅ Worklogs display on interactive calendar
-3. 🚧 Calendar edits persist back to Jira
-4. 🚧 Commits reconcile with worklogs automatically
+3. ✅ Calendar edits persist back to Jira (idempotent sync via delete/create)
+4. ✅ Commits reconcile with worklogs automatically (calculate-worklogs-from-commits)
 5. ❌ Monthly reports generate accurately
-6. ❌ Export functionality works for all formats
+6. ❌ Export functionality works for all formats (CSV/PDF)
 
 Contributions welcome. See [CLAUDE.md](./CLAUDE.md) for development guidelines.
 

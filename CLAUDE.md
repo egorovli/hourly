@@ -42,6 +42,8 @@ bun run --filter @hourly/web test
 - Auth: dual OAuth (Atlassian, GitLab); merged DB session; routes `auth.$provider.*`
 - Data loading: resource routes return JSON for Query; handle auth, clients, pagination
 - Infinite queries: `useAutoLoadInfiniteQuery`, `AutoLoadProgress`, `getNextPageParam`
+- Worklog sync: idempotent sync strategy (delete existing, create new) in `jira.worklog.entries.tsx` action
+- Commit reconciliation: `calculate-worklogs-from-commits` groups commits by day/issue, splits workday
 - DB: MikroORM entities (Session, Token, Profile), `orm.em.fork()`, migrations in `db/migrations/`
 - API clients: `lib/atlassian/client.ts`, `lib/gitlab/client.ts` with token refresh
 
@@ -64,16 +66,7 @@ if (process.env.NODE_ENV !== 'development') { connection = createConnection() }
 cd packages/web
 bunx --bun shadcn@latest add <component>
 ```
-Post‑gen fixes: files in `app/components/shadcn/ui` (blocks in `app/components/shadcn/blocks`); replace `@/lib/utils` → `~/lib/util/index.ts`; ensure named exports; remove `@/` imports.
-
-## Schedule‑X
-- Import once: `import '@schedule-x/theme-default/dist/index.css'`
-- Theme CSS `app/styles/schedule-x.css`:
-```css
-:root{--sx-color-primary:hsl(var(--primary));--sx-color-on-primary:hsl(var(--primary-foreground));--sx-color-surface:hsl(var(--card));--sx-color-on-surface:hsl(var(--foreground));--sx-color-outline:hsl(var(--border))}
-.dark{--sx-color-surface:hsl(var(--card));--sx-color-on-surface:hsl(var(--foreground))}
-```
-- Prefer user locale/timezone; see docs
+Post‑gen fixes: files in `app/shared/ui/shadcn/ui` (blocks in `app/shared/ui/shadcn/blocks`); replace `@/lib/utils` → `~/lib/util/index.ts`; ensure named exports; remove `@/` imports.
 
 ## Env (.env in packages/web)
 - Atlassian: `ATLASSIAN_CLIENT_ID`, `ATLASSIAN_CLIENT_SECRET`, `ATLASSIAN_CALLBACK_URL`
@@ -82,15 +75,15 @@ Post‑gen fixes: files in `app/components/shadcn/ui` (blocks in `app/components
 
 ## Testing patterns
 - Co‑located tests; Testing Library queries over snapshots; React 19 globals OK
-
-## Dev login shortcut (dev only)
-- Visit `/dev/hijack-session` → sets session, redirects `/`; uses latest fully‑authed session; 404 if none; only when `import.meta.env.DEV`
+- Jest config: `jest.config.ts`; run with `bun run --filter @hourly/web test`
 
 ## Notes
 - Route naming: `__.tsx` root layout; `__._index.tsx` nested index; `$provider` params
+- Calendar: Uses `react-big-calendar` with drag-and-drop addon; Luxon localizer; custom toolbar/event components
 - Sessions: DB‑backed `createSessionStorage` with expiration/cleanup
 - OAuth refresh: automatic; refresh tokens in DB; check expiry
 - Pagination: cursor/offset; `PAGE_SIZE=100`; infinite queries can auto‑load
+- Worklog sync: Idempotent delete/create strategy ensures calendar matches Jira after save
 
 ## README
 - Keep in sync: validate, update, prune, and sync user‑facing/env sections after changes
