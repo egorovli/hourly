@@ -4,20 +4,20 @@ import { worklogEntriesKeys } from '~/features/load-worklog-entries/index.ts'
 import type { action as updateWorklogEntriesAction } from '~/routes/jira.worklog.entries.tsx'
 
 import type {
-	UpdateWorklogsRequest,
-	UpdateWorklogsResponse,
-	UpdateWorklogsError
+	WorklogChangesRequest,
+	WorklogChangesResponse,
+	WorklogChangesError
 } from '../model/types.ts'
 
 /**
- * Mutation hook for updating worklog entries
+ * Mutation hook for saving worklog changes to Jira
  * Invalidates worklog entries queries on success
  */
 export function useUpdateWorklogEntriesMutation() {
 	const queryClient = useQueryClient()
 
-	return useMutation<UpdateWorklogsResponse, Error, UpdateWorklogsRequest>({
-		mutationFn: async (request: UpdateWorklogsRequest) => {
+	return useMutation<WorklogChangesResponse, Error, WorklogChangesRequest>({
+		mutationFn: async (request: WorklogChangesRequest) => {
 			const response = await fetch('/jira/worklog/entries', {
 				method: 'POST',
 				headers: {
@@ -27,16 +27,14 @@ export function useUpdateWorklogEntriesMutation() {
 			})
 
 			if (!response.ok) {
-				let errorData: UpdateWorklogsError | undefined
+				let errorData: WorklogChangesError | undefined
 				try {
-					errorData = (await response.json()) as UpdateWorklogsError
+					errorData = (await response.json()) as WorklogChangesError
 				} catch {
 					// If JSON parsing fails, use generic error
 				}
 
-				throw new Error(
-					errorData?.message || errorData?.error || 'Failed to update worklog entries'
-				)
+				throw new Error(errorData?.message || errorData?.error || 'Failed to save worklog changes')
 			}
 
 			const data = (await response.json()) as Awaited<ReturnType<typeof updateWorklogEntriesAction>>

@@ -2,25 +2,48 @@
  * Types for worklog entry updates
  */
 
-export interface WorklogUpdate {
-	eventId: string
-	issueKey: string
-	started: string
-	timeSpentSeconds: number
-	authorAccountId: string
+import type { LocalWorklogEntry } from '~/entities/worklog/index.ts'
+
+export interface WorklogChangesRequest {
+	newEntries: LocalWorklogEntry[]
+	modifiedEntries: LocalWorklogEntry[]
+	deletedEntries: LocalWorklogEntry[]
+	dateRange?: {
+		from: string
+		to: string
+	}
 }
 
-export interface UpdateWorklogsRequest {
-	updates: WorklogUpdate[]
-}
-
-export interface UpdateWorklogsResponse {
+export interface WorklogChangesResponse {
 	success: boolean
 	updatedCount: number
+	results: {
+		created: {
+			success: number
+			failed: number
+			errors: Array<{ entry: unknown; error: string }>
+		}
+		updated: {
+			success: number
+			failed: number
+			errors: Array<{ entry: unknown; error: string }>
+		}
+		deleted: {
+			success: number
+			failed: number
+			errors: Array<{ entry: unknown; error: string }>
+		}
+	}
+	summary: {
+		totalSuccess: number
+		totalFailed: number
+		totalProcessed: number
+	}
 	message: string
 }
 
-export interface UpdateWorklogsError {
-	error: string
-	message: string
+export interface WorklogChangesError {
+	error?: string
+	message?: string
+	errors?: Record<string, unknown>
 }

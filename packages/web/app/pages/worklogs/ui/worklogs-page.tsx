@@ -974,6 +974,7 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 										onDropFromOutside={handleIssueDropOnCalendar}
 										externalIssue={draggedIssue}
 										onLocalEventsChange={setCalendarStatsEvents}
+										dateRange={state.dateRange}
 									/>
 								)}
 							</div>
@@ -1318,6 +1319,7 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 
 							<WorklogChangesActions
 								worklogChanges={worklogChanges}
+								dateRange={state.dateRange}
 								onApply={handleWorklogApply}
 								onRevert={handleWorklogRevert}
 							/>

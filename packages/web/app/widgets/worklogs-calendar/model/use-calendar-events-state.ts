@@ -1,6 +1,7 @@
 import type { WorklogCalendarEvent } from '~/entities/index.ts'
 import type { EventInteractionArgs } from 'react-big-calendar/lib/addons/dragAndDrop'
 import type { EventChange, EventChangesSummary } from './types.ts'
+import type { DateRange } from 'react-day-picker'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -8,6 +9,8 @@ import { useUpdateWorklogEntriesMutation } from '~/features/update-worklog-entri
 
 interface UseCalendarEventsStateParams {
 	events: WorklogCalendarEvent[]
+	dateRange?: DateRange
+	currentUserAccountId?: string
 }
 
 interface UseCalendarEventsStateResult {
@@ -44,7 +47,9 @@ interface UseCalendarEventsStateResult {
  * 4. Provides handlers for save/cancel operations
  */
 export function useCalendarEventsState({
-	events
+	events,
+	dateRange,
+	currentUserAccountId
 }: UseCalendarEventsStateParams): UseCalendarEventsStateResult {
 	// Mutation for saving changes
 	const mutation = useUpdateWorklogEntriesMutation()
@@ -283,21 +288,103 @@ export function useCalendarEventsState({
 	}, [localEvents, changes])
 
 	// Save handler using mutation
+	// Strategy: Delete all existing worklogs for the user in the date range, then create all current events
 	const handleSave = useCallback(async () => {
-		// Convert changes to API format
-		const updates = Array.from(changes.values()).map(change => ({
-			eventId: change.modifiedEvent.id,
-			issueKey: change.modifiedEvent.resource.issueKey,
-			started: change.modifiedEvent.start.toISOString(),
-			timeSpentSeconds: change.modifiedEvent.resource.timeSpentSeconds,
-			authorAccountId: change.modifiedEvent.resource.authorAccountId
+		if (!dateRange?.from || !dateRange?.to) {
+			throw new Error('Date range is required to save worklogs')
+		}
+
+		// Convert dateRange to ISO date strings
+		const fromDate = dateRange.from instanceof Date ? dateRange.from : new Date(dateRange.from)
+		const toDate = dateRange.to instanceof Date ? dateRange.to : new Date(dateRange.to)
+		const fromStr = fromDate.toISOString().split('T')[0]
+		const toStr = toDate.toISOString().split('T')[0]
+
+		if (!fromStr || !toStr) {
+			throw new Error('Invalid date range format')
+		}
+
+		// Filter localEvents to only include those in the date range and for the current user
+		const eventsInRange = localEvents.filter(event => {
+			// Filter by user
+			if (currentUserAccountId && event.resource.authorAccountId !== currentUserAccountId) {
+				return false
+			}
+
+			// Filter by date range
+			const eventDate = new Date(event.start)
+			const eventDateStr = eventDate.toISOString().split('T')[0]
+			if (!eventDateStr) {
+				return false
+			}
+			return eventDateStr >= fromStr && eventDateStr <= toStr
+		})
+
+		// Get all existing worklogs (from original events) that should be deleted
+		const existingEventsInRange = originalEventsRef.current.filter(event => {
+			// Filter by user
+			if (currentUserAccountId && event.resource.authorAccountId !== currentUserAccountId) {
+				return false
+			}
+
+			// Filter by date range
+			const eventDate = new Date(event.start)
+			const eventDateStr = eventDate.toISOString().split('T')[0]
+			if (!eventDateStr) {
+				return false
+			}
+			return eventDateStr >= fromStr && eventDateStr <= toStr
+		})
+
+		// Convert existing events to deleted entries (only if they have a worklog ID)
+		const deletedEntries = existingEventsInRange
+			.filter(event => {
+				// Only delete events that have a worklog ID (format: "issueId-worklogId")
+				return event.id.includes('-') && event.id !== event.resource.issueKey
+			})
+			.map(event => ({
+				localId: event.id,
+				id: event.id, // This is the compound ID "issueId-worklogId"
+				issueKey: event.resource.issueKey,
+				summary: event.resource.issueSummary || event.title,
+				projectName: event.resource.projectName || '',
+				authorName: event.resource.authorName || '',
+				started: event.resource.started || event.start.toISOString(),
+				timeSpentSeconds: event.resource.timeSpentSeconds
+			}))
+
+		// Convert current events to new entries
+		const newEntries = eventsInRange.map(event => ({
+			localId: event.id,
+			issueKey: event.resource.issueKey,
+			summary: event.resource.issueSummary || event.title,
+			projectName: event.resource.projectName || '',
+			authorName: event.resource.authorName || '',
+			started: event.resource.started || event.start.toISOString(),
+			timeSpentSeconds: event.resource.timeSpentSeconds,
+			isNew: true
 		}))
 
-		await mutation.mutateAsync({ updates })
+		await mutation.mutateAsync({
+			newEntries,
+			modifiedEntries: [], // We're deleting and recreating, so no modifications needed
+			deletedEntries,
+			dateRange: {
+				from: fromStr,
+				to: toStr
+			}
+		})
 
 		// Clear changes after successful save
 		setChanges(new Map())
-	}, [changes, mutation])
+		// Update original events to match current state
+		originalEventsRef.current = localEvents.map(event => ({
+			...event,
+			start: new Date(event.start),
+			end: new Date(event.end),
+			resource: { ...event.resource }
+		}))
+	}, [localEvents, dateRange, currentUserAccountId, mutation])
 
 	// Cancel handler - revert to original
 	const handleCancel = useCallback(() => {

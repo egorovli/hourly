@@ -3,7 +3,7 @@ import type { Route as RootRoute } from '../../../../../+types/root.ts'
 
 import { CalendarIcon, Clock10Icon, ClockIcon, Loader2, Settings, TimerIcon } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useFetcher, useRouteLoaderData } from 'react-router'
+import { Link, useFetcher, useRevalidator, useRouteLoaderData } from 'react-router'
 
 import { Button } from '~/shared/ui/shadcn/ui/button.tsx'
 import { Label } from '~/shared/ui/shadcn/ui/label.tsx'
@@ -97,9 +97,46 @@ export function AppSidebar({ sessionUser, ...props }: AppSidebarProps) {
 
 	const [isOpen, setIsOpen] = useState(false)
 	const [isLoading, setIsLoading] = useState(false)
-	// const [durationValue, setDurationValue] = useState('60')
-	// const [durationUnit, setDurationUnit] = useState<'minutes' | 'seconds'>('minutes')
 	const fetcher = useFetcher()
+	const revalidator = useRevalidator()
+
+	// Controlled state for form fields
+	const [timezone, setTimezone] = useState<string>(preferences.timezone ?? 'UTC')
+	const [weekStartsOn, setWeekStartsOn] = useState<string>(
+		preferences.weekStartsOn?.toString(10) ?? '1'
+	)
+
+	// Update controlled state when preferences change
+	useEffect(() => {
+		if (preferences.timezone) {
+			setTimezone(preferences.timezone)
+		}
+		if (preferences.weekStartsOn !== undefined) {
+			setWeekStartsOn(preferences.weekStartsOn.toString(10))
+		}
+	}, [preferences.timezone, preferences.weekStartsOn])
+
+	// Build timezone list including browser-detected timezone if not already present
+	const timezoneList = useMemo(() => {
+		const commonTimezones = [
+			'Europe/Moscow',
+			'Europe/London',
+			'Europe/Warsaw',
+			'America/New_York',
+			'America/Chicago',
+			'America/Los_Angeles',
+			'Asia/Tokyo',
+			'Asia/Shanghai',
+			'Australia/Sydney'
+		]
+
+		const currentTimezone = preferences.timezone ?? 'UTC'
+		if (currentTimezone && !commonTimezones.includes(currentTimezone)) {
+			return [currentTimezone, ...commonTimezones]
+		}
+
+		return commonTimezones
+	}, [preferences.timezone])
 
 	// Handle minimum 2-second loading animation
 	useEffect(() => {
@@ -115,6 +152,8 @@ export function AppSidebar({ sessionUser, ...props }: AppSidebarProps) {
 				// Close dialog on successful submission (no error)
 				if (!fetcher.data || (fetcher.data && !(fetcher.data as { error?: unknown }).error)) {
 					setIsOpen(false)
+					// Reload root data to get updated preferences
+					revalidator.revalidate()
 				}
 			}, 2000)
 
@@ -124,16 +163,21 @@ export function AppSidebar({ sessionUser, ...props }: AppSidebarProps) {
 		}
 
 		return undefined
-	}, [fetcher.state, fetcher.data, isLoading])
+	}, [fetcher.state, fetcher.data, isLoading, revalidator])
 
 	const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault()
 		const formData = new FormData(e.currentTarget)
 
-		// Convert duration to minutes based on unit
-		// const value = Number.parseInt(durationValue, 10)
-		// const minutes = durationUnit === 'seconds' ? Math.ceil(value / 60) : value
-		// formData.set('minimumDurationMinutes', String(minutes))
+		// Ensure timezone is included in form data
+		if (timezone) {
+			formData.set('timezone', timezone)
+		}
+
+		// Ensure weekStartsOn is included in form data
+		if (weekStartsOn) {
+			formData.set('weekStartsOn', weekStartsOn)
+		}
 
 		fetcher.submit(formData, {
 			method: 'post',
@@ -213,7 +257,8 @@ export function AppSidebar({ sessionUser, ...props }: AppSidebarProps) {
 									<Label htmlFor='timezone'>Timezone</Label>
 									<Select
 										name='timezone'
-										defaultValue={preferences.timezone}
+										value={timezone}
+										onValueChange={setTimezone}
 									>
 										<SelectTrigger
 											id='timezone'
@@ -222,16 +267,7 @@ export function AppSidebar({ sessionUser, ...props }: AppSidebarProps) {
 											<SelectValue placeholder='Select timezone' />
 										</SelectTrigger>
 										<SelectContent>
-											{[
-												'Europe/Moscow',
-												'Europe/London',
-												'Europe/Warsaw',
-												'America/New_York',
-												'America/Los_Angeles',
-												'Asia/Tokyo',
-												'Asia/Shanghai',
-												'Australia/Sydney'
-											].map(tz => (
+											{timezoneList.map(tz => (
 												<SelectItem
 													key={tz}
 													value={tz}
@@ -250,7 +286,8 @@ export function AppSidebar({ sessionUser, ...props }: AppSidebarProps) {
 									<Label htmlFor='week-starts'>Week starts on</Label>
 									<Select
 										name='weekStartsOn'
-										defaultValue={preferences.weekStartsOn?.toString(10)}
+										value={weekStartsOn}
+										onValueChange={setWeekStartsOn}
 									>
 										<SelectTrigger
 											id='week-starts'

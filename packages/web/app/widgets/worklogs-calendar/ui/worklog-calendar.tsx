@@ -7,9 +7,11 @@ import type {
 	EventProps
 } from 'react-big-calendar'
 import type { EventInteractionArgs } from 'react-big-calendar/lib/addons/dragAndDrop'
+import type { DateRange } from 'react-day-picker'
 
 import type { DragEvent as ReactDragEvent, ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { DateTime, Settings } from 'luxon'
 
 import type { WorklogCalendarEvent } from '~/entities/index.ts'
 import type { CalendarCompactMode } from '~/domain/preferences.ts'
@@ -68,6 +70,7 @@ export interface WorklogsCalendarProps {
 		issue: ExternalIssueDragItem | null
 	}) => void
 	onLocalEventsChange?: (events: WorklogCalendarEvent[]) => void
+	dateRange?: DateRange
 }
 
 export function WorklogsCalendar({
@@ -95,7 +98,8 @@ export function WorklogsCalendar({
 	workingDayEndTime = '18:00',
 	externalIssue = null,
 	onDropFromOutside,
-	onLocalEventsChange
+	onLocalEventsChange,
+	dateRange
 }: WorklogsCalendarProps): ReactNode {
 	// Use local state management with change tracking
 	const {
@@ -110,7 +114,11 @@ export function WorklogsCalendar({
 		handleCancel,
 		isSaving,
 		saveError
-	} = useCalendarEventsState({ events })
+	} = useCalendarEventsState({
+		events,
+		dateRange,
+		currentUserAccountId
+	})
 
 	// Dialog state management
 	const [dialogOpen, setDialogOpen] = useState(false)
@@ -561,27 +569,13 @@ export function WorklogsCalendar({
 
 	// Calculate dynamic min/max based on local events with 30min padding
 	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: time-range normalization handles multiple edge cases for calendar display
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Settings.defaultZone.name is intentionally included to trigger recalculation when timezone changes
 	const dynamicMinMax = useMemo(() => {
 		const base = date ?? new Date()
 
 		// Parse working hours settings
 		const [startHourStr, startMinStr] = workingDayStartTime.split(':').map(Number)
 		const [endHourStr, endMinStr] = workingDayEndTime.split(':').map(Number)
-
-		const isInvalid =
-			Number.isNaN(startHourStr) ||
-			Number.isNaN(startMinStr) ||
-			Number.isNaN(endHourStr) ||
-			Number.isNaN(endMinStr)
-
-		// Fallback defaults
-		if (isInvalid) {
-			const defaultStart = new Date(base)
-			defaultStart.setHours(8, 0, 0, 0)
-			const defaultEnd = new Date(base)
-			defaultEnd.setHours(18, 0, 0, 0)
-			return { min: defaultStart, max: defaultEnd }
-		}
 
 		// Start with working hours minus/plus 30 minutes padding
 		const startMinutes = (startHourStr ?? 9) * 60 + (startMinStr ?? 0) - 30
@@ -594,36 +588,138 @@ export function WorklogsCalendar({
 
 		// Scan through all display events (including local changes and draft)
 		if (displayEvents.length > 0) {
+			// Get start of day in the user's timezone using Luxon
+			// DateTime.fromJSDate uses Settings.defaultZone automatically
+			const baseDateTime = DateTime.fromJSDate(base)
+			const startOfDayLocal = baseDateTime.startOf('day')
+
 			for (const event of displayEvents) {
-				// Calculate event start/end in minutes since midnight
-				const eventStartMinutes = event.start.getHours() * 60 + event.start.getMinutes()
-				const eventEndMinutes = event.end.getHours() * 60 + event.end.getMinutes()
+				// Convert event dates to Luxon DateTime in user's timezone
+				const eventStartLocal = DateTime.fromJSDate(event.start)
+				const eventEndLocal = DateTime.fromJSDate(event.end)
+
+				// Calculate minutes since midnight in the user's timezone
+				const eventStartMinutes = Math.floor(
+					eventStartLocal.diff(startOfDayLocal, 'minutes').minutes
+				)
+				const eventEndMinutes = Math.floor(eventEndLocal.diff(startOfDayLocal, 'minutes').minutes)
+
+				// Ensure valid values
+				if (Number.isNaN(eventStartMinutes) || Number.isNaN(eventEndMinutes)) {
+					continue
+				}
+
+				// Clamp to valid range (0-1440 minutes = 24 hours)
+				const clampedStartMinutes = Math.max(0, Math.min(1440, eventStartMinutes))
+				const clampedEndMinutes = Math.max(0, Math.min(1440, eventEndMinutes))
 
 				// Current min/max in minutes
 				const currentMinMinutes = minHour * 60 + minMinutes
 				const currentMaxMinutes = maxHour * 60 + maxMinutes
 
 				// Expand range if event is outside, with 30min padding
-				if (eventStartMinutes < currentMinMinutes) {
-					const paddedStart = Math.max(0, eventStartMinutes - 30)
+				if (clampedStartMinutes < currentMinMinutes) {
+					const paddedStart = Math.max(0, clampedStartMinutes - 30)
 					minHour = Math.floor(paddedStart / 60)
 					minMinutes = paddedStart % 60
 				}
-				if (eventEndMinutes > currentMaxMinutes) {
-					const paddedEnd = Math.min(24 * 60, eventEndMinutes + 30)
+				if (clampedEndMinutes > currentMaxMinutes) {
+					const paddedEnd = Math.min(24 * 60, clampedEndMinutes + 30)
 					maxHour = Math.floor(paddedEnd / 60)
 					maxMinutes = paddedEnd % 60
 				}
 			}
 		}
 
-		const calculatedMin = new Date(base)
-		calculatedMin.setHours(minHour, minMinutes, 0, 0)
-		const calculatedMax = new Date(base)
-		calculatedMax.setHours(maxHour, maxMinutes, 0, 0)
+		// Create Date objects using Luxon to ensure correct timezone handling
+		// IMPORTANT: React Big Calendar expects min/max to be Date objects on the same day
+		// We create DateTime objects in the user's timezone, then convert to JS Date
+		// The localizer will handle displaying them in the correct timezone
+		const baseDateTime = DateTime.fromJSDate(base)
+
+		// Get the start of day in the user's timezone
+		const startOfDayInTimezone = baseDateTime.startOf('day')
+
+		// Create DateTime objects in the user's timezone with the calculated hours/minutes
+		const minDateTime = startOfDayInTimezone.plus({ hours: minHour, minutes: minMinutes })
+		const maxDateTime = startOfDayInTimezone.plus({ hours: maxHour, minutes: maxMinutes })
+
+		// Convert to JS Date objects
+		// These represent absolute moments in time that will be displayed correctly by the localizer
+		const calculatedMin = minDateTime.toJSDate()
+		const calculatedMax = maxDateTime.toJSDate()
+
+		// Ensure both dates are valid and min < max
+		// Also ensure they're on the same calendar day (react-big-calendar requirement)
+		if (
+			!calculatedMin ||
+			!calculatedMax ||
+			calculatedMin >= calculatedMax ||
+			Number.isNaN(calculatedMin.getTime()) ||
+			Number.isNaN(calculatedMax.getTime())
+		) {
+			// Fallback to safe defaults using Luxon
+			const defaultStart = startOfDayInTimezone.plus({ hours: 8 }).toJSDate()
+			const defaultEnd = startOfDayInTimezone.plus({ hours: 18 }).toJSDate()
+			return { min: defaultStart, max: defaultEnd }
+		}
+
+		// Additional validation: ensure min and max are on the same day in the user's timezone
+		// This is critical for react-big-calendar's getSlotMetrics function
+		// Compare dates in the user's timezone, not UTC
+		const minDateInTimezone = DateTime.fromJSDate(calculatedMin)
+		const maxDateInTimezone = DateTime.fromJSDate(calculatedMax)
+		const minDateStr = minDateInTimezone.toFormat('yyyy-MM-dd')
+		const maxDateStr = maxDateInTimezone.toFormat('yyyy-MM-dd')
+
+		if (minDateStr !== maxDateStr) {
+			// If they're on different days in the user's timezone, clamp max to end of min's day
+			const endOfMinDay = startOfDayInTimezone.endOf('day')
+			const clampedMax = Math.min(calculatedMax.getTime(), endOfMinDay.toJSDate().getTime())
+			const calculatedMaxClamped = new Date(clampedMax)
+
+			// Ensure clamped max is still > min
+			if (calculatedMaxClamped <= calculatedMin) {
+				const defaultStart = startOfDayInTimezone.plus({ hours: 8 }).toJSDate()
+				const defaultEnd = startOfDayInTimezone.plus({ hours: 18 }).toJSDate()
+				return { min: defaultStart, max: defaultEnd }
+			}
+
+			return { min: calculatedMin, max: calculatedMaxClamped }
+		}
+
+		// Final validation: ensure min and max are on the same UTC day
+		// React Big Calendar's getSlotMetrics calculates slots based on UTC dates internally
+		// so we need to ensure they're on the same UTC day to avoid "invalid array length" errors
+		const minUTCYear = calculatedMin.getUTCFullYear()
+		const minUTCMonth = calculatedMin.getUTCMonth()
+		const minUTCDate = calculatedMin.getUTCDate()
+		const maxUTCYear = calculatedMax.getUTCFullYear()
+		const maxUTCMonth = calculatedMax.getUTCMonth()
+		const maxUTCDate = calculatedMax.getUTCDate()
+
+		if (minUTCYear !== maxUTCYear || minUTCMonth !== maxUTCMonth || minUTCDate !== maxUTCDate) {
+			// If they're on different UTC days, clamp max to end of min's UTC day
+			const endOfMinUTCDay = new Date(
+				Date.UTC(minUTCYear, minUTCMonth, minUTCDate, 23, 59, 59, 999)
+			)
+			const clampedMax = Math.min(calculatedMax.getTime(), endOfMinUTCDay.getTime())
+			const calculatedMaxClamped = new Date(clampedMax)
+
+			// Ensure clamped max is still > min
+			if (calculatedMaxClamped <= calculatedMin) {
+				const defaultStart = startOfDayInTimezone.plus({ hours: 8 }).toJSDate()
+				const defaultEnd = startOfDayInTimezone.plus({ hours: 18 }).toJSDate()
+				return { min: defaultStart, max: defaultEnd }
+			}
+
+			return { min: calculatedMin, max: calculatedMaxClamped }
+		}
 
 		return { min: calculatedMin, max: calculatedMax }
-	}, [date, displayEvents, workingDayStartTime, workingDayEndTime])
+		// Note: DateTime.fromJSDate uses Settings.defaultZone automatically when called
+		// When timezone changes, Settings.defaultZone changes, which triggers recalculation
+	}, [date, displayEvents, workingDayStartTime, workingDayEndTime, Settings.defaultZone.name])
 
 	// Custom event prop getter to style draft events differently
 	const customEventPropGetter = useCallback<EventPropGetter<WorklogCalendarEvent>>(

@@ -9,7 +9,7 @@ import type {
 } from 'react-big-calendar'
 import type { WorklogsPageLoaderData } from './types.ts'
 
-import { DateTime } from 'luxon'
+import { DateTime, Settings } from 'luxon'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { invariant } from '~/lib/util/index.ts'
 import { luxonLocalizer, Views } from 'react-big-calendar'
@@ -48,9 +48,17 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 
 	// Localizer per user settings
 	const luxonFirstDayOfWeek = weekStartsOn === 0 ? 7 : weekStartsOn
+	const timezone = preferences.timezone ?? 'UTC'
+
 	const localizer = useMemo(() => {
+		// Configure Luxon's default timezone for react-big-calendar
+		// This must be set before creating the localizer
+		Settings.defaultZone = timezone
+
+		// Recreate localizer when timezone or weekStartsOn changes
+		// The localizer will use Settings.defaultZone internally
 		return luxonLocalizer(DateTime, { firstDayOfWeek: luxonFirstDayOfWeek })
-	}, [luxonFirstDayOfWeek])
+	}, [luxonFirstDayOfWeek, timezone])
 
 	// Feature state
 	const [state, dispatch] = useWorklogState()
@@ -309,15 +317,25 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 	const totalCommitReferencedIssues = commitIssueKeys.length
 
 	// Calendar transforms and getters
+	// React Big Calendar will automatically use the timezone from Settings.defaultZone
+	// via the localizer, so we just need to ensure events update when preferences change
 	const calendarEvents = useMemo<WorklogCalendarEvent[]>(() => {
 		if (!worklogDebugEntries || worklogDebugEntries.length === 0) {
 			return []
 		}
+
+		// Reference timezone to ensure recalculation when it changes
+		// The localizer handles timezone display, but we need to trigger recalculation
+		void preferences.timezone
+
 		return worklogDebugEntries
 			.filter(entry => entry.started && entry.timeSpentSeconds > 0)
 			.map<WorklogCalendarEvent>(entry => {
+				// Date objects represent absolute moments in time (UTC)
+				// React Big Calendar + Luxon localizer will handle timezone display
 				const startDate = new Date(entry.started ?? new Date().toISOString())
 				const endDate = new Date(startDate.getTime() + entry.timeSpentSeconds * 1000)
+
 				return {
 					id: entry.id ?? entry.issueKey,
 					title: `${entry.issueKey}: ${entry.summary}`,
@@ -334,7 +352,7 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 					}
 				}
 			})
-	}, [worklogDebugEntries])
+	}, [worklogDebugEntries, preferences.timezone])
 
 	const calendarEventPropGetter = useCallback<EventPropGetter<WorklogCalendarEvent>>(event => {
 		const colors = generateColorFromString(event.resource.projectName)
