@@ -113,7 +113,8 @@ export function WorklogsCalendar({
 		handleSave,
 		handleCancel,
 		isSaving,
-		saveError
+		saveError,
+		getWorklogChanges
 	} = useCalendarEventsState({
 		events,
 		dateRange,
@@ -771,6 +772,7 @@ export function WorklogsCalendar({
 					localEventsCount={localEvents.length}
 					isSaving={isSaving}
 					saveError={saveError}
+					getWorklogChanges={getWorklogChanges}
 				/>
 				<SlotContextMenu
 					onCreate={handleCreateEventClick}

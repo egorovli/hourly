@@ -1,7 +1,8 @@
 import type { EventChangesSummary } from '../model/types.ts'
+import type { LocalWorklogEntry, WorklogChanges } from '~/entities/worklog/index.ts'
 
 import { AlertCircle, Check, X, Trash2, MoreVertical } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 
 import { Button } from '~/shared/ui/shadcn/ui/button.tsx'
@@ -19,6 +20,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger
 } from '~/shared/ui/shadcn/ui/dropdown-menu.tsx'
+import { ConfirmWorklogSaveDialog } from '~/features/confirm-worklog-save/index.ts'
 
 export interface WorklogCalendarActionsProps {
 	changesSummary: EventChangesSummary
@@ -28,6 +30,39 @@ export interface WorklogCalendarActionsProps {
 	localEventsCount?: number
 	isSaving: boolean
 	saveError: Error | null
+	getWorklogChanges: () => {
+		newEntries: Array<{
+			localId: string
+			issueKey: string
+			summary: string
+			projectName: string
+			authorName: string
+			started: string
+			timeSpentSeconds: number
+			isNew?: boolean
+		}>
+		modifiedEntries: Array<{
+			localId: string
+			id?: string
+			issueKey: string
+			summary: string
+			projectName: string
+			authorName: string
+			started: string
+			timeSpentSeconds: number
+		}>
+		deletedEntries: Array<{
+			localId: string
+			id?: string
+			issueKey: string
+			summary: string
+			projectName: string
+			authorName: string
+			started: string
+			timeSpentSeconds: number
+		}>
+		totalChanges: number
+	}
 }
 
 export function WorklogCalendarActions({
@@ -37,9 +72,23 @@ export function WorklogCalendarActions({
 	onDeleteAll,
 	localEventsCount = 0,
 	isSaving,
-	saveError
+	saveError,
+	getWorklogChanges
 }: WorklogCalendarActionsProps): React.ReactNode {
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+	const [saveDialogOpen, setSaveDialogOpen] = useState(false)
+
+	// Convert worklog changes to WorklogChanges format for the dialog
+	const worklogChanges = useMemo<WorklogChanges>(() => {
+		const changes = getWorklogChanges()
+		return {
+			newEntries: changes.newEntries as LocalWorklogEntry[],
+			modifiedEntries: changes.modifiedEntries as LocalWorklogEntry[],
+			deletedEntries: changes.deletedEntries as LocalWorklogEntry[],
+			hasChanges: changes.totalChanges > 0,
+			changeCount: changes.totalChanges
+		}
+	}, [getWorklogChanges])
 
 	// Show error toast when save fails
 	useEffect(() => {
@@ -48,31 +97,29 @@ export function WorklogCalendarActions({
 				description: saveError.message,
 				action: {
 					label: 'Retry',
-					onClick: () => onSave()
+					onClick: () => setSaveDialogOpen(true)
 				}
 			})
 		}
-	}, [saveError, onSave])
+	}, [saveError])
 
-	const hasEntries = localEventsCount > 0
-	const showActions = changesSummary.hasChanges || hasEntries
+	const handleSaveClick = useCallback(() => {
+		setSaveDialogOpen(true)
+	}, [])
 
-	if (!showActions) {
-		return null
-	}
-
-	const handleSave = async () => {
+	const handleConfirmSave = useCallback(async () => {
 		try {
 			await onSave()
+			setSaveDialogOpen(false)
 			toast.success('Changes saved successfully', {
-				description: `Updated ${changesSummary.totalChanges} worklog ${changesSummary.totalChanges === 1 ? 'entry' : 'entries'}`
+				description: `Updated ${worklogChanges.changeCount} worklog ${worklogChanges.changeCount === 1 ? 'entry' : 'entries'}`
 			})
 		} catch {
 			// Error is handled by useEffect above
 		}
-	}
+	}, [onSave, worklogChanges.changeCount])
 
-	const handleDeleteAll = () => {
+	const handleDeleteAll = useCallback(() => {
 		if (onDeleteAll) {
 			onDeleteAll()
 			setDeleteDialogOpen(false)
@@ -80,6 +127,13 @@ export function WorklogCalendarActions({
 				description: `Removed ${localEventsCount} worklog ${localEventsCount === 1 ? 'entry' : 'entries'}`
 			})
 		}
+	}, [onDeleteAll, localEventsCount])
+
+	const hasEntries = localEventsCount > 0
+	const showActions = changesSummary.hasChanges || hasEntries
+
+	if (!showActions) {
+		return null
 	}
 
 	return (
@@ -122,7 +176,7 @@ export function WorklogCalendarActions({
 							</Button>
 							<Button
 								size='sm'
-								onClick={handleSave}
+								onClick={handleSaveClick}
 								disabled={isSaving}
 							>
 								<Check className='h-4 w-4' />
@@ -186,6 +240,14 @@ export function WorklogCalendarActions({
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>
+
+			<ConfirmWorklogSaveDialog
+				open={saveDialogOpen}
+				onOpenChange={setSaveDialogOpen}
+				worklogChanges={worklogChanges}
+				isSaving={isSaving}
+				onConfirm={handleConfirmSave}
+			/>
 		</>
 	)
 }

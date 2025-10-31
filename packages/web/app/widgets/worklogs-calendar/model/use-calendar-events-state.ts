@@ -35,6 +35,39 @@ interface UseCalendarEventsStateResult {
 	handleCancel: () => void
 	isSaving: boolean
 	saveError: Error | null
+	getWorklogChanges: () => {
+		newEntries: Array<{
+			localId: string
+			issueKey: string
+			summary: string
+			projectName: string
+			authorName: string
+			started: string
+			timeSpentSeconds: number
+			isNew?: boolean
+		}>
+		modifiedEntries: Array<{
+			localId: string
+			id?: string
+			issueKey: string
+			summary: string
+			projectName: string
+			authorName: string
+			started: string
+			timeSpentSeconds: number
+		}>
+		deletedEntries: Array<{
+			localId: string
+			id?: string
+			issueKey: string
+			summary: string
+			projectName: string
+			authorName: string
+			started: string
+			timeSpentSeconds: number
+		}>
+		totalChanges: number
+	}
 }
 
 /**
@@ -400,6 +433,164 @@ export function useCalendarEventsState({
 		setChanges(new Map())
 	}, [])
 
+	// Helper to get worklog changes that will be saved (for confirmation dialog)
+	// This computes a logical diff for UI display, not the technical implementation
+	const getWorklogChanges = useCallback(() => {
+		if (!dateRange?.from || !dateRange?.to) {
+			return {
+				newEntries: [],
+				modifiedEntries: [],
+				deletedEntries: [],
+				totalChanges: 0
+			}
+		}
+
+		// Convert dateRange to ISO date strings
+		const fromDate = dateRange.from instanceof Date ? dateRange.from : new Date(dateRange.from)
+		const toDate = dateRange.to instanceof Date ? dateRange.to : new Date(dateRange.to)
+		const fromStr = fromDate.toISOString().split('T')[0]
+		const toStr = toDate.toISOString().split('T')[0]
+
+		if (!fromStr || !toStr) {
+			return {
+				newEntries: [],
+				modifiedEntries: [],
+				deletedEntries: [],
+				totalChanges: 0
+			}
+		}
+
+		// Filter events to only include those in the date range and for the current user
+		const filterEvents = (events: WorklogCalendarEvent[]) => {
+			return events.filter(event => {
+				// Filter by user
+				if (currentUserAccountId && event.resource.authorAccountId !== currentUserAccountId) {
+					return false
+				}
+
+				// Filter by date range
+				const eventDate = new Date(event.start)
+				const eventDateStr = eventDate.toISOString().split('T')[0]
+				if (!eventDateStr) {
+					return false
+				}
+				return eventDateStr >= fromStr && eventDateStr <= toStr
+			})
+		}
+
+		const localEventsInRange = filterEvents(localEvents)
+		const originalEventsInRange = filterEvents(originalEventsRef.current)
+
+		// Create a map of original events by ID for quick lookup
+		const originalEventsMap = new Map<string, WorklogCalendarEvent>()
+		for (const event of originalEventsInRange) {
+			originalEventsMap.set(event.id, event)
+		}
+
+		// Create a map of local events by ID
+		const localEventsMap = new Map<string, WorklogCalendarEvent>()
+		for (const event of localEventsInRange) {
+			localEventsMap.set(event.id, event)
+		}
+
+		const newEntries: Array<{
+			localId: string
+			issueKey: string
+			summary: string
+			projectName: string
+			authorName: string
+			started: string
+			timeSpentSeconds: number
+			isNew?: boolean
+		}> = []
+		const modifiedEntries: Array<{
+			localId: string
+			id?: string
+			issueKey: string
+			summary: string
+			projectName: string
+			authorName: string
+			started: string
+			timeSpentSeconds: number
+		}> = []
+		const deletedEntries: Array<{
+			localId: string
+			id?: string
+			issueKey: string
+			summary: string
+			projectName: string
+			authorName: string
+			started: string
+			timeSpentSeconds: number
+		}> = []
+
+		// Process local events: determine if they're new or modified
+		for (const localEvent of localEventsInRange) {
+			const originalEvent = originalEventsMap.get(localEvent.id)
+
+			const entry = {
+				localId: localEvent.id,
+				id:
+					localEvent.id.includes('-') && localEvent.id !== localEvent.resource.issueKey
+						? localEvent.id
+						: undefined,
+				issueKey: localEvent.resource.issueKey,
+				summary: localEvent.resource.issueSummary || localEvent.title,
+				projectName: localEvent.resource.projectName || '',
+				authorName: localEvent.resource.authorName || '',
+				started: localEvent.resource.started || localEvent.start.toISOString(),
+				timeSpentSeconds: localEvent.resource.timeSpentSeconds
+			}
+
+			if (originalEvent) {
+				// Check if it's modified
+				const isModified =
+					originalEvent.resource.issueKey !== localEvent.resource.issueKey ||
+					originalEvent.resource.started !== localEvent.resource.started ||
+					originalEvent.resource.timeSpentSeconds !== localEvent.resource.timeSpentSeconds ||
+					originalEvent.start.getTime() !== localEvent.start.getTime() ||
+					originalEvent.end.getTime() !== localEvent.end.getTime()
+
+				if (isModified) {
+					modifiedEntries.push(entry)
+				}
+				// If not modified, it's unchanged (ignore it)
+			} else {
+				// New entry: doesn't exist in original
+				newEntries.push({ ...entry, isNew: true })
+			}
+		}
+
+		// Process original events: find deleted ones
+		for (const originalEvent of originalEventsInRange) {
+			// Only consider events with real worklog IDs (not just issue keys)
+			if (!originalEvent.id.includes('-') || originalEvent.id === originalEvent.resource.issueKey) {
+				continue
+			}
+
+			// If original event is not in local events, it's deleted
+			if (!localEventsMap.has(originalEvent.id)) {
+				deletedEntries.push({
+					localId: originalEvent.id,
+					id: originalEvent.id,
+					issueKey: originalEvent.resource.issueKey,
+					summary: originalEvent.resource.issueSummary || originalEvent.title,
+					projectName: originalEvent.resource.projectName || '',
+					authorName: originalEvent.resource.authorName || '',
+					started: originalEvent.resource.started || originalEvent.start.toISOString(),
+					timeSpentSeconds: originalEvent.resource.timeSpentSeconds
+				})
+			}
+		}
+
+		return {
+			newEntries,
+			modifiedEntries,
+			deletedEntries,
+			totalChanges: newEntries.length + modifiedEntries.length + deletedEntries.length
+		}
+	}, [localEvents, dateRange, currentUserAccountId])
+
 	// Compute changes summary
 	const changesSummary = useMemo<EventChangesSummary>(
 		() => ({
@@ -421,6 +612,7 @@ export function useCalendarEventsState({
 		handleSave,
 		handleCancel,
 		isSaving: mutation.isPending,
-		saveError: mutation.error
+		saveError: mutation.error,
+		getWorklogChanges
 	}
 }

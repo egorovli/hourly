@@ -1,5 +1,5 @@
 import type { WorklogChanges } from '~/entities/worklog/index.ts'
-import { AlertTriangle, Loader2, Plus, Edit, Trash2 } from 'lucide-react'
+import { AlertTriangle, Loader2, Plus, Edit, Trash2, Clock, Calendar, Check } from 'lucide-react'
 
 import {
 	Dialog,
@@ -12,6 +12,8 @@ import {
 import { Button } from '~/shared/ui/shadcn/ui/button.tsx'
 import { Badge } from '~/shared/ui/shadcn/ui/badge.tsx'
 import { ScrollArea } from '~/shared/ui/shadcn/ui/scroll-area.tsx'
+import { Separator } from '~/shared/ui/shadcn/ui/separator.tsx'
+import { Card } from '~/shared/ui/shadcn/ui/card.tsx'
 import { formatDurationFromSeconds } from '~/shared/index.ts'
 
 export interface ConfirmWorklogSaveDialogProps {
@@ -43,31 +45,32 @@ export function ConfirmWorklogSaveDialog({
 			open={open}
 			onOpenChange={onOpenChange}
 		>
-			<DialogContent className='max-w-2xl'>
-				<DialogHeader>
-					<div className='flex items-start gap-3'>
-						<div className='mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-destructive/10'>
-							<AlertTriangle className='h-5 w-5 text-destructive' />
-						</div>
-						<div className='flex-1'>
-							<DialogTitle className='text-xl'>Confirm Worklog Changes</DialogTitle>
-							<DialogDescription className='mt-2 text-base'>
-								You are about to save {totalChanges} worklog{' '}
-								{totalChanges === 1 ? 'change' : 'changes'} to Jira. This action is permanent and
-								cannot be undone.
+			<DialogContent className='max-w-3xl sm:max-w-3xl'>
+				<DialogHeader className='space-y-3 pb-2'>
+					<div className='flex items-start gap-4'>
+						<div className='flex-1 space-y-1'>
+							<DialogTitle className='text-2xl font-semibold tracking-tight'>
+								Confirm Worklog Changes
+							</DialogTitle>
+							<DialogDescription className='text-base text-muted-foreground'>
+								You are about to save{' '}
+								<span className='font-semibold text-foreground'>{totalChanges}</span> worklog{' '}
+								{totalChanges === 1 ? 'change' : 'changes'} to Jira. This action is{' '}
+								<span className='font-semibold text-foreground'>permanent</span> and cannot be
+								undone.
 							</DialogDescription>
 						</div>
 					</div>
 				</DialogHeader>
 
-				<div className='flex flex-col gap-4'>
+				<div className='space-y-5'>
 					{/* Warning banner */}
-					<div className='rounded-lg border border-destructive/50 bg-destructive/10 p-3'>
-						<div className='flex items-start gap-2'>
-							<AlertTriangle className='mt-0.5 h-4 w-4 shrink-0 text-destructive' />
-							<div className='flex-1'>
-								<p className='text-sm font-semibold text-destructive'>Permanent Action Warning</p>
-								<p className='mt-1 text-xs text-destructive/90'>
+					<div className='rounded-lg border border-amber-200/40 bg-amber-50/30 p-4 dark:border-amber-900/30 dark:bg-amber-950/20'>
+						<div className='flex items-start gap-3'>
+							<AlertTriangle className='mt-0.5 h-5 w-5 shrink-0 text-amber-600/70 dark:text-amber-500/60' />
+							<div className='flex-1 space-y-1'>
+								<p className='text-sm font-semibold text-foreground'>Permanent Action Warning</p>
+								<p className='text-sm leading-relaxed text-muted-foreground'>
 									These changes will be permanently saved to your Jira worklogs. Once saved, they
 									cannot be automatically reverted. Please review all changes carefully before
 									confirming.
@@ -76,185 +79,243 @@ export function ConfirmWorklogSaveDialog({
 						</div>
 					</div>
 
-					{/* Summary */}
-					<div className='grid grid-cols-3 gap-3'>
+					{/* Summary - horizontal stat bar */}
+					<div className='flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 p-4'>
 						{worklogChanges.newEntries.length > 0 && (
-							<div className='flex flex-col gap-1 rounded-lg border border-green-200 bg-green-50/50 p-3 dark:border-green-900 dark:bg-green-950/30'>
-								<div className='flex items-center gap-2'>
-									<Plus className='h-4 w-4 text-green-600 dark:text-green-400' />
-									<span className='text-xs font-semibold uppercase tracking-wide text-green-700 dark:text-green-300'>
-										New Entries
+							<div className='flex items-center gap-2'>
+								<div className='flex h-7 w-7 items-center justify-center rounded-md bg-primary/10'>
+									<Plus className='h-3.5 w-3.5 text-primary' />
+								</div>
+								<div className='flex flex-col'>
+									<span className='text-xs font-medium text-muted-foreground'>New</span>
+									<span className='text-base font-semibold text-foreground'>
+										{worklogChanges.newEntries.length}
 									</span>
 								</div>
-								<p className='text-lg font-bold text-green-700 dark:text-green-300'>
-									{worklogChanges.newEntries.length}
-								</p>
 							</div>
 						)}
 						{worklogChanges.modifiedEntries.length > 0 && (
-							<div className='flex flex-col gap-1 rounded-lg border border-yellow-200 bg-yellow-50/50 p-3 dark:border-yellow-900 dark:bg-yellow-950/30'>
+							<>
+								<Separator
+									orientation='vertical'
+									className='h-8'
+								/>
 								<div className='flex items-center gap-2'>
-									<Edit className='h-4 w-4 text-yellow-600 dark:text-yellow-400' />
-									<span className='text-xs font-semibold uppercase tracking-wide text-yellow-700 dark:text-yellow-300'>
-										Modified
-									</span>
+									<div className='flex h-7 w-7 items-center justify-center rounded-md bg-accent/20'>
+										<Edit className='h-3.5 w-3.5 text-accent-foreground' />
+									</div>
+									<div className='flex flex-col'>
+										<span className='text-xs font-medium text-muted-foreground'>Modified</span>
+										<span className='text-base font-semibold text-foreground'>
+											{worklogChanges.modifiedEntries.length}
+										</span>
+									</div>
 								</div>
-								<p className='text-lg font-bold text-yellow-700 dark:text-yellow-300'>
-									{worklogChanges.modifiedEntries.length}
-								</p>
-							</div>
+							</>
 						)}
 						{worklogChanges.deletedEntries.length > 0 && (
-							<div className='flex flex-col gap-1 rounded-lg border border-red-200 bg-red-50/50 p-3 dark:border-red-900 dark:bg-red-950/30'>
+							<>
+								<Separator
+									orientation='vertical'
+									className='h-8'
+								/>
 								<div className='flex items-center gap-2'>
-									<Trash2 className='h-4 w-4 text-red-600 dark:text-red-400' />
-									<span className='text-xs font-semibold uppercase tracking-wide text-red-700 dark:text-red-300'>
-										Deleted
-									</span>
+									<div className='flex h-7 w-7 items-center justify-center rounded-md bg-amber-100/50 dark:bg-amber-900/30'>
+										<Trash2 className='h-3.5 w-3.5 text-amber-600/70 dark:text-amber-500/60' />
+									</div>
+									<div className='flex flex-col'>
+										<span className='text-xs font-medium text-muted-foreground'>Deleted</span>
+										<span className='text-base font-semibold text-foreground'>
+											{worklogChanges.deletedEntries.length}
+										</span>
+									</div>
 								</div>
-								<p className='text-lg font-bold text-red-700 dark:text-red-300'>
-									{worklogChanges.deletedEntries.length}
-								</p>
-							</div>
+							</>
 						)}
 					</div>
 
 					{/* Detailed list */}
-					<ScrollArea className='max-h-[300px] rounded-lg border'>
-						<div className='p-3'>
-							<div className='space-y-2'>
-								{worklogChanges.newEntries.length > 0 && (
-									<div className='space-y-2'>
-										<p className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
-											New Entries ({worklogChanges.newEntries.length})
-										</p>
-										{worklogChanges.newEntries.map(entry => (
-											<div
-												key={entry.localId}
-												className='flex items-start gap-2 rounded border border-green-200 bg-green-50/50 p-2 dark:border-green-900 dark:bg-green-950/30'
-											>
-												<Plus className='mt-0.5 h-3.5 w-3.5 shrink-0 text-green-600 dark:text-green-400' />
-												<div className='flex-1 min-w-0'>
-													<div className='flex items-center gap-2'>
-														<Badge
-															variant='outline'
-															className='text-[10px] font-mono'
-														>
-															{entry.issueKey}
-														</Badge>
-														<span className='text-xs font-medium text-foreground'>
-															{formatDurationFromSeconds(entry.timeSpentSeconds)}
-														</span>
-													</div>
-													<p className='mt-1 text-xs text-muted-foreground line-clamp-2'>
-														{entry.summary || 'No summary'}
-													</p>
-													<p className='mt-0.5 text-[10px] text-muted-foreground'>
-														{new Date(entry.started).toLocaleString()}
-													</p>
+					<Card className='overflow-hidden border'>
+						<ScrollArea className='h-[320px]'>
+							<div className='px-4'>
+								<div className='space-y-4'>
+									{worklogChanges.newEntries.length > 0 && (
+										<div className='space-y-2.5'>
+											<div className='flex items-center gap-2'>
+												<div className='flex h-5 w-5 items-center justify-center rounded-md bg-primary/10'>
+													<Plus className='h-3 w-3 text-primary' />
 												</div>
+												<h3 className='text-sm font-semibold text-foreground'>
+													New Entries ({worklogChanges.newEntries.length})
+												</h3>
 											</div>
-										))}
-									</div>
-								)}
+											<Separator />
+											<div className='space-y-2'>
+												{worklogChanges.newEntries.map(entry => (
+													<div
+														key={entry.localId}
+														className='group flex items-start gap-3 rounded-lg border bg-card p-3 transition-colors hover:bg-muted/50'
+													>
+														<div className='mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-primary/10'>
+															<Plus className='h-3 w-3 text-primary' />
+														</div>
+														<div className='flex-1 min-w-0 space-y-1.5'>
+															<div className='flex flex-wrap items-center gap-2'>
+																<Badge
+																	variant='outline'
+																	className='font-mono text-xs'
+																>
+																	{entry.issueKey}
+																</Badge>
+																<div className='flex items-center gap-1 text-xs font-medium text-muted-foreground'>
+																	<Clock className='h-3 w-3' />
+																	{formatDurationFromSeconds(entry.timeSpentSeconds)}
+																</div>
+															</div>
+															<p className='text-sm leading-relaxed text-foreground line-clamp-2'>
+																{entry.summary || 'No summary'}
+															</p>
+															<p className='text-xs text-muted-foreground'>
+																{new Date(entry.started).toLocaleString(undefined, {
+																	dateStyle: 'medium',
+																	timeStyle: 'short'
+																})}
+															</p>
+														</div>
+													</div>
+												))}
+											</div>
+										</div>
+									)}
 
-								{worklogChanges.modifiedEntries.length > 0 && (
-									<div className='space-y-2'>
-										<p className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
-											Modified Entries ({worklogChanges.modifiedEntries.length})
-										</p>
-										{worklogChanges.modifiedEntries.map(entry => (
-											<div
-												key={entry.localId}
-												className='flex items-start gap-2 rounded border border-yellow-200 bg-yellow-50/50 p-2 dark:border-yellow-900 dark:bg-yellow-950/30'
-											>
-												<Edit className='mt-0.5 h-3.5 w-3.5 shrink-0 text-yellow-600 dark:text-yellow-400' />
-												<div className='flex-1 min-w-0'>
-													<div className='flex items-center gap-2'>
-														<Badge
-															variant='outline'
-															className='text-[10px] font-mono'
-														>
-															{entry.issueKey}
-														</Badge>
-														<span className='text-xs font-medium text-foreground'>
-															{formatDurationFromSeconds(entry.timeSpentSeconds)}
-														</span>
-													</div>
-													<p className='mt-1 text-xs text-muted-foreground line-clamp-2'>
-														{entry.summary || 'No summary'}
-													</p>
-													<p className='mt-0.5 text-[10px] text-muted-foreground'>
-														{new Date(entry.started).toLocaleString()}
-													</p>
+									{worklogChanges.modifiedEntries.length > 0 && (
+										<div className='space-y-2.5'>
+											<div className='flex items-center gap-2'>
+												<div className='flex h-5 w-5 items-center justify-center rounded-md bg-accent/20'>
+													<Edit className='h-3 w-3 text-accent-foreground' />
 												</div>
+												<h3 className='text-sm font-semibold text-foreground'>
+													Modified Entries ({worklogChanges.modifiedEntries.length})
+												</h3>
 											</div>
-										))}
-									</div>
-								)}
+											<Separator />
+											<div className='space-y-2'>
+												{worklogChanges.modifiedEntries.map(entry => (
+													<div
+														key={entry.localId}
+														className='group flex items-start gap-3 rounded-lg border bg-card p-3 transition-colors hover:bg-muted/50'
+													>
+														<div className='mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-accent/20'>
+															<Edit className='h-3 w-3 text-accent-foreground' />
+														</div>
+														<div className='flex-1 min-w-0 space-y-1.5'>
+															<div className='flex flex-wrap items-center gap-2'>
+																<Badge
+																	variant='outline'
+																	className='font-mono text-xs'
+																>
+																	{entry.issueKey}
+																</Badge>
+																<div className='flex items-center gap-1 text-xs font-medium text-muted-foreground'>
+																	<Clock className='h-3 w-3' />
+																	{formatDurationFromSeconds(entry.timeSpentSeconds)}
+																</div>
+															</div>
+															<p className='text-sm leading-relaxed text-foreground line-clamp-2'>
+																{entry.summary || 'No summary'}
+															</p>
+															<p className='text-xs text-muted-foreground'>
+																{new Date(entry.started).toLocaleString(undefined, {
+																	dateStyle: 'medium',
+																	timeStyle: 'short'
+																})}
+															</p>
+														</div>
+													</div>
+												))}
+											</div>
+										</div>
+									)}
 
-								{worklogChanges.deletedEntries.length > 0 && (
-									<div className='space-y-2'>
-										<p className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
-											Deleted Entries ({worklogChanges.deletedEntries.length})
-										</p>
-										{worklogChanges.deletedEntries.map(entry => (
-											<div
-												key={entry.localId}
-												className='flex items-start gap-2 rounded border border-red-200 bg-red-50/50 p-2 dark:border-red-900 dark:bg-red-950/30'
-											>
-												<Trash2 className='mt-0.5 h-3.5 w-3.5 shrink-0 text-red-600 dark:text-red-400' />
-												<div className='flex-1 min-w-0'>
-													<div className='flex items-center gap-2'>
-														<Badge
-															variant='outline'
-															className='text-[10px] font-mono'
-														>
-															{entry.issueKey}
-														</Badge>
-														<span className='text-xs font-medium text-foreground'>
-															{formatDurationFromSeconds(entry.timeSpentSeconds)}
-														</span>
-													</div>
-													<p className='mt-1 text-xs text-muted-foreground line-clamp-2'>
-														{entry.summary || 'No summary'}
-													</p>
-													<p className='mt-0.5 text-[10px] text-muted-foreground'>
-														{entry.started
-															? new Date(entry.started).toLocaleString()
-															: 'Unknown date'}
-													</p>
+									{worklogChanges.deletedEntries.length > 0 && (
+										<div className='space-y-2.5'>
+											<div className='flex items-center gap-2'>
+												<div className='flex h-5 w-5 items-center justify-center rounded-md bg-amber-100/50 dark:bg-amber-900/30'>
+													<Trash2 className='h-3 w-3 text-amber-600/70 dark:text-amber-500/60' />
 												</div>
+												<h3 className='text-sm font-semibold text-foreground'>
+													Deleted Entries ({worklogChanges.deletedEntries.length})
+												</h3>
 											</div>
-										))}
-									</div>
-								)}
+											<Separator />
+											<div className='space-y-2'>
+												{worklogChanges.deletedEntries.map(entry => (
+													<div
+														key={entry.localId}
+														className='group flex items-start gap-3 rounded-lg border bg-card p-3 transition-colors hover:bg-muted/50'
+													>
+														<div className='mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-amber-100/50 dark:bg-amber-900/30'>
+															<Trash2 className='h-3 w-3 text-amber-600/70 dark:text-amber-500/60' />
+														</div>
+														<div className='flex-1 min-w-0 space-y-1.5'>
+															<div className='flex flex-wrap items-center gap-2'>
+																<Badge
+																	variant='outline'
+																	className='font-mono text-xs'
+																>
+																	{entry.issueKey}
+																</Badge>
+																<div className='flex items-center gap-1 text-xs font-medium text-muted-foreground'>
+																	<Clock className='h-3 w-3' />
+																	{formatDurationFromSeconds(entry.timeSpentSeconds)}
+																</div>
+															</div>
+															<p className='text-sm leading-relaxed text-foreground line-clamp-2'>
+																{entry.summary || 'No summary'}
+															</p>
+															<p className='text-xs text-muted-foreground'>
+																{entry.started
+																	? new Date(entry.started).toLocaleString(undefined, {
+																			dateStyle: 'medium',
+																			timeStyle: 'short'
+																		})
+																	: 'Unknown date'}
+															</p>
+														</div>
+													</div>
+												))}
+											</div>
+										</div>
+									)}
+								</div>
 							</div>
-						</div>
-					</ScrollArea>
+						</ScrollArea>
+					</Card>
 				</div>
 
-				<DialogFooter className='gap-2 sm:gap-0'>
+				<DialogFooter className='gap-2 sm:gap-2'>
 					<Button
 						variant='outline'
 						onClick={() => onOpenChange(false)}
 						disabled={isSaving}
+						className='sm:min-w-[100px]'
 					>
 						Cancel
 					</Button>
 					<Button
-						variant='destructive'
+						variant='default'
 						onClick={handleConfirm}
 						disabled={isSaving}
+						className='sm:min-w-[140px]'
 					>
 						{isSaving ? (
 							<>
-								<Loader2 className='mr-2 h-4 w-4 animate-spin' />
+								<Loader2 className='h-4 w-4 animate-spin' />
 								Saving...
 							</>
 						) : (
 							<>
-								<AlertTriangle className='mr-2 h-4 w-4' />
+								<Check className='h-4 w-4' />
 								Confirm & Save
 							</>
 						)}
