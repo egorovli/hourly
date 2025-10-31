@@ -1,0 +1,379 @@
+name: Deploy
+
+# Security: Explicit permissions for GITHUB_TOKEN
+permissions:
+  contents: read
+  packages: read
+  id-token: write
+  actions: read
+
+# Concurrency: Prevent multiple deployments for the same target
+concurrency:
+  group: deploy-${{ inputs.environment }}-${{ github.ref_name }}
+  cancel-in-progress: false
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Docker image tag to deploy (e.g., latest, main, sha-abc1234, v1.0.0)'
+        required: true
+        type: string
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      workflow_run_id:
+        description: 'Optional: Build workflow run ID to verify (leave empty to use latest successful build)'
+        required: false
+        type: string
+      dry_run:
+        description: 'Dry run mode (echo only, no actual deployment)'
+        required: false
+        type: boolean
+        default: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/web
+  AUTHORIZED_USER: egorovli
+  AUTHORIZED_USER_ID: '5165202'
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  verify-authorization:
+    name: Verify Authorization
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      authorized: ${{ steps.check.outputs.authorized }}
+
+    steps:
+      - name: Check user authorization
+        id: check
+        run: |
+          if [[ "${{ github.actor }}" != "${{ env.AUTHORIZED_USER }}" ]]; then
+            echo "❌ Unauthorized: Only ${{ env.AUTHORIZED_USER }} can trigger deployments"
+            echo "Current actor: ${{ github.actor }}"
+            echo "authorized=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          echo "✅ Authorized: ${{ github.actor }}"
+          echo "authorized=true" >> $GITHUB_OUTPUT
+
+  verify-build:
+    name: Verify Build Workflow
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: verify-authorization
+    if: needs.verify-authorization.outputs.authorized == 'true'
+    outputs:
+      build_workflow_run_id: ${{ steps.verify.outputs.workflow_run_id }}
+      build_sha: ${{ steps.verify.outputs.build_sha }}
+      image_exists: ${{ steps.image-check.outputs.image_exists }}
+      image_digest: ${{ steps.image-check.outputs.image_digest }}
+      full_image: ghcr.io/${{ github.repository }}/web:${{ inputs.image_tag }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Verify GitHub CLI
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          
+          # GitHub CLI is pre-installed and authenticates automatically with GITHUB_TOKEN
+          echo "Verifying GitHub CLI availability..."
+          gh --version
+          
+          # Verify authentication
+          CURRENT_USER=$(gh api user --jq '.login' 2>/dev/null || echo "")
+          if [[ -z "${CURRENT_USER}" ]]; then
+            echo "❌ GitHub CLI authentication failed"
+            exit 1
+          fi
+          echo "✅ Authenticated as: ${CURRENT_USER}"
+
+      - name: Verify build workflow completion
+        id: verify
+        env:
+          BUILD_WORKFLOW_ID: ${{ inputs.workflow_run_id }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          
+          echo "🔍 Verifying build workflow completion..."
+          
+          # Determine which workflow run to check
+          if [[ -n "${BUILD_WORKFLOW_ID:-}" ]]; then
+            echo "Using specified workflow run ID: ${BUILD_WORKFLOW_ID}"
+            WORKFLOW_RUN_ID="${BUILD_WORKFLOW_ID}"
+          else
+            echo "Finding latest successful build workflow run..."
+            WORKFLOW_RUN_ID=$(gh run list \
+              --workflow="build.yml" \
+              --branch="${{ github.ref_name }}" \
+              --status=success \
+              --limit=1 \
+              --json databaseId \
+              --jq '.[0].databaseId' \
+              || echo "")
+            
+            if [[ -z "${WORKFLOW_RUN_ID}" ]]; then
+              echo "❌ No successful build workflow found for branch: ${{ github.ref_name }}"
+              exit 1
+            fi
+            
+            echo "Found latest successful build: ${WORKFLOW_RUN_ID}"
+          fi
+          
+          # Verify workflow run exists and succeeded
+          WORKFLOW_STATUS=$(gh run view "${WORKFLOW_RUN_ID}" \
+            --json conclusion \
+            --jq '.conclusion' \
+            || echo "null")
+          
+          if [[ "${WORKFLOW_STATUS}" != "success" ]]; then
+            echo "❌ Build workflow ${WORKFLOW_RUN_ID} did not succeed (status: ${WORKFLOW_STATUS})"
+            exit 1
+          fi
+          
+          # Get commit SHA from workflow run
+          BUILD_SHA=$(gh run view "${WORKFLOW_RUN_ID}" \
+            --json headSha \
+            --jq '.headSha' \
+            || echo "")
+          
+          if [[ -z "${BUILD_SHA}" ]]; then
+            echo "❌ Could not determine build SHA"
+            exit 1
+          fi
+          
+          echo "✅ Build workflow verified: ${WORKFLOW_RUN_ID}"
+          echo "Build SHA: ${BUILD_SHA}"
+          echo "workflow_run_id=${WORKFLOW_RUN_ID}" >> $GITHUB_OUTPUT
+          echo "build_sha=${BUILD_SHA}" >> $GITHUB_OUTPUT
+
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v3.11.1
+
+      - name: Verify image exists in registry
+        id: image-check
+        env:
+          REGISTRY: ghcr.io
+          IMAGE_NAME: ${{ github.repository }}/web
+        run: |
+          set -euo pipefail
+          
+          echo "🔍 Verifying image exists in registry..."
+          
+          FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${{ inputs.image_tag }}"
+          echo "Checking image: ${FULL_IMAGE}"
+          
+          # Login to registry
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login "${REGISTRY}" \
+            --username "${{ github.actor }}" \
+            --password-stdin
+          
+          # Check if image exists using docker manifest inspect
+          if docker manifest inspect "${FULL_IMAGE}" > /dev/null 2>&1; then
+            echo "✅ Image found: ${FULL_IMAGE}"
+            echo "image_exists=true" >> $GITHUB_OUTPUT
+            
+            # Get image digest for verification (jq is pre-installed on GitHub runners)
+            MANIFEST_JSON=$(docker manifest inspect "${FULL_IMAGE}" 2>/dev/null || echo "")
+            if [[ -n "${MANIFEST_JSON}" ]]; then
+              # Try to extract digest using jq if available
+              if command -v jq >/dev/null 2>&1; then
+                IMAGE_DIGEST=$(echo "${MANIFEST_JSON}" | jq -r '.config.digest // empty' 2>/dev/null || echo "")
+                if [[ -n "${IMAGE_DIGEST}" && "${IMAGE_DIGEST}" != "null" ]]; then
+                  echo "Image digest: ${IMAGE_DIGEST}"
+                  echo "image_digest=${IMAGE_DIGEST}" >> $GITHUB_OUTPUT
+                fi
+              fi
+              
+              # Extract short SHA from manifest for reference
+              echo "Full image reference: ${FULL_IMAGE}"
+            fi
+          else
+            echo "❌ Image not found: ${FULL_IMAGE}"
+            echo "image_exists=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+  deploy:
+    name: Deploy Application
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs:
+      - verify-authorization
+      - verify-build
+    if: |
+      needs.verify-authorization.outputs.authorized == 'true' &&
+      needs.verify-build.outputs.image_exists == 'true'
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_NAME: ${{ github.repository }}/web
+      FULL_IMAGE: ${{ needs.verify-build.outputs.full_image }}
+      IMAGE_TAG: ${{ inputs.image_tag }}
+      ENVIRONMENT: ${{ inputs.environment }}
+      BUILD_SHA: ${{ needs.verify-build.outputs.build_sha }}
+      BUILD_RUN_ID: ${{ needs.verify-build.outputs.build_workflow_run_id }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Validate deployment parameters
+        run: |
+          set -euo pipefail
+          
+          echo "🔍 Validating deployment parameters..."
+          
+          # Validate image tag format
+          if [[ ! "${{ inputs.image_tag }}" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+            echo "❌ Invalid image tag format: ${{ inputs.image_tag }}"
+            echo "Tag must contain only alphanumeric characters, dots, underscores, and hyphens"
+            exit 1
+          fi
+          
+          # Validate environment
+          if [[ "${{ inputs.environment }}" != "staging" && "${{ inputs.environment }}" != "production" ]]; then
+            echo "❌ Invalid environment: ${{ inputs.environment }}"
+            echo "Environment must be 'staging' or 'production'"
+            exit 1
+          fi
+          
+          echo "✅ All parameters validated"
+
+      - name: Display deployment parameters
+        run: |
+          set -euo pipefail
+          
+          echo "## Deployment Parameters" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Image Information" >> $GITHUB_STEP_SUMMARY
+          echo "- **Registry:** \`${REGISTRY}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image Name:** \`${IMAGE_NAME}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image Tag:** \`${{ inputs.image_tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Full Image:** \`${REGISTRY}/${IMAGE_NAME}:${{ inputs.image_tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Deployment Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment:** \`${{ inputs.environment }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Dry Run:** \`${{ inputs.dry_run }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered By:** \`${{ github.actor }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit SHA:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Build Verification" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build Workflow Run ID:** \`${{ needs.verify-build.outputs.build_workflow_run_id }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build Commit SHA:** \`${{ needs.verify-build.outputs.build_sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image Verified:** ✅" >> $GITHUB_STEP_SUMMARY
+          IMAGE_DIGEST="${{ needs.verify-build.outputs.image_digest }}"
+          if [[ -n "${IMAGE_DIGEST}" ]]; then
+            echo "- **Image Digest:** \`${IMAGE_DIGEST}\`" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🚀 DEPLOYMENT PARAMETERS"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "Image Information:"
+          echo "  Registry:        ${REGISTRY}"
+          echo "  Image Name:      ${IMAGE_NAME}"
+          echo "  Image Tag:       ${{ inputs.image_tag }}"
+          echo "  Full Image:      ${REGISTRY}/${IMAGE_NAME}:${{ inputs.image_tag }}"
+          echo ""
+          echo "Deployment Configuration:"
+          echo "  Environment:     ${{ inputs.environment }}"
+          echo "  Dry Run:         ${{ inputs.dry_run }}"
+          echo "  Triggered By:    ${{ github.actor }}"
+          echo "  Branch:          ${{ github.ref_name }}"
+          echo "  Commit SHA:      ${{ github.sha }}"
+          echo ""
+          echo "Build Verification:"
+          echo "  Build Run ID:    ${{ needs.verify-build.outputs.build_workflow_run_id }}"
+          echo "  Build SHA:       ${{ needs.verify-build.outputs.build_sha }}"
+          IMAGE_DIGEST="${{ needs.verify-build.outputs.image_digest }}"
+          if [[ -n "${IMAGE_DIGEST}" ]]; then
+            echo "  Image Digest:   ${IMAGE_DIGEST}"
+          fi
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Execute deployment stub
+        if: inputs.dry_run == true
+        run: |
+          set -euo pipefail
+          
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🔍 DRY RUN MODE - No actual deployment"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "In production mode, this step would:"
+          echo "  1. Connect to deployment target (SSH/Kubernetes/Helm)"
+          echo "  2. Pull image: ${REGISTRY}/${IMAGE_NAME}:${{ inputs.image_tag }}"
+          echo "  3. Update deployment configuration"
+          echo "  4. Perform health checks"
+          echo "  5. Rollback on failure"
+          echo ""
+          echo "Deployment command would be:"
+          echo "  docker pull ${FULL_IMAGE}"
+          echo "  # OR"
+          echo "  kubectl set image deployment/app app=${FULL_IMAGE} -n ${ENVIRONMENT}"
+          echo "  # OR"
+          echo "  helm upgrade app ./chart --set image.tag=${IMAGE_TAG} -n ${ENVIRONMENT}"
+          echo ""
+          echo "Available environment variables:"
+          echo "  FULL_IMAGE=${FULL_IMAGE}"
+          echo "  IMAGE_TAG=${IMAGE_TAG}"
+          echo "  ENVIRONMENT=${ENVIRONMENT}"
+          echo "  BUILD_SHA=${BUILD_SHA}"
+          echo "  BUILD_RUN_ID=${BUILD_RUN_ID}"
+          echo ""
+
+      - name: Execute deployment (production)
+        if: inputs.dry_run == false
+        run: |
+          set -euo pipefail
+          
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🚀 PRODUCTION DEPLOYMENT MODE"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "⚠️  WARNING: This is a production deployment!"
+          echo ""
+          echo "Current implementation is a stub."
+          echo "Replace this step with actual deployment logic:"
+          echo ""
+          echo "Available environment variables:"
+          echo "  FULL_IMAGE=${FULL_IMAGE}"
+          echo "  IMAGE_TAG=${IMAGE_TAG}"
+          echo "  ENVIRONMENT=${ENVIRONMENT}"
+          echo "  BUILD_SHA=${BUILD_SHA}"
+          echo "  BUILD_RUN_ID=${BUILD_RUN_ID}"
+          echo ""
+          echo "  # Example SSH + Docker:"
+          echo "  ssh deploy@target 'docker pull ${FULL_IMAGE} && docker-compose up -d'"
+          echo ""
+          echo "  # Example Kubernetes:"
+          echo "  kubectl set image deployment/app app=${FULL_IMAGE} -n ${ENVIRONMENT}"
+          echo ""
+          echo "  # Example Helm:"
+          echo "  helm upgrade app ./chart --set image.tag=${IMAGE_TAG} -n ${ENVIRONMENT}"
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ Deployment stub completed"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
