@@ -1,3 +1,4 @@
+import { DateTime } from 'luxon'
 import type { WorklogCalendarEvent } from '~/entities/index.ts'
 
 export interface WorklogStatsGroupEntry {
@@ -59,7 +60,8 @@ export function aggregateWorklogStats(events: WorklogCalendarEvent[]): WorklogSt
 			accountId: event.resource.authorAccountId
 		})
 
-		const start = event.start instanceof Date ? event.start : new Date(event.start)
+		const start =
+			event.start instanceof Date ? DateTime.fromJSDate(event.start) : DateTime.fromISO(event.start)
 		const dayKey = toDateKey(start)
 		const existingDay = dayMap.get(dayKey)
 		if (existingDay) {
@@ -71,7 +73,7 @@ export function aggregateWorklogStats(events: WorklogCalendarEvent[]): WorklogSt
 				label: dayKey,
 				totalSeconds: durationSeconds,
 				entryCount: 1,
-				date: new Date(start),
+				date: start.toJSDate(),
 				meta: {}
 			})
 		}
@@ -110,8 +112,8 @@ function deriveProjectKey(issueKey: string | undefined): string {
 	return issueKey.split('-')[0] ?? ''
 }
 
-function toDateKey(date: Date): string {
-	return date.toISOString().slice(0, 10)
+function toDateKey(date: DateTime): string {
+	return date.toISODate() ?? ''
 }
 
 function upsertGroup(
@@ -151,5 +153,7 @@ function sortGroupEntries(map: Map<string, WorklogStatsGroupEntry>): WorklogStat
 function sortDayEntries(
 	map: Map<string, WorklogStatsGroupEntry & { date: Date }>
 ): Array<WorklogStatsGroupEntry & { date: Date }> {
-	return Array.from(map.values()).sort((a, b) => b.date.getTime() - a.date.getTime())
+	return Array.from(map.values()).sort(
+		(a, b) => DateTime.fromJSDate(b.date).toMillis() - DateTime.fromJSDate(a.date).toMillis()
+	)
 }

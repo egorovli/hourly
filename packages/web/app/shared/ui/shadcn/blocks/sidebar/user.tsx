@@ -2,7 +2,7 @@ import type { SessionUser } from '~/lib/session/storage.ts'
 
 import { ChevronsUpDown, LogOut, Sparkles, CheckCircle2, RefreshCw } from 'lucide-react'
 import { SiAtlassian, SiAtlassianHex, SiGitlab, SiGitlabHex } from '@icons-pack/react-simple-icons'
-import { Link, useFetcher } from 'react-router'
+import { Link, useFetcher, useRouteLoaderData } from 'react-router'
 import { DateTime } from 'luxon'
 import { Fragment, useEffect, useMemo, useReducer } from 'react'
 
@@ -52,17 +52,19 @@ function formatExpiryRelative(expiresAt?: string): string {
 	return dt.toRelative({ base: now, rounding: 'round' }) ?? '—'
 }
 
-function formatExpiryAbsoluteTitle(expiresAt?: string): string | undefined {
+function formatExpiryAbsoluteTitle(expiresAt?: string, timezone?: string): string | undefined {
 	if (!expiresAt) {
 		return undefined
 	}
 
-	const dt = DateTime.fromISO(expiresAt)
+	const dt = DateTime.fromISO(expiresAt, { zone: 'utc' })
 	if (!dt.isValid) {
 		return undefined
 	}
 
-	return dt.toLocaleString(DateTime.DATETIME_FULL)
+	const tz = timezone ?? 'UTC'
+	const dtInTimezone = dt.setZone(tz)
+	return dtInTimezone.toLocaleString(DateTime.DATETIME_FULL)
 }
 
 interface ExpirationProps {
@@ -87,6 +89,8 @@ function Expiration({ date, interval = 1000 }: ExpirationProps): React.ReactNode
 export function NavUser({ user, sessionUser }: NavUserProps) {
 	const { isMobile } = useSidebar()
 	const refreshFetcher = useFetcher<{ success: boolean; error?: string; expiresAt?: string }>()
+	const rootData = useRouteLoaderData('root') as { preferences?: { timezone?: string } } | undefined
+	const timezone = rootData?.preferences?.timezone ?? 'UTC'
 
 	const providers = useMemo(
 		() => [
@@ -215,7 +219,7 @@ export function NavUser({ user, sessionUser }: NavUserProps) {
 										</div>
 										<div
 											className='mt-1'
-											title={formatExpiryAbsoluteTitle(p.expiresAt)}
+											title={formatExpiryAbsoluteTitle(p.expiresAt, timezone)}
 										>
 											Expires: <Expiration date={p.expiresAt} />
 										</div>

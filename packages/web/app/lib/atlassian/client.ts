@@ -4,6 +4,8 @@ export interface Options {
 	baseUrl?: string
 }
 
+import { DateTime } from 'luxon'
+
 export interface MeResponse {
 	account_type: string
 	account_id: string
@@ -263,9 +265,20 @@ export class AtlassianClient {
 	}
 
 	private async requestJson<T>(url: string, init?: RequestInit): Promise<T> {
-		// const urlObj = new URL(url)
-		// this.logJiraRequest(urlObj, init)
-		// const method = (init?.method ?? 'GET').toUpperCase()
+		const urlObj = new URL(url)
+		const method = (init?.method ?? 'GET').toUpperCase()
+		const startedAt = DateTime.now().toMillis()
+
+		console.log(`[AtlassianClient] ${method} ${urlObj.pathname}${urlObj.search}`)
+		if (init?.body) {
+			try {
+				const bodyObj = JSON.parse(init.body as string)
+				console.log('[AtlassianClient] Request body:', JSON.stringify(bodyObj, null, 2))
+			} catch {
+				console.log('[AtlassianClient] Request body:', init.body)
+			}
+		}
+
 		const response = await fetch(url, {
 			...init,
 			headers: {
@@ -274,10 +287,11 @@ export class AtlassianClient {
 				...(init?.headers ?? {})
 			}
 		})
-		// const durationMs = Date.now() - startedAt
-		// process.stdout.write(
-		// 	`[Jira] ${method} ${urlObj.pathname} -> ${response.status} (${durationMs} ms)\n`
-		// )
+
+		const durationMs = DateTime.now().toMillis() - startedAt
+		console.log(
+			`[AtlassianClient] ${method} ${urlObj.pathname} -> ${response.status} (${durationMs} ms)`
+		)
 
 		if (!response.ok) {
 			let details: unknown = null
@@ -291,6 +305,12 @@ export class AtlassianClient {
 				}
 			}
 
+			console.error('[AtlassianClient] Request failed:', {
+				status: response.status,
+				statusText: response.statusText,
+				details
+			})
+
 			throw new AtlassianClientError(
 				`Atlassian API request failed with status ${response.status}`,
 				response.status,
@@ -303,7 +323,9 @@ export class AtlassianClient {
 			return undefined as T
 		}
 
-		return response.json() as Promise<T>
+		const result = (await response.json()) as T
+		console.log('[AtlassianClient] Response:', JSON.stringify(result, null, 2))
+		return result
 	}
 
 	async getMe(): Promise<MeResponse> {
@@ -1376,11 +1398,13 @@ async function fetchIssueWorklogs({
 /* eslint-enable @typescript-eslint/no-unused-vars */
 
 function startOfDayEpochMillis(date: string) {
-	return new Date(`${date}T00:00:00.000Z`).getTime()
+	const dt = DateTime.fromISO(`${date}T00:00:00.000Z`, { zone: 'utc' })
+	return dt.isValid ? dt.toMillis() : 0
 }
 
 function endOfDayEpochMillis(date: string) {
-	return new Date(`${date}T23:59:59.999Z`).getTime()
+	const dt = DateTime.fromISO(`${date}T23:59:59.999Z`, { zone: 'utc' })
+	return dt.isValid ? dt.toMillis() : 0
 }
 
 function chunkArray<T>(items: T[], size: number): T[][] {

@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { DateTime } from 'luxon'
 import type { WorklogCalendarEvent } from '~/entities/index.ts'
 
 export function useBusinessHours({
@@ -16,7 +17,7 @@ export function useBusinessHours({
 }) {
 	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Derived time window with bounds and event scanning
 	return useMemo(() => {
-		const base = calendarDate ?? new Date()
+		const base = calendarDate ? DateTime.fromJSDate(calendarDate) : DateTime.now()
 		const [startHourStr, startMinStr] = (workingDayStartTime ?? '09:00').split(':').map(Number)
 		const [endHourStr, endMinStr] = (workingDayEndTime ?? '18:00').split(':').map(Number)
 		const isInvalid =
@@ -24,12 +25,10 @@ export function useBusinessHours({
 			Number.isNaN(startMinStr) ||
 			Number.isNaN(endHourStr) ||
 			Number.isNaN(endMinStr)
-		const defaultStart = new Date(base)
-		defaultStart.setHours(8, 0, 0, 0)
-		const defaultEnd = new Date(base)
-		defaultEnd.setHours(18, 0, 0, 0)
+		const defaultStart = base.startOf('day').set({ hour: 8, minute: 0, second: 0, millisecond: 0 })
+		const defaultEnd = base.startOf('day').set({ hour: 18, minute: 0, second: 0, millisecond: 0 })
 		if (isInvalid) {
-			return { start: defaultStart, end: defaultEnd }
+			return { start: defaultStart.toJSDate(), end: defaultEnd.toJSDate() }
 		}
 
 		const startMinutes = (startHourStr ?? 9) * 60 + (startMinStr ?? 0) - 30
@@ -53,32 +52,36 @@ export function useBusinessHours({
 
 		if (visibleEvents.length > 0) {
 			for (const event of visibleEvents) {
-				const eventStartMinutes = event.start.getHours() * 60 + event.start.getMinutes()
-				const eventEndMinutes = event.end.getHours() * 60 + event.end.getMinutes()
+				const eventStartDt = DateTime.fromJSDate(event.start)
+				const eventEndDt = DateTime.fromJSDate(event.end)
+				const eventStartMinutes = eventStartDt.hour * 60 + eventStartDt.minute
+				const eventEndMinutes = eventEndDt.hour * 60 + eventEndDt.minute
 
 				const defaultStartMinutes = minHour * 60 + minMinutes
 				const defaultEndMinutes = maxHour * 60 + maxMinutes
 
 				if (eventStartMinutes < defaultStartMinutes) {
-					minHour = event.start.getHours()
+					minHour = eventStartDt.hour
 					minMinutes = 0
 				}
 
 				if (eventEndMinutes > defaultEndMinutes) {
-					maxHour = event.end.getHours()
+					maxHour = eventEndDt.hour
 					maxMinutes = 0
-					if (event.end.getMinutes() > 0) {
+					if (eventEndDt.minute > 0) {
 						maxHour += 1
 					}
 				}
 			}
 		}
 
-		const start = new Date(base)
-		start.setHours(minHour, minMinutes, 0, 0)
-		const end = new Date(base)
-		end.setHours(maxHour, maxMinutes, 0, 0)
+		const start = base
+			.startOf('day')
+			.set({ hour: minHour, minute: minMinutes, second: 0, millisecond: 0 })
+		const end = base
+			.startOf('day')
+			.set({ hour: maxHour, minute: maxMinutes, second: 0, millisecond: 0 })
 
-		return { start, end }
+		return { start: start.toJSDate(), end: end.toJSDate() }
 	}, [calendarDate, calendarEvents, viewDateRange, workingDayStartTime, workingDayEndTime])
 }

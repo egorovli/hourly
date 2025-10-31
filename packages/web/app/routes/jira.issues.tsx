@@ -1,6 +1,7 @@
 import type { Route } from './+types/jira.issues.ts'
 
 import { z } from 'zod'
+import { DateTime } from 'luxon'
 
 import { AtlassianClient } from '~/lib/atlassian/index.ts'
 import { orm, Token } from '~/lib/mikro-orm/index.ts'
@@ -242,8 +243,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 	})
 
 	const sortedIssues = issues.issues.slice().sort((a, b) => {
-		const aTime = a.fields.updated ? new Date(a.fields.updated).getTime() : 0
-		const bTime = b.fields.updated ? new Date(b.fields.updated).getTime() : 0
+		const aTime = a.fields.updated ? DateTime.fromISO(a.fields.updated).toMillis() : 0
+		const bTime = b.fields.updated ? DateTime.fromISO(b.fields.updated).toMillis() : 0
 		return bTime - aTime
 	})
 
@@ -298,7 +299,8 @@ async function resolveProjectSelectionsForSearch(client: AtlassianClient, projec
 }
 
 function parseIsoDate(value: string) {
-	return new Date(`${value}T00:00:00.000Z`)
+	const dt = DateTime.fromISO(`${value}T00:00:00.000Z`, { zone: 'utc' })
+	return dt.isValid ? dt.toJSDate() : new Date()
 }
 
 function isValidIsoDate(value: string) {
@@ -306,6 +308,10 @@ function isValidIsoDate(value: string) {
 		return false
 	}
 
-	const date = parseIsoDate(value)
-	return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
+	const dt = DateTime.fromISO(`${value}T00:00:00.000Z`, { zone: 'utc' })
+	if (!dt.isValid) {
+		return false
+	}
+
+	return dt.toISODate() === value
 }

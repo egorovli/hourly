@@ -2,7 +2,7 @@ import type { WorklogCalendarEvent } from '~/entities/index.ts'
 import type { ChartConfig } from '~/shared/ui/shadcn/ui/chart.tsx'
 
 import { useMemo } from 'react'
-import { format } from 'date-fns'
+import { DateTime } from 'luxon'
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
 
 import { generateColorFromString } from '~/shared/index.ts'
@@ -455,7 +455,7 @@ function buildInsightsData(events: WorklogCalendarEvent[]): InsightsData {
 			continue
 		}
 
-		const dayKey = startDate.toISOString().slice(0, 10)
+		const dayKey = DateTime.fromJSDate(startDate).toISODate() ?? ''
 		const dayEntry = ensureDayAccumulator(dayMap, dayKey, startDate)
 		dayEntry.totalSeconds += durationSeconds
 		dayEntry.entryCount += 1
@@ -503,7 +503,7 @@ function buildInsightsData(events: WorklogCalendarEvent[]): InsightsData {
 	const authorSeriesByDataKey = new Map(authorSeries.map(series => [series.dataKey, series]))
 
 	const dailyByAuthor = Array.from(dayMap.values())
-		.sort((a, b) => a.date.getTime() - b.date.getTime())
+		.sort((a, b) => DateTime.fromJSDate(a.date).toMillis() - DateTime.fromJSDate(b.date).toMillis())
 		.map(day => buildDailySeriesPoint(day, authorSeries))
 
 	const projectSeries = Array.from(projectSeriesMap.values())
@@ -513,7 +513,9 @@ function buildInsightsData(events: WorklogCalendarEvent[]): InsightsData {
 	const projectDailyCharts = Array.from(projectMap.values())
 		.map(project => {
 			const data = Array.from(project.dayMap.values())
-				.sort((a, b) => a.date.getTime() - b.date.getTime())
+				.sort(
+					(a, b) => DateTime.fromJSDate(a.date).toMillis() - DateTime.fromJSDate(b.date).toMillis()
+				)
 				.map(day => buildDailySeriesPoint(day, authorSeries))
 
 			const activeSeries = Array.from(project.authorSeconds.entries())
@@ -666,7 +668,7 @@ function ensureDayAccumulator(
 
 	const entry: DayAccumulator = {
 		key,
-		date: new Date(date),
+		date: DateTime.fromJSDate(date).toJSDate(),
 		totalSeconds: 0,
 		entryCount: 0,
 		values: new Map()
@@ -681,8 +683,8 @@ function buildDailySeriesPoint(
 ): DailySeriesPoint {
 	const point: DailySeriesPoint = {
 		key: day.key,
-		label: format(day.date, 'MMM d'),
-		fullLabel: format(day.date, 'PPP'),
+		label: DateTime.fromJSDate(day.date).toFormat('MMM d'),
+		fullLabel: DateTime.fromJSDate(day.date).toLocaleString(DateTime.DATE_FULL),
 		totalHours: toHours(day.totalSeconds),
 		entryCount: day.entryCount,
 		__seriesOrder: []
@@ -736,11 +738,11 @@ function normalizeDurationSeconds(value: number | undefined): number {
 function getEventStartDate(event: WorklogCalendarEvent): Date | null {
 	const start = event.start
 	if (start instanceof Date) {
-		return Number.isNaN(start.getTime()) ? null : start
+		return DateTime.fromJSDate(start).isValid ? DateTime.fromJSDate(start).toJSDate() : null
 	}
 
-	const parsed = new Date(start)
-	return Number.isNaN(parsed.getTime()) ? null : parsed
+	const dt = DateTime.fromISO(start)
+	return dt.isValid ? dt.toJSDate() : null
 }
 
 function toHours(seconds: number): number {

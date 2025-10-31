@@ -4,6 +4,8 @@ export interface Options {
 	baseUrl?: string
 }
 
+import { DateTime } from 'luxon'
+
 export interface CurrentUserResponse {
 	id: number
 	username: string
@@ -401,11 +403,13 @@ export class GitLabClient {
 }
 
 function startOfDayIso(date: string) {
-	return new Date(`${date}T00:00:00.000Z`).toISOString()
+	const dt = DateTime.fromISO(`${date}T00:00:00.000Z`, { zone: 'utc' })
+	return dt.isValid ? (dt.toISO() ?? '') : ''
 }
 
 function endOfDayIso(date: string) {
-	return new Date(`${date}T23:59:59.999Z`).toISOString()
+	const dt = DateTime.fromISO(`${date}T23:59:59.999Z`, { zone: 'utc' })
+	return dt.isValid ? (dt.toISO() ?? '') : ''
 }
 
 export function createContributorKey(commit: GitLabCommit): string {

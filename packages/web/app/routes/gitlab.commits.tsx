@@ -1,6 +1,7 @@
 import type { Route } from './+types/gitlab.commits.ts'
 
 import { z } from 'zod'
+import { DateTime } from 'luxon'
 
 import { GitLabClient } from '~/lib/gitlab/client.ts'
 import { orm, Token } from '~/lib/mikro-orm/index.ts'
@@ -102,8 +103,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 	})
 
 	const sortedCommits = commits.slice().sort((a, b) => {
-		const aTime = a.created_at ? new Date(a.created_at).getTime() : 0
-		const bTime = b.created_at ? new Date(b.created_at).getTime() : 0
+		const aTime = a.created_at ? DateTime.fromISO(a.created_at).toMillis() : 0
+		const bTime = b.created_at ? DateTime.fromISO(b.created_at).toMillis() : 0
 		return bTime - aTime
 	})
 
@@ -160,7 +161,8 @@ function extractIssueKeysFromCommit(commit: { title?: string | null; message?: s
 }
 
 function parseIsoDate(value: string) {
-	return new Date(`${value}T00:00:00.000Z`)
+	const dt = DateTime.fromISO(`${value}T00:00:00.000Z`, { zone: 'utc' })
+	return dt.isValid ? dt.toJSDate() : new Date()
 }
 
 function isValidIsoDate(value: string) {
@@ -168,6 +170,10 @@ function isValidIsoDate(value: string) {
 		return false
 	}
 
-	const date = parseIsoDate(value)
-	return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
+	const dt = DateTime.fromISO(`${value}T00:00:00.000Z`, { zone: 'utc' })
+	if (!dt.isValid) {
+		return false
+	}
+
+	return dt.toISODate() === value
 }

@@ -65,7 +65,13 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 
 	// Calendar view state
 	const [calendarView, setCalendarView] = useState<View>(Views.WEEK)
-	const [calendarDate, setCalendarDate] = useState<Date>(() => state.dateRange?.from ?? new Date())
+	const [calendarDate, setCalendarDate] = useState<Date>(() =>
+		state.dateRange?.from
+			? state.dateRange.from instanceof Date
+				? state.dateRange.from
+				: DateTime.fromISO(state.dateRange.from).toJSDate()
+			: DateTime.now().toJSDate()
+	)
 
 	// Queries
 	const projectsQuery = useJiraProjectsQuery({ userId: atlassianUserId })
@@ -289,8 +295,8 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 
 		// Sort by createdAt (descending), then by issue key (ascending) as fallback
 		const sortedIssues = allIssues.slice().sort((a, b) => {
-			const aCreated = a.fields.created ? new Date(a.fields.created).getTime() : 0
-			const bCreated = b.fields.created ? new Date(b.fields.created).getTime() : 0
+			const aCreated = a.fields.created ? DateTime.fromISO(a.fields.created).toMillis() : 0
+			const bCreated = b.fields.created ? DateTime.fromISO(b.fields.created).toMillis() : 0
 			if (aCreated !== bCreated) {
 				return bCreated - aCreated // Descending (newest first)
 			}
@@ -333,8 +339,11 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 			.map<WorklogCalendarEvent>(entry => {
 				// Date objects represent absolute moments in time (UTC)
 				// React Big Calendar + Luxon localizer will handle timezone display
-				const startDate = new Date(entry.started ?? new Date().toISOString())
-				const endDate = new Date(startDate.getTime() + entry.timeSpentSeconds * 1000)
+				const startDt = entry.started ? DateTime.fromISO(entry.started) : DateTime.now()
+				const startDate = startDt.isValid ? startDt.toJSDate() : new Date()
+				const endDate = DateTime.fromJSDate(startDate)
+					.plus({ seconds: entry.timeSpentSeconds })
+					.toJSDate()
 
 				return {
 					id: entry.id ?? entry.issueKey,
@@ -348,7 +357,7 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 						authorName: entry.authorName,
 						authorAccountId: entry.authorAccountId,
 						timeSpentSeconds: entry.timeSpentSeconds,
-						started: entry.started ?? new Date().toISOString()
+						started: entry.started ?? DateTime.now().toISO()
 					}
 				}
 			})
@@ -386,7 +395,7 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 
 	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Derived time-window with bounds and event scanning
 	const calendarBusinessHours = useMemo(() => {
-		const base = calendarDate ?? new Date()
+		const base = calendarDate ? DateTime.fromJSDate(calendarDate) : DateTime.now()
 		const [startHourStr, startMinStr] = (workingDayStartTime ?? '09:00').split(':').map(Number)
 		const [endHourStr, endMinStr] = (workingDayEndTime ?? '18:00').split(':').map(Number)
 		const isInvalid =
@@ -394,12 +403,11 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 			Number.isNaN(startMinStr) ||
 			Number.isNaN(endHourStr) ||
 			Number.isNaN(endMinStr)
-		const defaultStart = new Date(base)
-		defaultStart.setHours(8, 0, 0, 0)
-		const defaultEnd = new Date(base)
-		defaultEnd.setHours(18, 0, 0, 0)
+
+		const defaultStart = base.startOf('day').set({ hour: 8, minute: 0, second: 0, millisecond: 0 })
+		const defaultEnd = base.startOf('day').set({ hour: 18, minute: 0, second: 0, millisecond: 0 })
 		if (isInvalid) {
-			return { start: defaultStart, end: defaultEnd }
+			return { start: defaultStart.toJSDate(), end: defaultEnd.toJSDate() }
 		}
 
 		const startMinutes = (startHourStr ?? 9) * 60 + (startMinStr ?? 0) - 30
@@ -423,29 +431,33 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 
 		if (visibleEvents.length > 0) {
 			for (const event of visibleEvents) {
-				const eventStartMinutes = event.start.getHours() * 60 + event.start.getMinutes()
-				const eventEndMinutes = event.end.getHours() * 60 + event.end.getMinutes()
+				const eventStartDt = DateTime.fromJSDate(event.start)
+				const eventEndDt = DateTime.fromJSDate(event.end)
+				const eventStartMinutes = eventStartDt.hour * 60 + eventStartDt.minute
+				const eventEndMinutes = eventEndDt.hour * 60 + eventEndDt.minute
 				const defaultStartMinutes = minHour * 60 + minMinutes
 				const defaultEndMinutes = maxHour * 60 + maxMinutes
 				if (eventStartMinutes < defaultStartMinutes) {
-					minHour = event.start.getHours()
+					minHour = eventStartDt.hour
 					minMinutes = 0
 				}
 				if (eventEndMinutes > defaultEndMinutes) {
-					maxHour = event.end.getHours()
+					maxHour = eventEndDt.hour
 					maxMinutes = 0
-					if (event.end.getMinutes() > 0) {
+					if (eventEndDt.minute > 0) {
 						maxHour += 1
 					}
 				}
 			}
 		}
 
-		const start = new Date(base)
-		start.setHours(minHour, minMinutes, 0, 0)
-		const end = new Date(base)
-		end.setHours(maxHour, maxMinutes, 0, 0)
-		return { start, end }
+		const start = base
+			.startOf('day')
+			.set({ hour: minHour, minute: minMinutes, second: 0, millisecond: 0 })
+		const end = base
+			.startOf('day')
+			.set({ hour: maxHour, minute: maxMinutes, second: 0, millisecond: 0 })
+		return { start: start.toJSDate(), end: end.toJSDate() }
 	}, [
 		calendarDate,
 		calendarEvents,
@@ -574,16 +586,9 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 					continue
 				}
 				if (entry.worklog.started) {
-					const startedDate = new Date(entry.worklog.started)
-					const roundedStarted = new Date(
-						startedDate.getFullYear(),
-						startedDate.getMonth(),
-						startedDate.getDate(),
-						startedDate.getHours(),
-						startedDate.getMinutes(),
-						0
-					)
-					const signature = `${entry.issueKey}|${roundedStarted.toISOString()}|${entry.worklog.timeSpentSeconds ?? 0}`
+					const startedDt = DateTime.fromISO(entry.worklog.started)
+					const roundedStarted = startedDt.startOf('minute')
+					const signature = `${entry.issueKey}|${roundedStarted.toISO()}|${entry.worklog.timeSpentSeconds ?? 0}`
 					existingEntries.add(signature)
 				}
 			}
@@ -592,32 +597,18 @@ export function useWorklogsPageState(loaderData: WorklogsPageLoaderData) {
 		// Check local entries
 		for (const entry of state.localWorklogEntries.values()) {
 			// Round started time to minute for comparison
-			const startedDate = new Date(entry.started)
-			const roundedStarted = new Date(
-				startedDate.getFullYear(),
-				startedDate.getMonth(),
-				startedDate.getDate(),
-				startedDate.getHours(),
-				startedDate.getMinutes(),
-				0
-			)
-			const signature = `${entry.issueKey}|${roundedStarted.toISOString()}|${entry.timeSpentSeconds}`
+			const startedDt = DateTime.fromISO(entry.started)
+			const roundedStarted = startedDt.startOf('minute')
+			const signature = `${entry.issueKey}|${roundedStarted.toISO()}|${entry.timeSpentSeconds}`
 			existingEntries.add(signature)
 		}
 
 		// Only create entries that don't already exist
 		for (const entry of worklogEntries) {
 			// Round started time to minute for comparison
-			const startedDate = new Date(entry.started)
-			const roundedStarted = new Date(
-				startedDate.getFullYear(),
-				startedDate.getMonth(),
-				startedDate.getDate(),
-				startedDate.getHours(),
-				startedDate.getMinutes(),
-				0
-			)
-			const signature = `${entry.issueKey}|${roundedStarted.toISOString()}|${entry.timeSpentSeconds}`
+			const startedDt = DateTime.fromISO(entry.started)
+			const roundedStarted = startedDt.startOf('minute')
+			const signature = `${entry.issueKey}|${roundedStarted.toISO()}|${entry.timeSpentSeconds}`
 
 			if (!existingEntries.has(signature)) {
 				dispatch({ type: 'worklog.create', payload: entry })

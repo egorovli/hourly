@@ -1,5 +1,10 @@
 // Format utilities
-export { formatDurationFromSeconds, formatDateTimeLabel, getErrorMessage } from './formats/index.ts'
+export {
+	formatDurationFromSeconds,
+	formatDateTimeLabel,
+	formatDateTimeWithTimezone,
+	getErrorMessage
+} from './formats/index.ts'
 
 // Array utilities
 export { chunkArray } from './array/index.ts'

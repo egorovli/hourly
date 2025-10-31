@@ -1,5 +1,5 @@
 import { useInfiniteQuery } from '@tanstack/react-query'
-import { format } from 'date-fns'
+import { DateTime } from 'luxon'
 import type { InferQueryKeyParams } from '~/shared/index.ts'
 import { PAGE_SIZE } from '~/shared/index.ts'
 import type { loader as gitlabCommitsLoader } from '~/routes/gitlab.commits.tsx'
@@ -49,8 +49,12 @@ export function useGitlabCommitsQuery({
 				throw new Error('Projects and contributors are required to fetch GitLab commits')
 			}
 
-			const fromDate = format(new Date(dateRange.from), 'yyyy-MM-dd')
-			const toDate = format(new Date(dateRange.to), 'yyyy-MM-dd')
+			const fromDate = DateTime.fromISO(dateRange.from).toISODate()
+			const toDate = DateTime.fromISO(dateRange.to).toISODate()
+
+			if (!fromDate || !toDate) {
+				throw new Error('Invalid date range format')
+			}
 
 			const searchParams = new URLSearchParams([
 				...projectIds.map(id => ['project-id', id]),

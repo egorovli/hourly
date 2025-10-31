@@ -3,6 +3,7 @@ import type { EventInteractionArgs } from 'react-big-calendar/lib/addons/dragAnd
 import type { EventChange, EventChangesSummary } from './types.ts'
 import type { DateRange } from 'react-day-picker'
 
+import { DateTime } from 'luxon'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useUpdateWorklogEntriesMutation } from '~/features/update-worklog-entries/index.ts'
@@ -101,8 +102,12 @@ export function useCalendarEventsState({
 		// Deep copy events to avoid mutations
 		const eventsCopy = events.map(event => ({
 			...event,
-			start: new Date(event.start),
-			end: new Date(event.end),
+			start: DateTime.fromJSDate(
+				event.start instanceof Date ? event.start : new Date(event.start)
+			).toJSDate(),
+			end: DateTime.fromJSDate(
+				event.end instanceof Date ? event.end : new Date(event.end)
+			).toJSDate(),
 			resource: { ...event.resource }
 		}))
 
@@ -116,8 +121,12 @@ export function useCalendarEventsState({
 		const { event, start, end } = args
 
 		// Convert start/end to Date if they're strings
-		const startDate = start instanceof Date ? start : new Date(start)
-		const endDate = end instanceof Date ? end : new Date(end)
+		const startDate =
+			start instanceof Date
+				? DateTime.fromJSDate(start).toJSDate()
+				: DateTime.fromISO(start).toJSDate()
+		const endDate =
+			end instanceof Date ? DateTime.fromJSDate(end).toJSDate() : DateTime.fromISO(end).toJSDate()
 
 		// Find original event for comparison (null for newly created events)
 		const originalEvent = originalEventsRef.current.find(e => e.id === event.id) ?? null
@@ -129,7 +138,9 @@ export function useCalendarEventsState({
 			end: endDate,
 			resource: {
 				...event.resource,
-				timeSpentSeconds: Math.floor((endDate.getTime() - startDate.getTime()) / 1000)
+				timeSpentSeconds: Math.floor(
+					DateTime.fromJSDate(endDate).diff(DateTime.fromJSDate(startDate), 'seconds').seconds
+				)
 			}
 		}
 
@@ -145,7 +156,7 @@ export function useCalendarEventsState({
 				originalEvent: existingChange?.originalEvent ?? originalEvent,
 				modifiedEvent: updatedEvent,
 				changeType: existingChange?.changeType === 'create' ? 'create' : 'resize',
-				timestamp: Date.now()
+				timestamp: DateTime.now().toMillis()
 			})
 			return newChanges
 		})
@@ -186,7 +197,7 @@ export function useCalendarEventsState({
 				originalEvent: existingChange?.originalEvent ?? originalEvent,
 				modifiedEvent: updatedEvent,
 				changeType: existingChange?.changeType === 'create' ? 'create' : 'move',
-				timestamp: Date.now()
+				timestamp: DateTime.now().toMillis()
 			})
 			return newChanges
 		})
@@ -206,10 +217,12 @@ export function useCalendarEventsState({
 			}
 		): WorklogCalendarEvent => {
 			// Generate a temporary ID for the new event
-			const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+			const tempId = `temp-${DateTime.now().toMillis()}-${Math.random().toString(36).substring(2, 9)}`
 
 			// Calculate time spent in seconds
-			const timeSpentSeconds = Math.floor((end.getTime() - start.getTime()) / 1000)
+			const timeSpentSeconds = Math.floor(
+				DateTime.fromJSDate(end).diff(DateTime.fromJSDate(start), 'seconds').seconds
+			)
 
 			// Determine title based on issue data
 			const title = issueData ? `${issueData.issueKey} • ${issueData.issueSummary}` : 'New Event'
@@ -227,7 +240,7 @@ export function useCalendarEventsState({
 					authorName: currentUserName,
 					authorAccountId: currentUserAccountId,
 					timeSpentSeconds,
-					started: start.toISOString()
+					started: DateTime.fromJSDate(start).toISO() ?? ''
 				}
 			}
 
@@ -242,7 +255,7 @@ export function useCalendarEventsState({
 					originalEvent: null,
 					modifiedEvent: newEvent,
 					changeType: 'create',
-					timestamp: Date.now()
+					timestamp: DateTime.now().toMillis()
 				})
 				return newChanges
 			})
@@ -280,7 +293,7 @@ export function useCalendarEventsState({
 						originalEvent,
 						modifiedEvent: originalEvent, // Keep reference
 						changeType: 'delete',
-						timestamp: Date.now()
+						timestamp: DateTime.now().toMillis()
 					})
 					return newChanges
 				})
@@ -310,7 +323,7 @@ export function useCalendarEventsState({
 					originalEvent,
 					modifiedEvent: originalEvent,
 					changeType: 'delete',
-					timestamp: Date.now()
+					timestamp: DateTime.now().toMillis()
 				})
 			}
 		}
@@ -328,10 +341,16 @@ export function useCalendarEventsState({
 		}
 
 		// Convert dateRange to ISO date strings
-		const fromDate = dateRange.from instanceof Date ? dateRange.from : new Date(dateRange.from)
-		const toDate = dateRange.to instanceof Date ? dateRange.to : new Date(dateRange.to)
-		const fromStr = fromDate.toISOString().split('T')[0]
-		const toStr = toDate.toISOString().split('T')[0]
+		const fromDate =
+			dateRange.from instanceof Date
+				? DateTime.fromJSDate(dateRange.from)
+				: DateTime.fromISO(dateRange.from)
+		const toDate =
+			dateRange.to instanceof Date
+				? DateTime.fromJSDate(dateRange.to)
+				: DateTime.fromISO(dateRange.to)
+		const fromStr = fromDate.toISODate()
+		const toStr = toDate.toISODate()
 
 		if (!fromStr || !toStr) {
 			throw new Error('Invalid date range format')
@@ -353,55 +372,19 @@ export function useCalendarEventsState({
 			return eventDateStr >= fromStr && eventDateStr <= toStr
 		})
 
-		// Get all existing worklogs (from original events) that should be deleted
-		const existingEventsInRange = originalEventsRef.current.filter(event => {
-			// Filter by user
-			if (currentUserAccountId && event.resource.authorAccountId !== currentUserAccountId) {
-				return false
-			}
-
-			// Filter by date range
-			const eventDate = new Date(event.start)
-			const eventDateStr = eventDate.toISOString().split('T')[0]
-			if (!eventDateStr) {
-				return false
-			}
-			return eventDateStr >= fromStr && eventDateStr <= toStr
-		})
-
-		// Convert existing events to deleted entries (only if they have a worklog ID)
-		const deletedEntries = existingEventsInRange
-			.filter(event => {
-				// Only delete events that have a worklog ID (format: "issueId-worklogId")
-				return event.id.includes('-') && event.id !== event.resource.issueKey
-			})
-			.map(event => ({
-				localId: event.id,
-				id: event.id, // This is the compound ID "issueId-worklogId"
-				issueKey: event.resource.issueKey,
-				summary: event.resource.issueSummary || event.title,
-				projectName: event.resource.projectName || '',
-				authorName: event.resource.authorName || '',
-				started: event.resource.started || event.start.toISOString(),
-				timeSpentSeconds: event.resource.timeSpentSeconds
-			}))
-
-		// Convert current events to new entries
-		const newEntries = eventsInRange.map(event => ({
+		// Convert current events to entries (idempotent format: just send what should exist)
+		const entries = eventsInRange.map(event => ({
 			localId: event.id,
 			issueKey: event.resource.issueKey,
 			summary: event.resource.issueSummary || event.title,
 			projectName: event.resource.projectName || '',
 			authorName: event.resource.authorName || '',
 			started: event.resource.started || event.start.toISOString(),
-			timeSpentSeconds: event.resource.timeSpentSeconds,
-			isNew: true
+			timeSpentSeconds: event.resource.timeSpentSeconds
 		}))
 
 		await mutation.mutateAsync({
-			newEntries,
-			modifiedEntries: [], // We're deleting and recreating, so no modifications needed
-			deletedEntries,
+			entries,
 			dateRange: {
 				from: fromStr,
 				to: toStr
@@ -446,10 +429,16 @@ export function useCalendarEventsState({
 		}
 
 		// Convert dateRange to ISO date strings
-		const fromDate = dateRange.from instanceof Date ? dateRange.from : new Date(dateRange.from)
-		const toDate = dateRange.to instanceof Date ? dateRange.to : new Date(dateRange.to)
-		const fromStr = fromDate.toISOString().split('T')[0]
-		const toStr = toDate.toISOString().split('T')[0]
+		const fromDate =
+			dateRange.from instanceof Date
+				? DateTime.fromJSDate(dateRange.from)
+				: DateTime.fromISO(dateRange.from)
+		const toDate =
+			dateRange.to instanceof Date
+				? DateTime.fromJSDate(dateRange.to)
+				: DateTime.fromISO(dateRange.to)
+		const fromStr = fromDate.toISODate()
+		const toStr = toDate.toISODate()
 
 		if (!fromStr || !toStr) {
 			return {
@@ -469,8 +458,8 @@ export function useCalendarEventsState({
 				}
 
 				// Filter by date range
-				const eventDate = new Date(event.start)
-				const eventDateStr = eventDate.toISOString().split('T')[0]
+				const eventDate = DateTime.fromJSDate(event.start)
+				const eventDateStr = eventDate.toISODate()
 				if (!eventDateStr) {
 					return false
 				}
@@ -538,7 +527,8 @@ export function useCalendarEventsState({
 				summary: localEvent.resource.issueSummary || localEvent.title,
 				projectName: localEvent.resource.projectName || '',
 				authorName: localEvent.resource.authorName || '',
-				started: localEvent.resource.started || localEvent.start.toISOString(),
+				started:
+					(localEvent.resource.started || DateTime.fromJSDate(localEvent.start).toISO()) ?? '',
 				timeSpentSeconds: localEvent.resource.timeSpentSeconds
 			}
 
@@ -548,8 +538,10 @@ export function useCalendarEventsState({
 					originalEvent.resource.issueKey !== localEvent.resource.issueKey ||
 					originalEvent.resource.started !== localEvent.resource.started ||
 					originalEvent.resource.timeSpentSeconds !== localEvent.resource.timeSpentSeconds ||
-					originalEvent.start.getTime() !== localEvent.start.getTime() ||
-					originalEvent.end.getTime() !== localEvent.end.getTime()
+					DateTime.fromJSDate(originalEvent.start).toMillis() !==
+						DateTime.fromJSDate(localEvent.start).toMillis() ||
+					DateTime.fromJSDate(originalEvent.end).toMillis() !==
+						DateTime.fromJSDate(localEvent.end).toMillis()
 
 				if (isModified) {
 					modifiedEntries.push(entry)
@@ -577,7 +569,9 @@ export function useCalendarEventsState({
 					summary: originalEvent.resource.issueSummary || originalEvent.title,
 					projectName: originalEvent.resource.projectName || '',
 					authorName: originalEvent.resource.authorName || '',
-					started: originalEvent.resource.started || originalEvent.start.toISOString(),
+					started:
+						(originalEvent.resource.started || DateTime.fromJSDate(originalEvent.start).toISO()) ??
+						'',
 					timeSpentSeconds: originalEvent.resource.timeSpentSeconds
 				})
 			}

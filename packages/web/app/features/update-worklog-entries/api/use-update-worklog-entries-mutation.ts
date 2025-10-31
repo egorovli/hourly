@@ -4,20 +4,20 @@ import { worklogEntriesKeys } from '~/features/load-worklog-entries/index.ts'
 import type { action as updateWorklogEntriesAction } from '~/routes/jira.worklog.entries.tsx'
 
 import type {
-	WorklogChangesRequest,
+	WorklogSyncRequest,
 	WorklogChangesResponse,
 	WorklogChangesError
 } from '../model/types.ts'
 
 /**
- * Mutation hook for saving worklog changes to Jira
+ * Mutation hook for saving worklog changes to Jira (idempotent sync)
  * Invalidates worklog entries queries on success
  */
 export function useUpdateWorklogEntriesMutation() {
 	const queryClient = useQueryClient()
 
-	return useMutation<WorklogChangesResponse, Error, WorklogChangesRequest>({
-		mutationFn: async (request: WorklogChangesRequest) => {
+	return useMutation<WorklogChangesResponse, Error, WorklogSyncRequest>({
+		mutationFn: async (request: WorklogSyncRequest) => {
 			const response = await fetch('/jira/worklog/entries', {
 				method: 'POST',
 				headers: {

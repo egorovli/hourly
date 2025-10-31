@@ -1,5 +1,5 @@
 import { useInfiniteQuery } from '@tanstack/react-query'
-import { format } from 'date-fns'
+import { DateTime } from 'luxon'
 import type { InferQueryKeyParams } from '~/shared/index.ts'
 import { PAGE_SIZE } from '~/shared/index.ts'
 import type { loader as jiraWorklogEntriesLoader } from '~/routes/jira.worklog.entries.tsx'
@@ -46,8 +46,12 @@ export function useWorklogEntriesQuery({
 				throw new Error('Date range is required to fetch worklog entries')
 			}
 
-			const fromDate = format(new Date(dateRange.from), 'yyyy-MM-dd')
-			const toDate = format(new Date(dateRange.to), 'yyyy-MM-dd')
+			const fromDate = DateTime.fromISO(dateRange.from).toISODate()
+			const toDate = DateTime.fromISO(dateRange.to).toISODate()
+
+			if (!fromDate || !toDate) {
+				throw new Error('Invalid date range format')
+			}
 
 			const searchParams = new URLSearchParams([
 				...projectIds.map(id => ['project-id', id]),

@@ -191,8 +191,8 @@ export function WorklogsCalendar({
 				// Store original event and position for duplication preview
 				setDraggedEventForDuplication({
 					event: args.event,
-					originalStart: new Date(args.event.start),
-					originalEnd: new Date(args.event.end)
+					originalStart: DateTime.fromJSDate(args.event.start).toJSDate(),
+					originalEnd: DateTime.fromJSDate(args.event.end).toJSDate()
 				})
 			}
 		},
@@ -247,8 +247,10 @@ export function WorklogsCalendar({
 					projectName: '',
 					authorName: currentUserName ?? 'Current User',
 					authorAccountId: currentUserAccountId,
-					timeSpentSeconds: Math.floor((range.end.getTime() - range.start.getTime()) / 1000),
-					started: range.start.toISOString()
+					timeSpentSeconds: Math.floor(
+						DateTime.fromJSDate(range.end).diff(DateTime.fromJSDate(range.start), 'seconds').seconds
+					),
+					started: DateTime.fromJSDate(range.start).toISO() ?? ''
 				}
 			}
 
@@ -270,7 +272,10 @@ export function WorklogsCalendar({
 			}
 
 			// Prevent single-click creation - only allow actual drag
-			const timeDiffMs = slotInfo.end.getTime() - slotInfo.start.getTime()
+			const timeDiffMs = DateTime.fromJSDate(slotInfo.end).diff(
+				DateTime.fromJSDate(slotInfo.start),
+				'milliseconds'
+			).milliseconds
 			if (timeDiffMs < 60000) {
 				// Less than 1 minute = likely a click, not a drag
 				return
@@ -313,14 +318,16 @@ export function WorklogsCalendar({
 		const draggedEvent = localEvents.find(e => e.id === draggedEventForDuplication.event.id)
 		if (draggedEvent) {
 			const hasMoved =
-				draggedEvent.start.getTime() !== draggedEventForDuplication.originalStart.getTime() ||
-				draggedEvent.end.getTime() !== draggedEventForDuplication.originalEnd.getTime()
+				DateTime.fromJSDate(draggedEvent.start).toMillis() !==
+					DateTime.fromJSDate(draggedEventForDuplication.originalStart).toMillis() ||
+				DateTime.fromJSDate(draggedEvent.end).toMillis() !==
+					DateTime.fromJSDate(draggedEventForDuplication.originalEnd).toMillis()
 
 			if (hasMoved) {
 				// Update preview position during drag
 				setCurrentDragPosition({
-					start: new Date(draggedEvent.start),
-					end: new Date(draggedEvent.end)
+					start: DateTime.fromJSDate(draggedEvent.start).toJSDate(),
+					end: DateTime.fromJSDate(draggedEvent.end).toJSDate()
 				})
 			}
 		}
@@ -332,15 +339,19 @@ export function WorklogsCalendar({
 			const { event, start } = args
 
 			// Convert start to Date if it's a string
-			const startDate = start instanceof Date ? start : new Date(start)
+			const startDate =
+				start instanceof Date
+					? DateTime.fromJSDate(start).toJSDate()
+					: DateTime.fromISO(start).toJSDate()
 
 			// Check if Alt/Option is currently pressed (check actual key state at drop time)
 			// Note: This checks the tracked state, which should be accurate if Alt is held during drag
 			if (isAltKeyPressed && draggedEventForDuplication) {
 				// Restore original event position (prevent move)
-				const originalDuration =
-					draggedEventForDuplication.originalEnd.getTime() -
-					draggedEventForDuplication.originalStart.getTime()
+				const originalDuration = DateTime.fromJSDate(draggedEventForDuplication.originalEnd).diff(
+					DateTime.fromJSDate(draggedEventForDuplication.originalStart),
+					'milliseconds'
+				).milliseconds
 				const restoredEvent: WorklogCalendarEvent = {
 					...event,
 					start: draggedEventForDuplication.originalStart,
@@ -348,7 +359,7 @@ export function WorklogsCalendar({
 					resource: {
 						...event.resource,
 						timeSpentSeconds: Math.floor(originalDuration / 1000),
-						started: draggedEventForDuplication.originalStart.toISOString()
+						started: DateTime.fromJSDate(draggedEventForDuplication.originalStart).toISO() ?? ''
 					}
 				}
 
@@ -361,10 +372,13 @@ export function WorklogsCalendar({
 				})
 
 				// Calculate duration for duplicate
-				const duplicateDuration =
-					draggedEventForDuplication.originalEnd.getTime() -
-					draggedEventForDuplication.originalStart.getTime()
-				const newEnd = new Date(startDate.getTime() + duplicateDuration)
+				const duplicateDuration = DateTime.fromJSDate(draggedEventForDuplication.originalEnd).diff(
+					DateTime.fromJSDate(draggedEventForDuplication.originalStart),
+					'milliseconds'
+				).milliseconds
+				const newEnd = DateTime.fromJSDate(startDate)
+					.plus({ milliseconds: duplicateDuration })
+					.toJSDate()
 
 				// Create duplicate event with same issue data
 				handleCreateEvent(
@@ -408,15 +422,17 @@ export function WorklogsCalendar({
 				return
 			}
 
-			const start = typeof args.start === 'string' ? new Date(args.start) : args.start
-			const end = typeof args.end === 'string' ? new Date(args.end) : args.end
+			const start =
+				typeof args.start === 'string' ? DateTime.fromISO(args.start).toJSDate() : args.start
+			const end = typeof args.end === 'string' ? DateTime.fromISO(args.end).toJSDate() : args.end
 
 			// Ensure minimum duration of 15 minutes
 			const minDuration = 15 * 60 * 1000 // 15 minutes in milliseconds
+			const startDt = DateTime.fromJSDate(start)
+			const endDt = DateTime.fromJSDate(end)
+			const durationMs = endDt.diff(startDt, 'milliseconds').milliseconds
 			const actualEnd =
-				end.getTime() - start.getTime() < minDuration
-					? new Date(start.getTime() + minDuration)
-					: end
+				durationMs < minDuration ? startDt.plus({ milliseconds: minDuration }).toJSDate() : end
 
 			// Create the event with issue data
 			handleCreateEvent(
@@ -461,9 +477,9 @@ export function WorklogsCalendar({
 			return null
 		}
 
-		const previewStart = new Date(0)
-		const previewEnd = new Date(EXTERNAL_DRAG_DEFAULT_DURATION_MS)
-		const startedIso = new Date().toISOString()
+		const previewStart = DateTime.fromMillis(0).toJSDate()
+		const previewEnd = DateTime.fromMillis(EXTERNAL_DRAG_DEFAULT_DURATION_MS).toJSDate()
+		const startedIso = DateTime.now().toISO() ?? ''
 
 		return {
 			id: `external-${externalIssue.id}`,
@@ -572,7 +588,7 @@ export function WorklogsCalendar({
 	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: time-range normalization handles multiple edge cases for calendar display
 	// biome-ignore lint/correctness/useExhaustiveDependencies: Settings.defaultZone.name is intentionally included to trigger recalculation when timezone changes
 	const dynamicMinMax = useMemo(() => {
-		const base = date ?? new Date()
+		const base = date ? DateTime.fromJSDate(date) : DateTime.now()
 
 		// Parse working hours settings
 		const [startHourStr, startMinStr] = workingDayStartTime.split(':').map(Number)
@@ -591,7 +607,7 @@ export function WorklogsCalendar({
 		if (displayEvents.length > 0) {
 			// Get start of day in the user's timezone using Luxon
 			// DateTime.fromJSDate uses Settings.defaultZone automatically
-			const baseDateTime = DateTime.fromJSDate(base)
+			const baseDateTime = base instanceof Date ? DateTime.fromJSDate(base) : base
 			const startOfDayLocal = baseDateTime.startOf('day')
 
 			for (const event of displayEvents) {
@@ -636,7 +652,7 @@ export function WorklogsCalendar({
 		// IMPORTANT: React Big Calendar expects min/max to be Date objects on the same day
 		// We create DateTime objects in the user's timezone, then convert to JS Date
 		// The localizer will handle displaying them in the correct timezone
-		const baseDateTime = DateTime.fromJSDate(base)
+		const baseDateTime = base instanceof Date ? DateTime.fromJSDate(base) : base
 
 		// Get the start of day in the user's timezone
 		const startOfDayInTimezone = baseDateTime.startOf('day')
@@ -677,7 +693,7 @@ export function WorklogsCalendar({
 			// If they're on different days in the user's timezone, clamp max to end of min's day
 			const endOfMinDay = startOfDayInTimezone.endOf('day')
 			const clampedMax = Math.min(calculatedMax.getTime(), endOfMinDay.toJSDate().getTime())
-			const calculatedMaxClamped = new Date(clampedMax)
+			const calculatedMaxClamped = DateTime.fromMillis(clampedMax).toJSDate()
 
 			// Ensure clamped max is still > min
 			if (calculatedMaxClamped <= calculatedMin) {
@@ -692,20 +708,16 @@ export function WorklogsCalendar({
 		// Final validation: ensure min and max are on the same UTC day
 		// React Big Calendar's getSlotMetrics calculates slots based on UTC dates internally
 		// so we need to ensure they're on the same UTC day to avoid "invalid array length" errors
-		const minUTCYear = calculatedMin.getUTCFullYear()
-		const minUTCMonth = calculatedMin.getUTCMonth()
-		const minUTCDate = calculatedMin.getUTCDate()
-		const maxUTCYear = calculatedMax.getUTCFullYear()
-		const maxUTCMonth = calculatedMax.getUTCMonth()
-		const maxUTCDate = calculatedMax.getUTCDate()
+		const minUTC = DateTime.fromJSDate(calculatedMin, { zone: 'utc' })
+		const maxUTC = DateTime.fromJSDate(calculatedMax, { zone: 'utc' })
+		const minUTCDateStr = minUTC.toFormat('yyyy-MM-dd')
+		const maxUTCDateStr = maxUTC.toFormat('yyyy-MM-dd')
 
-		if (minUTCYear !== maxUTCYear || minUTCMonth !== maxUTCMonth || minUTCDate !== maxUTCDate) {
+		if (minUTCDateStr !== maxUTCDateStr) {
 			// If they're on different UTC days, clamp max to end of min's UTC day
-			const endOfMinUTCDay = new Date(
-				Date.UTC(minUTCYear, minUTCMonth, minUTCDate, 23, 59, 59, 999)
-			)
-			const clampedMax = Math.min(calculatedMax.getTime(), endOfMinUTCDay.getTime())
-			const calculatedMaxClamped = new Date(clampedMax)
+			const endOfMinUTCDay = minUTC.endOf('day')
+			const clampedMax = Math.min(calculatedMax.getTime(), endOfMinUTCDay.toJSDate().getTime())
+			const calculatedMaxClamped = DateTime.fromMillis(clampedMax).toJSDate()
 
 			// Ensure clamped max is still > min
 			if (calculatedMaxClamped <= calculatedMin) {

@@ -1,5 +1,6 @@
 import type { WorklogChanges } from '~/entities/worklog/index.ts'
-import { AlertTriangle, Loader2, Plus, Edit, Trash2, Clock, Calendar, Check } from 'lucide-react'
+import { AlertTriangle, Loader2, Plus, Edit, Trash2, Clock, Check } from 'lucide-react'
+import { useRouteLoaderData } from 'react-router'
 
 import {
 	Dialog,
@@ -15,6 +16,7 @@ import { ScrollArea } from '~/shared/ui/shadcn/ui/scroll-area.tsx'
 import { Separator } from '~/shared/ui/shadcn/ui/separator.tsx'
 import { Card } from '~/shared/ui/shadcn/ui/card.tsx'
 import { formatDurationFromSeconds } from '~/shared/index.ts'
+import { formatDateTimeWithTimezone } from '~/shared/lib/formats/format-date-time.ts'
 
 export interface ConfirmWorklogSaveDialogProps {
 	open: boolean
@@ -31,6 +33,9 @@ export function ConfirmWorklogSaveDialog({
 	isSaving,
 	onConfirm
 }: ConfirmWorklogSaveDialogProps): React.ReactNode {
+	const rootData = useRouteLoaderData('root') as { preferences?: { timezone?: string } } | undefined
+	const timezone = rootData?.preferences?.timezone ?? 'UTC'
+
 	const totalChanges =
 		worklogChanges.newEntries.length +
 		worklogChanges.modifiedEntries.length +
@@ -176,7 +181,7 @@ export function ConfirmWorklogSaveDialog({
 																{entry.summary || 'No summary'}
 															</p>
 															<p className='text-xs text-muted-foreground'>
-																{new Date(entry.started).toLocaleString(undefined, {
+																{formatDateTimeWithTimezone(entry.started, timezone, {
 																	dateStyle: 'medium',
 																	timeStyle: 'short'
 																})}
@@ -225,7 +230,7 @@ export function ConfirmWorklogSaveDialog({
 																{entry.summary || 'No summary'}
 															</p>
 															<p className='text-xs text-muted-foreground'>
-																{new Date(entry.started).toLocaleString(undefined, {
+																{formatDateTimeWithTimezone(entry.started, timezone, {
 																	dateStyle: 'medium',
 																	timeStyle: 'short'
 																})}
@@ -275,7 +280,7 @@ export function ConfirmWorklogSaveDialog({
 															</p>
 															<p className='text-xs text-muted-foreground'>
 																{entry.started
-																	? new Date(entry.started).toLocaleString(undefined, {
+																	? formatDateTimeWithTimezone(entry.started, timezone, {
 																			dateStyle: 'medium',
 																			timeStyle: 'short'
 																		})

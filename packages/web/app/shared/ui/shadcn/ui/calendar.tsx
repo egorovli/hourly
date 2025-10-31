@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import { DateTime } from 'luxon'
 import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon } from 'lucide-react'
 import { type DayButton, DayPicker, getDefaultClassNames } from 'react-day-picker'
 
@@ -32,7 +33,7 @@ function Calendar({
 			)}
 			captionLayout={captionLayout}
 			formatters={{
-				formatMonthDropdown: date => date.toLocaleString('default', { month: 'short' }),
+				formatMonthDropdown: date => DateTime.fromJSDate(date).toFormat('LLL'),
 				...formatters
 			}}
 			classNames={{
@@ -178,7 +179,7 @@ function CalendarDayButton({
 			ref={ref}
 			variant='ghost'
 			size='icon'
-			data-day={day.date.toLocaleDateString()}
+			data-day={DateTime.fromJSDate(day.date).toISODate() ?? day.date.toLocaleDateString()}
 			data-selected-single={
 				modifiers['selected'] &&
 				!modifiers['range_start'] &&

@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { DateTime } from 'luxon'
 import type { WorklogCalendarEvent } from '~/entities/index.ts'
 import type { EventDialogMode, EventFormData } from './types.ts'
 
@@ -6,29 +7,29 @@ export function useEventForm(mode: EventDialogMode, event?: WorklogCalendarEvent
 	const [formData, setFormData] = useState<EventFormData>(() => {
 		if (mode === 'edit' && event) {
 			// Format existing event data
-			const start = new Date(event.start)
-			const end = new Date(event.end)
+			const start = DateTime.fromJSDate(event.start)
+			const end = DateTime.fromJSDate(event.end)
 
 			return {
 				issueKey: event.resource.issueKey,
-				startDate: start.toISOString().split('T')[0] ?? '',
-				startTime: start.toTimeString().slice(0, 5),
-				endDate: end.toISOString().split('T')[0] ?? '',
-				endTime: end.toTimeString().slice(0, 5),
+				startDate: start.toISODate() ?? '',
+				startTime: start.toFormat('HH:mm'),
+				endDate: end.toISODate() ?? '',
+				endTime: end.toFormat('HH:mm'),
 				description: event.resource.issueSummary || ''
 			}
 		}
 
 		// Default values for new event
-		const now = new Date()
-		const later = new Date(now.getTime() + 60 * 60 * 1000) // +1 hour
+		const now = DateTime.now()
+		const later = now.plus({ hours: 1 })
 
 		return {
 			issueKey: '',
-			startDate: now.toISOString().split('T')[0] ?? '',
-			startTime: now.toTimeString().slice(0, 5),
-			endDate: later.toISOString().split('T')[0] ?? '',
-			endTime: later.toTimeString().slice(0, 5),
+			startDate: now.toISODate() ?? '',
+			startTime: now.toFormat('HH:mm'),
+			endDate: later.toISODate() ?? '',
+			endTime: later.toFormat('HH:mm'),
 			description: ''
 		}
 	})
@@ -41,15 +42,15 @@ export function useEventForm(mode: EventDialogMode, event?: WorklogCalendarEvent
 	)
 
 	const resetForm = useCallback(() => {
-		const now = new Date()
-		const later = new Date(now.getTime() + 60 * 60 * 1000)
+		const now = DateTime.now()
+		const later = now.plus({ hours: 1 })
 
 		setFormData({
 			issueKey: '',
-			startDate: now.toISOString().split('T')[0] ?? '',
-			startTime: now.toTimeString().slice(0, 5),
-			endDate: later.toISOString().split('T')[0] ?? '',
-			endTime: later.toTimeString().slice(0, 5),
+			startDate: now.toISODate() ?? '',
+			startTime: now.toFormat('HH:mm'),
+			endDate: later.toISODate() ?? '',
+			endTime: later.toFormat('HH:mm'),
 			description: ''
 		})
 	}, [])

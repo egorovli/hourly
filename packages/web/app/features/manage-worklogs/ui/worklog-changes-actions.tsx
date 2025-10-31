@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import { DateTime } from 'luxon'
 import { Save, Undo2 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -32,29 +33,36 @@ export function WorklogChangesActions({
 
 	const handleConfirmSave = useCallback(async () => {
 		try {
-			// Build request payload
-			const request: {
-				newEntries: typeof worklogChanges.newEntries
-				modifiedEntries: typeof worklogChanges.modifiedEntries
-				deletedEntries: typeof worklogChanges.deletedEntries
-				dateRange?: { from: string; to: string }
-			} = {
-				newEntries: worklogChanges.newEntries,
-				modifiedEntries: worklogChanges.modifiedEntries,
-				deletedEntries: worklogChanges.deletedEntries
+			// Validate dateRange is available (required for idempotent sync)
+			if (!dateRange?.from || !dateRange?.to) {
+				throw new Error('Date range is required to save worklog changes')
 			}
 
-			// Add dateRange if both from and to are available
-			if (dateRange?.from && dateRange?.to) {
-				const fromDate = dateRange.from instanceof Date ? dateRange.from : new Date(dateRange.from)
-				const toDate = dateRange.to instanceof Date ? dateRange.to : new Date(dateRange.to)
-				const fromStr = fromDate.toISOString().split('T')[0]
-				const toStr = toDate.toISOString().split('T')[0]
-				if (fromStr && toStr) {
-					request.dateRange = {
-						from: fromStr,
-						to: toStr
-					}
+			const fromDate =
+				dateRange.from instanceof Date
+					? DateTime.fromJSDate(dateRange.from)
+					: DateTime.fromISO(dateRange.from)
+			const toDate =
+				dateRange.to instanceof Date
+					? DateTime.fromJSDate(dateRange.to)
+					: DateTime.fromISO(dateRange.to)
+
+			const fromStr = fromDate.toISODate()
+			const toStr = toDate.toISODate()
+
+			if (!fromStr || !toStr) {
+				throw new Error('Invalid date range format')
+			}
+
+			// Convert changes to idempotent format: entries = newEntries + modifiedEntries
+			// (deletedEntries are handled by backend - it deletes all existing entries in range)
+			const entries = [...worklogChanges.newEntries, ...worklogChanges.modifiedEntries]
+
+			const request = {
+				entries,
+				dateRange: {
+					from: fromStr,
+					to: toStr
 				}
 			}
 
@@ -73,11 +81,6 @@ export function WorklogChangesActions({
 					if (result.results.created.failed > 0) {
 						failedDetails.push(
 							`${result.results.created.failed} creation${result.results.created.failed === 1 ? '' : 's'} failed`
-						)
-					}
-					if (result.results.updated.failed > 0) {
-						failedDetails.push(
-							`${result.results.updated.failed} update${result.results.updated.failed === 1 ? '' : 's'} failed`
 						)
 					}
 					if (result.results.deleted.failed > 0) {

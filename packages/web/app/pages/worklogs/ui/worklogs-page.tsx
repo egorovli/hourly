@@ -2,6 +2,7 @@ import type { WorklogCalendarEvent } from '~/entities/index.ts'
 import type { CalendarProps } from 'react-big-calendar'
 import type { WorklogsPageProps } from '../model/types.ts'
 
+import { DateTime } from 'luxon'
 import { useWorklogsPageState } from '../model/use-worklogs-page-state.ts'
 
 import type { ReactNode } from 'react'
@@ -241,12 +242,12 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 			gitlabProjectIds: ['59014094'],
 			gitlabContributorIds: ['a.egorov@health-samurai.io', 'anton.egorov@health-samurai.io'],
 			dateRange: {
-				from: new Date(2025, 8, 1),
-				to: new Date(2025, 8, 30)
+				from: DateTime.fromObject({ year: 2025, month: 9, day: 1 }).toJSDate(),
+				to: DateTime.fromObject({ year: 2025, month: 9, day: 30 }).toJSDate()
 			}
 		} as const
-		const presetFrom = new Date(preset.dateRange.from.getTime())
-		const presetTo = new Date(preset.dateRange.to.getTime())
+		const presetFrom = DateTime.fromJSDate(preset.dateRange.from).toJSDate()
+		const presetTo = DateTime.fromJSDate(preset.dateRange.to).toJSDate()
 
 		handleJiraProjectIdsChange([...preset.jiraProjectIds])
 		handleJiraUserIdsChange([...preset.jiraUserIds])
@@ -257,8 +258,8 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 			to: presetTo
 		})
 		handleCalendarViewDateRangeChange({
-			from: new Date(presetFrom.getTime()),
-			to: new Date(presetTo.getTime())
+			from: DateTime.fromJSDate(presetFrom).toJSDate(),
+			to: DateTime.fromJSDate(presetTo).toJSDate()
 		})
 
 		setCalendarView(Views.WEEK)
@@ -275,17 +276,17 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 	])
 
 	const handleSetCurrentMonth = useCallback(() => {
-		const now = new Date()
-		const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
-		const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+		const now = DateTime.now()
+		const firstDay = now.startOf('month').toJSDate()
+		const lastDay = now.endOf('month').toJSDate()
 
 		handleDateRangeChange({
 			from: firstDay,
 			to: lastDay
 		})
 		handleCalendarViewDateRangeChange({
-			from: new Date(firstDay.getTime()),
-			to: new Date(lastDay.getTime())
+			from: DateTime.fromJSDate(firstDay).toJSDate(),
+			to: DateTime.fromJSDate(lastDay).toJSDate()
 		})
 
 		setCalendarView(Views.WEEK)
@@ -393,8 +394,8 @@ export function WorklogsPage({ loaderData }: WorklogsPageProps): React.ReactNode
 		// Include ALL commit-referenced issues, not just first 10
 		const sortedIssues = Array.from(issuesMap.values())
 			.sort((a, b) => {
-				const aCreated = a.fields.created ? new Date(a.fields.created).getTime() : 0
-				const bCreated = b.fields.created ? new Date(b.fields.created).getTime() : 0
+				const aCreated = a.fields.created ? DateTime.fromISO(a.fields.created).toMillis() : 0
+				const bCreated = b.fields.created ? DateTime.fromISO(b.fields.created).toMillis() : 0
 				if (aCreated !== bCreated) {
 					return bCreated - aCreated // Descending (newest first)
 				}

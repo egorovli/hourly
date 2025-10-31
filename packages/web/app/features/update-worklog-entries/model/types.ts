@@ -4,6 +4,16 @@
 
 import type { LocalWorklogEntry } from '~/entities/worklog/index.ts'
 
+// New idempotent format: just send entries that should exist
+export interface WorklogSyncRequest {
+	entries: LocalWorklogEntry[]
+	dateRange: {
+		from: string
+		to: string
+	}
+}
+
+// Legacy format for backward compatibility (will be removed)
 export interface WorklogChangesRequest {
 	newEntries: LocalWorklogEntry[]
 	modifiedEntries: LocalWorklogEntry[]
@@ -18,17 +28,12 @@ export interface WorklogChangesResponse {
 	success: boolean
 	updatedCount: number
 	results: {
-		created: {
-			success: number
-			failed: number
-			errors: Array<{ entry: unknown; error: string }>
-		}
-		updated: {
-			success: number
-			failed: number
-			errors: Array<{ entry: unknown; error: string }>
-		}
 		deleted: {
+			success: number
+			failed: number
+			errors: Array<{ entry: unknown; error: string }>
+		}
+		created: {
 			success: number
 			failed: number
 			errors: Array<{ entry: unknown; error: string }>
