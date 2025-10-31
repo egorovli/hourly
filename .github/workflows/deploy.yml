@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: 'Docker image tag to deploy (e.g., latest, main, sha-abc1234, v1.0.0). Defaults to "latest"'
+        description: 'Docker image tag to deploy (e.g., latest, main, sha-abc1234, 1.0.0). Defaults to "latest"'
         required: false
         type: string
         default: 'latest'
@@ -27,17 +27,8 @@ on:
         options:
           - staging
           - production
-      workflow_run_id:
-        description: 'Optional: Build workflow run ID to verify (leave empty to use latest successful build)'
-        required: false
-        type: string
-      dry_run:
-        description: 'Dry run mode (echo only, no actual deployment)'
-        required: false
-        type: boolean
-        default: true
 
-run-name: "Deployment to ${{ github.event.inputs.environment }} (${{ github.event.inputs.image_tag || 'latest' }}) by @${{ github.actor }}"
+run-name: "deploy: ${{ github.event.inputs.environment }} (${{ github.event.inputs.image_tag || 'latest' }}) by @${{ github.actor }}"
 
 env:
   REGISTRY: ghcr.io
@@ -54,7 +45,6 @@ jobs:
     timeout-minutes: 10
     if: contains('egorovli', github.actor)
     outputs:
-      build_workflow_run_id: ${{ steps.verify.outputs.workflow_run_id }}
       build_sha: ${{ steps.verify.outputs.build_sha }}
       image_exists: ${{ steps.image-check.outputs.image_exists }}
       image_digest: ${{ steps.image-check.outputs.image_digest }}
@@ -88,35 +78,27 @@ jobs:
       - name: Verify build workflow completion
         id: verify
         env:
-          BUILD_WORKFLOW_ID: ${{ inputs.workflow_run_id }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           
-          echo "🔍 Verifying build workflow completion..."
+          echo "🔍 Finding latest successful build workflow..."
           
-          # Determine which workflow run to check
-          if [[ -n "${BUILD_WORKFLOW_ID:-}" ]]; then
-            echo "Using specified workflow run ID: ${BUILD_WORKFLOW_ID}"
-            WORKFLOW_RUN_ID="${BUILD_WORKFLOW_ID}"
-          else
-            echo "Finding latest successful build workflow run..."
-            WORKFLOW_RUN_ID=$(gh run list \
-              --workflow="build.yml" \
-              --branch="${{ github.ref_name }}" \
-              --status=success \
-              --limit=1 \
-              --json databaseId \
-              --jq '.[0].databaseId' \
-              || echo "")
-            
-            if [[ -z "${WORKFLOW_RUN_ID}" ]]; then
-              echo "❌ No successful build workflow found for branch: ${{ github.ref_name }}"
-              exit 1
-            fi
-            
-            echo "Found latest successful build: ${WORKFLOW_RUN_ID}"
+          WORKFLOW_RUN_ID=$(gh run list \
+            --workflow="build.yml" \
+            --branch="${{ github.ref_name }}" \
+            --status=success \
+            --limit=1 \
+            --json databaseId \
+            --jq '.[0].databaseId' \
+            || echo "")
+          
+          if [[ -z "${WORKFLOW_RUN_ID}" ]]; then
+            echo "❌ No successful build workflow found for branch: ${{ github.ref_name }}"
+            exit 1
           fi
+          
+          echo "Found latest successful build: ${WORKFLOW_RUN_ID}"
           
           # Verify workflow run exists and succeeded
           WORKFLOW_STATUS=$(gh run view "${WORKFLOW_RUN_ID}" \
@@ -142,7 +124,6 @@ jobs:
           
           echo "✅ Build workflow verified: ${WORKFLOW_RUN_ID}"
           echo "Build SHA: ${BUILD_SHA}"
-          echo "workflow_run_id=${WORKFLOW_RUN_ID}" >> $GITHUB_OUTPUT
           echo "build_sha=${BUILD_SHA}" >> $GITHUB_OUTPUT
 
       - name: Setup Docker
@@ -230,12 +211,10 @@ jobs:
       IMAGE_NAME: ${{ github.repository }}/web
       FULL_IMAGE: ${{ needs.verify-build.outputs.full_image }}
       IMAGE_TAG: ${{ inputs.image_tag || 'latest' }}
-      RESOLVED_TAG: ${{ needs.verify-build.outputs.resolved_tag }}
       RESOLVED_SHA: ${{ needs.verify-build.outputs.resolved_sha }}
       RESOLVED_SHA_SHORT: ${{ needs.verify-build.outputs.resolved_sha_short }}
       ENVIRONMENT: ${{ inputs.environment }}
       BUILD_SHA: ${{ needs.verify-build.outputs.build_sha }}
-      BUILD_RUN_ID: ${{ needs.verify-build.outputs.build_workflow_run_id }}
 
     steps:
       - name: Checkout repository
@@ -282,13 +261,11 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Deployment Configuration" >> $GITHUB_STEP_SUMMARY
           echo "- **Environment:** \`${{ inputs.environment }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Dry Run:** \`${{ inputs.dry_run }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Triggered By:** \`${{ github.actor }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Branch:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit SHA:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Build Verification" >> $GITHUB_STEP_SUMMARY
-          echo "- **Build Workflow Run ID:** \`${{ needs.verify-build.outputs.build_workflow_run_id }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Build Commit SHA:** \`${{ needs.verify-build.outputs.build_sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Image Verified:** ✅" >> $GITHUB_STEP_SUMMARY
           IMAGE_DIGEST="${{ needs.verify-build.outputs.image_digest }}"
@@ -312,13 +289,11 @@ jobs:
           echo ""
           echo "Deployment Configuration:"
           echo "  Environment:     ${ENVIRONMENT}"
-          echo "  Dry Run:         ${{ inputs.dry_run }}"
           echo "  Triggered By:    ${{ github.actor }}"
           echo "  Branch:          ${{ github.ref_name }}"
           echo "  Commit SHA:      ${{ github.sha }}"
           echo ""
           echo "Build Verification:"
-          echo "  Build Run ID:    ${{ needs.verify-build.outputs.build_workflow_run_id }}"
           echo "  Build SHA:       ${{ needs.verify-build.outputs.build_sha }}"
           IMAGE_DIGEST="${{ needs.verify-build.outputs.image_digest }}"
           if [[ -n "${IMAGE_DIGEST}" ]]; then
@@ -328,48 +303,13 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
       - name: Execute deployment stub
-        if: inputs.dry_run == true
         run: |
           set -euo pipefail
           
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "🔍 DRY RUN MODE - No actual deployment"
+          echo "🚀 DEPLOYMENT STUB"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo ""
-          echo "In production mode, this step would:"
-          echo "  1. Connect to deployment target (SSH/Kubernetes/Helm)"
-          echo "  2. Pull image: ${REGISTRY}/${IMAGE_NAME}:${{ inputs.image_tag }}"
-          echo "  3. Update deployment configuration"
-          echo "  4. Perform health checks"
-          echo "  5. Rollback on failure"
-          echo ""
-          echo "Deployment command would be:"
-          echo "  docker pull ${FULL_IMAGE}"
-          echo "  # OR"
-          echo "  kubectl set image deployment/app app=${FULL_IMAGE} -n ${ENVIRONMENT}"
-          echo "  # OR"
-          echo "  helm upgrade app ./chart --set image.tag=${IMAGE_TAG} -n ${ENVIRONMENT}"
-          echo ""
-          echo "Available environment variables:"
-          echo "  FULL_IMAGE=${FULL_IMAGE}"
-          echo "  IMAGE_TAG=${IMAGE_TAG}"
-          echo "  ENVIRONMENT=${ENVIRONMENT}"
-          echo "  BUILD_SHA=${BUILD_SHA}"
-          echo "  BUILD_RUN_ID=${BUILD_RUN_ID}"
-          echo ""
-
-      - name: Execute deployment (production)
-        if: inputs.dry_run == false
-        run: |
-          set -euo pipefail
-          
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "🚀 PRODUCTION DEPLOYMENT MODE"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo ""
-          echo "⚠️  WARNING: This is a production deployment!"
           echo ""
           echo "Current implementation is a stub."
           echo "Replace this step with actual deployment logic:"
@@ -381,7 +321,6 @@ jobs:
           echo "  RESOLVED_SHA_SHORT=${RESOLVED_SHA_SHORT}"
           echo "  ENVIRONMENT=${ENVIRONMENT}"
           echo "  BUILD_SHA=${BUILD_SHA}"
-          echo "  BUILD_RUN_ID=${BUILD_RUN_ID}"
           echo ""
           echo "  # Example SSH + Docker:"
           echo "  ssh deploy@target 'docker pull ${FULL_IMAGE} && docker-compose up -d'"
