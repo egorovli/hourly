@@ -16,9 +16,10 @@ on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: 'Docker image tag to deploy (e.g., latest, main, sha-abc1234, v1.0.0)'
-        required: true
+        description: 'Docker image tag to deploy (e.g., latest, main, sha-abc1234, v1.0.0). Defaults to "latest"'
+        required: false
         type: string
+        default: 'latest'
       environment:
         description: 'Target environment'
         required: true
@@ -36,49 +37,31 @@ on:
         type: boolean
         default: true
 
+run-name: "Deployment to ${{ github.event.inputs.environment }} (${{ github.event.inputs.image_tag || 'latest' }}) by @${{ github.actor }}"
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}/web
-  AUTHORIZED_USER: egorovli
-  AUTHORIZED_USER_ID: '5165202'
 
 defaults:
   run:
     shell: bash
 
 jobs:
-  verify-authorization:
-    name: Verify Authorization
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      authorized: ${{ steps.check.outputs.authorized }}
-
-    steps:
-      - name: Check user authorization
-        id: check
-        run: |
-          if [[ "${{ github.actor }}" != "${{ env.AUTHORIZED_USER }}" ]]; then
-            echo "❌ Unauthorized: Only ${{ env.AUTHORIZED_USER }} can trigger deployments"
-            echo "Current actor: ${{ github.actor }}"
-            echo "authorized=false" >> $GITHUB_OUTPUT
-            exit 1
-          fi
-          echo "✅ Authorized: ${{ github.actor }}"
-          echo "authorized=true" >> $GITHUB_OUTPUT
-
   verify-build:
     name: Verify Build Workflow
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: verify-authorization
-    if: needs.verify-authorization.outputs.authorized == 'true'
+    if: contains('egorovli', github.actor)
     outputs:
       build_workflow_run_id: ${{ steps.verify.outputs.workflow_run_id }}
       build_sha: ${{ steps.verify.outputs.build_sha }}
       image_exists: ${{ steps.image-check.outputs.image_exists }}
       image_digest: ${{ steps.image-check.outputs.image_digest }}
-      full_image: ghcr.io/${{ github.repository }}/web:${{ inputs.image_tag }}
+      resolved_tag: ${{ steps.resolve-final.outputs.resolved_tag }}
+      resolved_sha: ${{ steps.resolve-final.outputs.resolved_sha }}
+      resolved_sha_short: ${{ steps.resolve-final.outputs.resolved_sha_short }}
+      full_image: ghcr.io/${{ github.repository }}/web:${{ inputs.image_tag || 'latest' }}
 
     steps:
       - name: Checkout repository
@@ -170,12 +153,13 @@ jobs:
         env:
           REGISTRY: ghcr.io
           IMAGE_NAME: ${{ github.repository }}/web
+          IMAGE_TAG: ${{ inputs.image_tag || 'latest' }}
         run: |
           set -euo pipefail
           
           echo "🔍 Verifying image exists in registry..."
           
-          FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${{ inputs.image_tag }}"
+          FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
           echo "Checking image: ${FULL_IMAGE}"
           
           # Login to registry
@@ -209,21 +193,46 @@ jobs:
             exit 1
           fi
 
+      - name: Resolve tag to commit SHA (finalize)
+        id: resolve-final
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag || 'latest' }}
+          BUILD_SHA: ${{ steps.verify.outputs.build_sha }}
+        run: |
+          set -euo pipefail
+          
+          # If tag is already a SHA, use it
+          if [[ "${IMAGE_TAG}" =~ ^[0-9a-f]{7,}$ ]]; then
+            RESOLVED_SHA="${IMAGE_TAG}"
+            echo "✅ Tag is commit SHA: ${RESOLVED_SHA}"
+          else
+            # Otherwise, use the build SHA from the verified workflow
+            RESOLVED_SHA="${BUILD_SHA}"
+            echo "✅ Resolved tag '${IMAGE_TAG}' to commit SHA: ${RESOLVED_SHA}"
+          fi
+          
+          echo "resolved_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          echo "resolved_sha=${RESOLVED_SHA}" >> $GITHUB_OUTPUT
+          
+          # Output short SHA for display
+          SHORT_SHA="${RESOLVED_SHA:0:7}"
+          echo "resolved_sha_short=${SHORT_SHA}" >> $GITHUB_OUTPUT
+
   deploy:
     name: Deploy Application
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs:
-      - verify-authorization
       - verify-build
-    if: |
-      needs.verify-authorization.outputs.authorized == 'true' &&
-      needs.verify-build.outputs.image_exists == 'true'
+    if: needs.verify-build.outputs.image_exists == 'true'
     env:
       REGISTRY: ghcr.io
       IMAGE_NAME: ${{ github.repository }}/web
       FULL_IMAGE: ${{ needs.verify-build.outputs.full_image }}
-      IMAGE_TAG: ${{ inputs.image_tag }}
+      IMAGE_TAG: ${{ inputs.image_tag || 'latest' }}
+      RESOLVED_TAG: ${{ needs.verify-build.outputs.resolved_tag }}
+      RESOLVED_SHA: ${{ needs.verify-build.outputs.resolved_sha }}
+      RESOLVED_SHA_SHORT: ${{ needs.verify-build.outputs.resolved_sha_short }}
       ENVIRONMENT: ${{ inputs.environment }}
       BUILD_SHA: ${{ needs.verify-build.outputs.build_sha }}
       BUILD_RUN_ID: ${{ needs.verify-build.outputs.build_workflow_run_id }}
@@ -239,15 +248,17 @@ jobs:
           echo "🔍 Validating deployment parameters..."
           
           # Validate image tag format
-          if [[ ! "${{ inputs.image_tag }}" =~ ^[a-zA-Z0-9._-]+$ ]]; then
-            echo "❌ Invalid image tag format: ${{ inputs.image_tag }}"
+          IMAGE_TAG="${IMAGE_TAG}"
+          if [[ ! "${IMAGE_TAG}" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+            echo "❌ Invalid image tag format: ${IMAGE_TAG}"
             echo "Tag must contain only alphanumeric characters, dots, underscores, and hyphens"
             exit 1
           fi
           
           # Validate environment
-          if [[ "${{ inputs.environment }}" != "staging" && "${{ inputs.environment }}" != "production" ]]; then
-            echo "❌ Invalid environment: ${{ inputs.environment }}"
+          ENVIRONMENT="${ENVIRONMENT}"
+          if [[ "${ENVIRONMENT}" != "staging" && "${ENVIRONMENT}" != "production" ]]; then
+            echo "❌ Invalid environment: ${ENVIRONMENT}"
             echo "Environment must be 'staging' or 'production'"
             exit 1
           fi
@@ -263,8 +274,11 @@ jobs:
           echo "### Image Information" >> $GITHUB_STEP_SUMMARY
           echo "- **Registry:** \`${REGISTRY}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Image Name:** \`${IMAGE_NAME}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Image Tag:** \`${{ inputs.image_tag }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Full Image:** \`${REGISTRY}/${IMAGE_NAME}:${{ inputs.image_tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image Tag:** \`${IMAGE_TAG}\`" >> $GITHUB_STEP_SUMMARY
+          if [[ -n "${RESOLVED_SHA}" ]]; then
+            echo "- **Resolved SHA:** \`${RESOLVED_SHA_SHORT}\` (${RESOLVED_SHA})" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "- **Full Image:** \`${FULL_IMAGE}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Deployment Configuration" >> $GITHUB_STEP_SUMMARY
           echo "- **Environment:** \`${{ inputs.environment }}\`" >> $GITHUB_STEP_SUMMARY
@@ -290,11 +304,14 @@ jobs:
           echo "Image Information:"
           echo "  Registry:        ${REGISTRY}"
           echo "  Image Name:      ${IMAGE_NAME}"
-          echo "  Image Tag:       ${{ inputs.image_tag }}"
-          echo "  Full Image:      ${REGISTRY}/${IMAGE_NAME}:${{ inputs.image_tag }}"
+          echo "  Image Tag:       ${IMAGE_TAG}"
+          if [[ -n "${RESOLVED_SHA}" ]]; then
+            echo "  Resolved SHA:    ${RESOLVED_SHA_SHORT} (${RESOLVED_SHA})"
+          fi
+          echo "  Full Image:      ${FULL_IMAGE}"
           echo ""
           echo "Deployment Configuration:"
-          echo "  Environment:     ${{ inputs.environment }}"
+          echo "  Environment:     ${ENVIRONMENT}"
           echo "  Dry Run:         ${{ inputs.dry_run }}"
           echo "  Triggered By:    ${{ github.actor }}"
           echo "  Branch:          ${{ github.ref_name }}"
@@ -360,6 +377,8 @@ jobs:
           echo "Available environment variables:"
           echo "  FULL_IMAGE=${FULL_IMAGE}"
           echo "  IMAGE_TAG=${IMAGE_TAG}"
+          echo "  RESOLVED_SHA=${RESOLVED_SHA}"
+          echo "  RESOLVED_SHA_SHORT=${RESOLVED_SHA_SHORT}"
           echo "  ENVIRONMENT=${ENVIRONMENT}"
           echo "  BUILD_SHA=${BUILD_SHA}"
           echo "  BUILD_RUN_ID=${BUILD_RUN_ID}"
