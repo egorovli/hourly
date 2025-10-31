@@ -34,6 +34,9 @@ jobs:
     name: Build, Scan, and Push Docker Image
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      trivy-scan-passed: ${{ steps.trivy-scan.outcome == 'success' }}
+      trivy-sarif-uploaded: ${{ steps.upload-sarif.outcome == 'success' }}
 
     steps:
       - name: Checkout repository
@@ -117,37 +120,55 @@ jobs:
           # secrets: |
           #   "npm_token=${{ secrets.NPM_TOKEN }}"
 
-      # Trivy scanning temporarily disabled
-      # TODO: Re-enable when issues are resolved
-      # - name: Run Trivy vulnerability scanner
-      #   uses: aquasecurity/trivy-action@0.33.1
-      #   with:
-      #     image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:scan
-      #     format: 'sarif'
-      #     output: 'trivy-results.sarif'
-      #     severity: 'CRITICAL,HIGH,MEDIUM'
-      #     # Fail on critical/high vulnerabilities
-      #     exit-code: '0'
-      #     vuln-type: 'os,library'
-      #     scanners: 'vuln,secret,misconfig'
+      - name: Cache Trivy vulnerability database
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/trivy
+          key: ${{ runner.os }}-trivy-db-latest
+          restore-keys: |
+            ${{ runner.os }}-trivy-db-
 
-      # - name: Upload Trivy results to GitHub Security
-      #   uses: github/codeql-action/upload-sarif@v4
-      #   if: always()
-      #   with:
-      #     sarif_file: 'trivy-results.sarif'
-      #     category: 'trivy-container-scan'
+      - name: Run Trivy vulnerability scanner (SARIF)
+        id: trivy-scan
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:scan
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+          # exit-code: '0' = don't fail build, scan for visibility
+          # Change to '1' to fail build on vulnerabilities found
+          exit-code: '0'
+          vuln-type: 'os,library'
+          scanners: 'vuln,secret,misconfig'
+          ignore-unfixed: false
+          timeout: '10m'
+          cache-dir: ~/.cache/trivy
 
-      # - name: Run Trivy vulnerability scanner (table output)
-      #   uses: aquasecurity/trivy-action@0.33.1
-      #   if: always()
-      #   with:
-      #     image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:scan
-      #     format: 'table'
-      #     severity: 'CRITICAL,HIGH'
-      #     exit-code: '1'
-      #     vuln-type: 'os,library'
-      #     scanners: 'vuln,secret,misconfig'
+      - name: Upload Trivy results to GitHub Security
+        id: upload-sarif
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+          category: 'trivy-container-scan'
+          wait-for-processing: true
+
+      - name: Run Trivy vulnerability scanner (table output)
+        id: trivy-table
+        uses: aquasecurity/trivy-action@0.33.1
+        if: always()
+        continue-on-error: true
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:scan
+          format: 'table'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+          exit-code: '0'
+          vuln-type: 'os,library'
+          scanners: 'vuln,secret,misconfig'
+          ignore-unfixed: false
+          timeout: '10m'
+          cache-dir: ~/.cache/trivy
 
       - name: Build and push Docker image (multi-platform)
         uses: docker/build-push-action@v6.18.0
@@ -183,3 +204,25 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Platforms:** linux/amd64, linux/arm64" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Security Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.trivy-scan.outcome }}" == "success" ]; then
+            echo "✅ **Trivy Scan:** Completed successfully" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Scan Details:**" >> $GITHUB_STEP_SUMMARY
+            echo "- **Scanners:** Vulnerability, Secret, Misconfiguration" >> $GITHUB_STEP_SUMMARY
+            echo "- **Severity Levels:** CRITICAL, HIGH, MEDIUM, LOW" >> $GITHUB_STEP_SUMMARY
+            echo "- **Vulnerability Types:** OS packages, Library dependencies" >> $GITHUB_STEP_SUMMARY
+            if [ "${{ steps.upload-sarif.outcome }}" == "success" ]; then
+              echo "- ✅ **SARIF Results:** Uploaded to GitHub Security" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "- ⚠️ **SARIF Upload:** Failed (check logs)" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "❌ **Trivy Scan:** Failed or encountered errors" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Check the scan logs above for details." >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📊 View detailed results in the [Security tab](https://github.com/${{ github.repository }}/security/code-scanning)" >> $GITHUB_STEP_SUMMARY
