@@ -145,6 +145,41 @@ export interface IssueWorklogResponse {
 	worklogs: IssueWorklog[]
 }
 
+export interface CreateWorklogParams {
+	comment?: string | { type: 'doc'; version: number; content: unknown[] }
+	started: string
+	timeSpentSeconds: number
+	timeSpent?: string
+	visibility?: {
+		type: 'group' | 'role'
+		value?: string
+		identifier?: string
+	}
+	notifyUsers?: boolean
+	adjustEstimate?: 'new' | 'leave' | 'manual'
+	newEstimate?: string
+	reduceBy?: string
+	overrideEditableFlag?: boolean
+}
+
+export interface UpdateWorklogParams {
+	comment?: string | { type: 'doc'; version: number; content: unknown[] }
+	started?: string
+	timeSpentSeconds?: number
+	timeSpent?: string
+	visibility?: {
+		type: 'group' | 'role'
+		value?: string
+		identifier?: string
+	}
+	notifyUsers?: boolean
+	adjustEstimate?: 'new' | 'leave' | 'manual'
+	newEstimate?: string
+	reduceBy?: string
+	overrideEditableFlag?: boolean
+	expand?: string
+}
+
 export interface JiraProjectSelection {
 	cloudId: string
 	projectId: string
@@ -406,6 +441,181 @@ export class AtlassianClient {
 		}
 
 		return this.requestJson<IssueWorklogResponse>(url.toString())
+	}
+
+	/**
+	 * Creates a new worklog entry for an issue.
+	 * Time tracking must be enabled in Jira.
+	 */
+	async createIssueWorklog(
+		cloudId: string,
+		issueIdOrKey: string,
+		params: CreateWorklogParams
+	): Promise<IssueWorklog> {
+		const url = new URL(
+			this.buildJiraUrl(cloudId, `/rest/api/3/issue/${encodeURIComponent(issueIdOrKey)}/worklog`)
+		)
+
+		if (params.notifyUsers !== undefined) {
+			url.searchParams.set('notifyUsers', String(params.notifyUsers))
+		}
+
+		if (params.adjustEstimate) {
+			url.searchParams.set('adjustEstimate', params.adjustEstimate)
+		}
+
+		if (params.newEstimate) {
+			url.searchParams.set('newEstimate', params.newEstimate)
+		}
+
+		if (params.reduceBy) {
+			url.searchParams.set('reduceBy', params.reduceBy)
+		}
+
+		if (params.overrideEditableFlag !== undefined) {
+			url.searchParams.set('overrideEditableFlag', String(params.overrideEditableFlag))
+		}
+
+		const body: Record<string, unknown> = {
+			started: params.started,
+			timeSpentSeconds: params.timeSpentSeconds
+		}
+
+		if (params.comment !== undefined) {
+			body['comment'] = params.comment
+		}
+
+		if (params.timeSpent) {
+			body['timeSpent'] = params.timeSpent
+		}
+
+		if (params.visibility) {
+			body['visibility'] = params.visibility
+		}
+
+		return this.requestJson<IssueWorklog>(url.toString(), {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(body)
+		})
+	}
+
+	/**
+	 * Updates an existing worklog entry for an issue.
+	 * Requires appropriate project permissions and may be subject to visibility restrictions.
+	 */
+	async updateIssueWorklog(
+		cloudId: string,
+		issueIdOrKey: string,
+		worklogId: string,
+		params: UpdateWorklogParams
+	): Promise<IssueWorklog> {
+		const url = new URL(
+			this.buildJiraUrl(
+				cloudId,
+				`/rest/api/3/issue/${encodeURIComponent(issueIdOrKey)}/worklog/${encodeURIComponent(worklogId)}`
+			)
+		)
+
+		if (params.notifyUsers !== undefined) {
+			url.searchParams.set('notifyUsers', String(params.notifyUsers))
+		}
+
+		if (params.adjustEstimate) {
+			url.searchParams.set('adjustEstimate', params.adjustEstimate)
+		}
+
+		if (params.newEstimate) {
+			url.searchParams.set('newEstimate', params.newEstimate)
+		}
+
+		if (params.reduceBy) {
+			url.searchParams.set('reduceBy', params.reduceBy)
+		}
+
+		if (params.overrideEditableFlag !== undefined) {
+			url.searchParams.set('overrideEditableFlag', String(params.overrideEditableFlag))
+		}
+
+		if (params.expand) {
+			url.searchParams.set('expand', params.expand)
+		}
+
+		const body: Record<string, unknown> = {}
+
+		if (params.comment !== undefined) {
+			body['comment'] = params.comment
+		}
+
+		if (params.started !== undefined) {
+			body['started'] = params.started
+		}
+
+		if (params.timeSpentSeconds !== undefined) {
+			body['timeSpentSeconds'] = params.timeSpentSeconds
+		}
+
+		if (params.timeSpent) {
+			body['timeSpent'] = params.timeSpent
+		}
+
+		if (params.visibility) {
+			body['visibility'] = params.visibility
+		}
+
+		return this.requestJson<IssueWorklog>(url.toString(), {
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(body)
+		})
+	}
+
+	/**
+	 * Deletes a worklog entry from an issue.
+	 * Requires appropriate project permissions.
+	 */
+	async deleteIssueWorklog(
+		cloudId: string,
+		issueIdOrKey: string,
+		worklogId: string,
+		params?: {
+			notifyUsers?: boolean
+			adjustEstimate?: 'new' | 'leave' | 'manual'
+			newEstimate?: string
+			increaseBy?: string
+			overrideEditableFlag?: boolean
+		}
+	): Promise<void> {
+		const url = new URL(
+			this.buildJiraUrl(
+				cloudId,
+				`/rest/api/3/issue/${encodeURIComponent(issueIdOrKey)}/worklog/${encodeURIComponent(worklogId)}`
+			)
+		)
+
+		if (params?.notifyUsers !== undefined) {
+			url.searchParams.set('notifyUsers', String(params.notifyUsers))
+		}
+
+		if (params?.adjustEstimate) {
+			url.searchParams.set('adjustEstimate', params.adjustEstimate)
+		}
+
+		if (params?.newEstimate) {
+			url.searchParams.set('newEstimate', params.newEstimate)
+		}
+
+		if (params?.increaseBy) {
+			url.searchParams.set('increaseBy', params.increaseBy)
+		}
+
+		if (params?.overrideEditableFlag !== undefined) {
+			url.searchParams.set('overrideEditableFlag', String(params.overrideEditableFlag))
+		}
+
+		await this.requestJson<void>(url.toString(), {
+			method: 'DELETE'
+		})
 	}
 
 	/**
