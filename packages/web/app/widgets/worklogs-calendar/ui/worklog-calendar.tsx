@@ -586,7 +586,7 @@ export function WorklogsCalendar({
 
 	// Calculate dynamic min/max based on local events with 30min padding
 	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: time-range normalization handles multiple edge cases for calendar display
-	// biome-ignore lint/correctness/useExhaustiveDependencies: Settings.defaultZone.name is intentionally included to trigger recalculation when timezone changes
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Settings.defaultZone.name, dateRange, and view are intentionally included to trigger recalculation
 	const dynamicMinMax = useMemo(() => {
 		const base = date ? DateTime.fromJSDate(date) : DateTime.now()
 
@@ -603,14 +603,26 @@ export function WorklogsCalendar({
 		let maxHour = Math.floor(Math.min(24 * 60, endMinutes) / 60)
 		let maxMinutes = Math.min(24 * 60, endMinutes) % 60
 
-		// Scan through all display events (including local changes and draft)
-		if (displayEvents.length > 0) {
+		// Filter events to only those visible in the current view range
+		// This ensures min/max recalculates when view range changes
+		let visibleEvents = displayEvents
+		if (dateRange?.from && dateRange?.to) {
+			const rangeFrom = dateRange.from
+			const rangeTo = dateRange.to
+			visibleEvents = displayEvents.filter(event => {
+				// Event is visible if it overlaps with the view range
+				return event.start <= rangeTo && event.end >= rangeFrom
+			})
+		}
+
+		// Scan through visible events (including local changes and draft)
+		if (visibleEvents.length > 0) {
 			// Get start of day in the user's timezone using Luxon
 			// DateTime.fromJSDate uses Settings.defaultZone automatically
 			const baseDateTime = base instanceof Date ? DateTime.fromJSDate(base) : base
 			const startOfDayLocal = baseDateTime.startOf('day')
 
-			for (const event of displayEvents) {
+			for (const event of visibleEvents) {
 				// Convert event dates to Luxon DateTime in user's timezone
 				const eventStartLocal = DateTime.fromJSDate(event.start)
 				const eventEndLocal = DateTime.fromJSDate(event.end)
@@ -732,7 +744,18 @@ export function WorklogsCalendar({
 		return { min: calculatedMin, max: calculatedMax }
 		// Note: DateTime.fromJSDate uses Settings.defaultZone automatically when called
 		// When timezone changes, Settings.defaultZone changes, which triggers recalculation
-	}, [date, displayEvents, workingDayStartTime, workingDayEndTime, Settings.defaultZone.name])
+		// dateRange and view are included to ensure recalculation when calendar view changes
+		// displayEvents is included to recalculate when events change
+	}, [
+		date,
+		displayEvents,
+		workingDayStartTime,
+		workingDayEndTime,
+		Settings.defaultZone.name,
+		dateRange?.from,
+		dateRange?.to,
+		view
+	])
 
 	// Custom event prop getter to style draft events differently
 	const customEventPropGetter = useCallback<EventPropGetter<WorklogCalendarEvent>>(
