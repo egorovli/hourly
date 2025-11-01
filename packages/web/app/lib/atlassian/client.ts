@@ -1234,8 +1234,6 @@ function buildIssueKeyJql(issueKeys: string[]) {
 	return `issuekey in (${clauses.join(', ')}) ORDER BY created DESC`
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-// @ts-expect-error - Unused function kept for potential future use
 function buildIssueIdJql(issueIds: string[]) {
 	const clauses = issueIds.map(id => `"${escapeJqlString(id)}"`)
 	return `id in (${clauses.join(', ')}) ORDER BY created DESC`
@@ -1420,8 +1418,6 @@ function chunkArray<T>(items: T[], size: number): T[][] {
 	return chunks
 }
 
-/* eslint-disable @typescript-eslint/no-unused-vars */
-// @ts-expect-error - Unused function kept for potential future use
 function splitIntoDailyWindows(since: number, until: number): { since: number; until: number }[] {
 	if (until <= since) {
 		return []
