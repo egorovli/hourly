@@ -1,5 +1,5 @@
 import type { WorklogEntryRepository } from '../repositories/worklog-entry-repository.ts'
-import type { WorklogEntryFactory } from '../services/worklog-entry-factory.ts'
+import type { WorklogEntryFactory } from '../../infrastructure/worklog-entry-factory.ts'
 
 import { inject, injectable } from 'inversify'
 

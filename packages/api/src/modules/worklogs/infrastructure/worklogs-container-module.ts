@@ -6,7 +6,7 @@ import type { BindingMap } from '../../../core/ioc/binding-map.ts'
 import { InjectionKey } from '../../../core/ioc/injection-key.enum.ts'
 import { ListWorklogEntriesUseCase } from '../domain/use-cases/list-worklog-entries.use-case.ts'
 import { SyncWorklogEntriesUseCase } from '../domain/use-cases/sync-worklog-entries.use-case.ts'
-import { DefaultWorklogEntryFactory } from './default-worklog-entry-factory.ts'
+import { WorklogEntryFactory } from './worklog-entry-factory.ts'
 import { ZodWorklogEntryValidator } from './zod-worklog-entry-validator.ts'
 
 /**
@@ -23,7 +23,7 @@ export const worklogsContainerModule = new ContainerModule(options => {
 	options.bind(InjectionKey.WorklogEntryValidator).to(ZodWorklogEntryValidator).inSingletonScope()
 
 	// Domain factories - bind factory implementation
-	options.bind(InjectionKey.WorklogEntryFactory).to(DefaultWorklogEntryFactory).inSingletonScope()
+	options.bind(InjectionKey.WorklogEntryFactory).to(WorklogEntryFactory).inSingletonScope()
 
 	// Use cases - these will be resolved when repositories are bound
 	options

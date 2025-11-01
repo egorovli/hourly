@@ -3,7 +3,7 @@ import type { ProjectRepository } from '../../modules/projects/domain/repositori
 import type { ResourceRepository } from '../../modules/projects/domain/repositories/resource-repository.ts'
 import type { WorklogEntryRepository } from '../../modules/worklogs/domain/repositories/worklog-entry-repository.ts'
 import type { WorklogEntryValidator } from '../../modules/worklogs/domain/services/worklog-entry-validator.ts'
-import type { WorklogEntryFactory } from '../../modules/worklogs/domain/services/worklog-entry-factory.ts'
+import type { WorklogEntryFactory } from '../../modules/worklogs/infrastructure/worklog-entry-factory.ts'
 import type { FindProjectUseCase } from '../../modules/projects/domain/use-cases/find-project.use-case.ts'
 import type { GetProjectByIdUseCase } from '../../modules/projects/domain/use-cases/get-project-by-id.use-case.ts'
 import type { GetResourceByIdUseCase } from '../../modules/projects/domain/use-cases/get-resource-by-id.use-case.ts'

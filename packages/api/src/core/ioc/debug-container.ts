@@ -14,7 +14,7 @@ import { ListWorklogEntriesUseCase } from '../../modules/worklogs/domain/use-cas
 import { SyncWorklogEntriesUseCase } from '../../modules/worklogs/domain/use-cases/sync-worklog-entries.use-case.ts'
 import { BunUuidV7Generator } from '../../infrastructure/ids/bun-uuid-v7-generator.ts'
 import { InMemoryWorklogEntryRepository } from '../../infrastructure/worklogs/poc/in-memory-worklog-entry-repository.ts'
-import { DefaultWorklogEntryFactory } from '../../modules/worklogs/infrastructure/default-worklog-entry-factory.ts'
+import { WorklogEntryFactory } from '../../modules/worklogs/infrastructure/worklog-entry-factory.ts'
 import { ZodWorklogEntryValidator } from '../../modules/worklogs/infrastructure/zod-worklog-entry-validator.ts'
 
 /**
@@ -31,7 +31,7 @@ const KEY_TO_CLASS_MAP: Record<string, unknown> = {
 	[InjectionKey.IdGenerator]: BunUuidV7Generator,
 	[InjectionKey.WorklogEntryRepository]: InMemoryWorklogEntryRepository,
 	[InjectionKey.WorklogEntryValidator]: ZodWorklogEntryValidator,
-	[InjectionKey.WorklogEntryFactory]: DefaultWorklogEntryFactory
+	[InjectionKey.WorklogEntryFactory]: WorklogEntryFactory
 }
 
 /**

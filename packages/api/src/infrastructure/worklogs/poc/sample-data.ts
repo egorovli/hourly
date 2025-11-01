@@ -1,7 +1,6 @@
 import type { WorklogEntryRepository } from '../../../modules/worklogs/domain/repositories/worklog-entry-repository.ts'
-import type { WorklogEntryFactory } from '../../../modules/worklogs/domain/services/worklog-entry-factory.ts'
 
-import { DefaultWorklogEntryFactory } from '../../../modules/worklogs/infrastructure/default-worklog-entry-factory.ts'
+import { WorklogEntryFactory } from '../../../modules/worklogs/infrastructure/worklog-entry-factory.ts'
 import { ZodWorklogEntryValidator } from '../../../modules/worklogs/infrastructure/zod-worklog-entry-validator.ts'
 import { BunUuidV7Generator } from '../../../infrastructure/ids/bun-uuid-v7-generator.ts'
 
@@ -10,7 +9,7 @@ import { BunUuidV7Generator } from '../../../infrastructure/ids/bun-uuid-v7-gene
  */
 export function initializeSampleWorklogEntries(
 	repository: WorklogEntryRepository,
-	factory: WorklogEntryFactory = new DefaultWorklogEntryFactory(
+	factory: WorklogEntryFactory = new WorklogEntryFactory(
 		new BunUuidV7Generator(),
 		new ZodWorklogEntryValidator()
 	)

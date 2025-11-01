@@ -21,7 +21,8 @@
 			"!docs/**/*",
 			"!packages/web/.react-router/**/*",
 			"!packages/web/build/**/*",
-			"!packages/web/app/.old/**/*"
+			"!packages/web/app/.old/**/*",
+			"!packages/api/.old.src/**/*"
 		]
 	},
 	"formatter": {
