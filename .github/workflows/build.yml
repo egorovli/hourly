@@ -24,28 +24,70 @@ on:
     outputs:
       image_version:
         description: 'Docker image version/tag'
-        value: ${{ jobs.build-and-push.outputs.image_version }}
+        value: ${{ jobs.build-and-push-web.outputs.image_version }}
       image_tags:
         description: 'All Docker image tags generated'
-        value: ${{ jobs.build-and-push.outputs.image_tags }}
+        value: ${{ jobs.build-and-push-web.outputs.image_tags }}
       image_digest:
         description: 'Docker image digest'
-        value: ${{ jobs.build-and-push.outputs.image_digest }}
+        value: ${{ jobs.build-and-push-web.outputs.image_digest }}
       build_sha:
         description: 'Commit SHA of the build'
-        value: ${{ jobs.build-and-push.outputs.build_sha }}
+        value: ${{ jobs.build-and-push-web.outputs.build_sha }}
+      api_image_version:
+        description: 'API Docker image version/tag'
+        value: ${{ jobs.build-and-push-api.outputs.image_version }}
+      api_image_tags:
+        description: 'All API Docker image tags generated'
+        value: ${{ jobs.build-and-push-api.outputs.image_tags }}
+      api_image_digest:
+        description: 'API Docker image digest'
+        value: ${{ jobs.build-and-push-api.outputs.image_digest }}
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/web
+  IMAGE_NAME_WEB: ${{ github.repository }}/web
+  IMAGE_NAME_API: ${{ github.repository }}/api
 
 defaults:
   run:
     shell: bash
 
 jobs:
-  build-and-push:
-    name: Build, Scan, and Push Docker Image
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.23
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run linting
+        run: bun run lint
+
+      - name: Type check web package
+        run: bun run --filter "@hourly/web" types:check
+
+      - name: Type check API package
+        run: bun run --filter "@hourly/api" types:check
+
+      - name: Run web tests
+        run: bun run --filter "@hourly/web" test
+
+      - name: Run API tests
+        run: bun run --filter "@hourly/api" test
+
+  build-and-push-web:
+    name: Build, Scan, and Push Web Docker Image
+    needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -81,11 +123,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata for Docker
+      - name: Extract metadata for Docker (Web)
         id: meta
         uses: docker/metadata-action@v5.8.0
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WEB }}
           flavor: |
             latest=auto
           tags: |
@@ -121,14 +163,14 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Building version: ${VERSION}"
 
-      - name: Build Docker image
+      - name: Build Docker image (Web)
         uses: docker/build-push-action@v6.18.0
         with:
           context: .
           push: false
           load: true
           target: web
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:scan
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WEB }}:scan
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
@@ -146,13 +188,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-trivy-db-
 
-      - name: Run Trivy vulnerability scanner (SARIF)
+      - name: Run Trivy vulnerability scanner (SARIF) - Web
         id: trivy-scan
         uses: aquasecurity/trivy-action@0.33.1
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:scan
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WEB }}:scan
           format: 'sarif'
-          output: 'trivy-results.sarif'
+          output: 'trivy-results-web.sarif'
           severity: 'CRITICAL,HIGH,MEDIUM,LOW'
           # exit-code: '0' = don't fail build, scan for visibility
           # Change to '1' to fail build on vulnerabilities found
@@ -163,22 +205,22 @@ jobs:
           timeout: '10m'
           cache-dir: ~/.cache/trivy
 
-      - name: Upload Trivy results to GitHub Security
+      - name: Upload Trivy results to GitHub Security (Web)
         id: upload-sarif
         uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
-          sarif_file: 'trivy-results.sarif'
-          category: 'trivy-container-scan'
+          sarif_file: 'trivy-results-web.sarif'
+          category: 'trivy-container-scan-web'
           wait-for-processing: true
 
-      - name: Run Trivy vulnerability scanner (table output)
+      - name: Run Trivy vulnerability scanner (table output) - Web
         id: trivy-table
         uses: aquasecurity/trivy-action@0.33.1
         if: always()
         continue-on-error: true
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:scan
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WEB }}:scan
           format: 'table'
           severity: 'CRITICAL,HIGH,MEDIUM,LOW'
           exit-code: '0'
@@ -188,7 +230,7 @@ jobs:
           timeout: '10m'
           cache-dir: ~/.cache/trivy
 
-      - name: Build and push Docker image (multi-platform)
+      - name: Build and push Docker image (multi-platform) - Web
         id: build-push
         uses: docker/build-push-action@v6.18.0
         with:
@@ -206,14 +248,213 @@ jobs:
           provenance: true
           sbom: true
           # Security: Build reproducibly
-          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push=true
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WEB }},push=true
 
-      - name: Generate build summary
+      - name: Generate build summary (Web)
         if: always()
         run: |
-          echo "## Docker Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## Docker Build Summary - Web" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Image:** \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WEB }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** \`${{ steps.version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tags:**" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Platforms:** linux/amd64, linux/arm64" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Security Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.trivy-scan.outcome }}" == "success" ]; then
+            echo "✅ **Trivy Scan:** Completed successfully" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Scan Details:**" >> $GITHUB_STEP_SUMMARY
+            echo "- **Scanners:** Vulnerability, Secret, Misconfiguration" >> $GITHUB_STEP_SUMMARY
+            echo "- **Severity Levels:** CRITICAL, HIGH, MEDIUM, LOW" >> $GITHUB_STEP_SUMMARY
+            echo "- **Vulnerability Types:** OS packages, Library dependencies" >> $GITHUB_STEP_SUMMARY
+            if [ "${{ steps.upload-sarif.outcome }}" == "success" ]; then
+              echo "- ✅ **SARIF Results:** Uploaded to GitHub Security" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "- ⚠️ **SARIF Upload:** Failed (check logs)" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "❌ **Trivy Scan:** Failed or encountered errors" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Check the scan logs above for details." >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📊 View detailed results in the [Security tab](https://github.com/${{ github.repository }}/security/code-scanning)" >> $GITHUB_STEP_SUMMARY
+
+  build-and-push-api:
+    name: Build, Scan, and Push API Docker Image
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      trivy-scan-passed: ${{ steps.trivy-scan.outcome == 'success' }}
+      trivy-sarif-uploaded: ${{ steps.upload-sarif.outcome == 'success' }}
+      image_version: ${{ steps.version.outputs.version }}
+      image_tags: ${{ steps.meta.outputs.tags }}
+      build_sha: ${{ github.sha }}
+      image_digest: ${{ steps.build-push.outputs.digest }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          # Fetch full history for better cache hits
+          fetch-depth: 0
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3.6.0
+        with:
+          platforms: linux/amd64,linux/arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3.11.1
+        with:
+          # Enable advanced BuildKit features
+          buildkitd-flags: --debug
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker (API)
+        id: meta
+        uses: docker/metadata-action@v5.8.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}
+          flavor: |
+            latest=auto
+          tags: |
+            type=ref,event=pr
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Extract version
+        id: version
+        run: |
+          # If it's a release with a tag, use the tag name
+          if [[ "${{ github.event_name }}" == "release" && -n "${{ github.event.release.tag_name }}" ]]; then
+            VERSION="${{ github.event.release.tag_name }}"
+            # Remove 'v' prefix if present
+            VERSION="${VERSION#v}"
+          # If it's a tag push, use the tag name
+          elif [[ "${{ github.ref_type }}" == "tag" ]]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+          else
+            # Otherwise use short commit SHA
+            VERSION="${{ github.sha }}"
+            VERSION="${VERSION:0:7}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Building version: ${VERSION}"
+
+      - name: Build Docker image (API)
+        uses: docker/build-push-action@v6.18.0
+        with:
+          context: .
+          push: false
+          load: true
+          target: api
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}:scan
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # Security: Use BuildKit secret mounts for sensitive data if needed
+          # secrets: |
+          #   "npm_token=${{ secrets.NPM_TOKEN }}"
+
+      - name: Cache Trivy vulnerability database
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/trivy
+          key: ${{ runner.os }}-trivy-db-latest
+          restore-keys: |
+            ${{ runner.os }}-trivy-db-
+
+      - name: Run Trivy vulnerability scanner (SARIF) - API
+        id: trivy-scan
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}:scan
+          format: 'sarif'
+          output: 'trivy-results-api.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+          # exit-code: '0' = don't fail build, scan for visibility
+          # Change to '1' to fail build on vulnerabilities found
+          exit-code: '0'
+          vuln-type: 'os,library'
+          scanners: 'vuln,secret,misconfig'
+          ignore-unfixed: false
+          timeout: '10m'
+          cache-dir: ~/.cache/trivy
+
+      - name: Upload Trivy results to GitHub Security (API)
+        id: upload-sarif
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: 'trivy-results-api.sarif'
+          category: 'trivy-container-scan-api'
+          wait-for-processing: true
+
+      - name: Run Trivy vulnerability scanner (table output) - API
+        id: trivy-table
+        uses: aquasecurity/trivy-action@0.33.1
+        if: always()
+        continue-on-error: true
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}:scan
+          format: 'table'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+          exit-code: '0'
+          vuln-type: 'os,library'
+          scanners: 'vuln,secret,misconfig'
+          ignore-unfixed: false
+          timeout: '10m'
+          cache-dir: ~/.cache/trivy
+
+      - name: Build and push Docker image (multi-platform) - API
+        id: build-push
+        uses: docker/build-push-action@v6.18.0
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          target: api
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # Enable provenance and SBOM attestations
+          provenance: true
+          sbom: true
+          # Security: Build reproducibly
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }},push=true
+
+      - name: Generate build summary (API)
+        if: always()
+        run: |
+          echo "## Docker Build Summary - API" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** \`${{ steps.version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
