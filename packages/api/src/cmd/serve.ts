@@ -1,11 +1,19 @@
+import type { AuthController } from '../modules/auth/presentation/controllers/auth-controller.ts'
+
 import { Command } from 'commander'
 
-import { app } from '../infrastructure/http/index.ts'
+import { container } from '../core/ioc/container.ts'
+import { InjectionKey } from '../core/ioc/injection-key.enum.ts'
+import { createElysiaApp } from '../infrastructure/http/index.ts'
 
 export const serve = new Command('serve').description('Start HTTP server')
 
 serve.action(function serve() {
 	const start = process.hrtime.bigint()
+
+	const authController = container.get<AuthController>(InjectionKey.AuthController)
+
+	const app = createElysiaApp({ authController })
 
 	app.listen({
 		port: 3000,
@@ -21,8 +29,8 @@ serve.action(function serve() {
 
 	const duration = Number((process.hrtime.bigint() - start) / BigInt(1e6))
 
-	console.log(`HTTP server started on port ${app.server?.port}`)
-	console.log(`HTTP server started in ${duration}ms`)
+	process.stdout.write(`HTTP server started on port ${app.server.port}\n`)
+	process.stdout.write(`HTTP server started in ${duration}ms\n`)
 
 	// logger.info(
 	// 	{

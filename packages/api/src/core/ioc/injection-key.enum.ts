@@ -6,6 +6,21 @@ export enum InjectionKey {
 	ListProjectsUseCase = 'ListProjectsUseCase',
 
 	// Auth module
+	UserProfileRepository = 'UserProfileRepository',
+	AuthenticationRepository = 'AuthenticationRepository',
+	OAuthTokenRepository = 'OAuthTokenRepository',
+	OAuthStateService = 'OAuthStateService',
+
+	IdGenerator = 'IdGenerator',
+
 	UserProfileValidator = 'UserProfileValidator',
-	UserProfileFactory = 'UserProfileFactory'
+	UserProfileFactory = 'UserProfileFactory',
+
+	RegisterUserProfileUseCase = 'RegisterUserProfileUseCase',
+	LinkAuthenticationUseCase = 'LinkAuthenticationUseCase',
+	StoreOAuthTokenUseCase = 'StoreOAuthTokenUseCase',
+	GenerateOAuthAuthorizationRequestUseCase = 'GenerateOAuthAuthorizationRequestUseCase',
+	ValidateOAuthStateUseCase = 'ValidateOAuthStateUseCase',
+
+	AuthController = 'AuthController'
 }
