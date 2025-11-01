@@ -88,15 +88,28 @@ function getImplementationClass(key: string): unknown {
 }
 
 /**
+ * Gets the implementation class name for a binding key
+ */
+function getImplementationClassName(key: string): string | undefined {
+	const cls = getImplementationClass(key)
+	if (typeof cls === 'function') {
+		return cls.name
+	}
+	return undefined
+}
+
+/**
  * Builds dependency map for all bound keys
  */
 function buildDependencyMap(container: Container | TypedContainer<BindingMap>): {
 	boundKeys: string[]
 	dependencyMap: Map<string, string[]>
+	implementationMap: Map<string, string>
 } {
 	const knownKeys = Object.values(InjectionKey)
 	const boundKeys: string[] = []
 	const dependencyMap = new Map<string, string[]>()
+	const implementationMap = new Map<string, string>()
 
 	for (const key of knownKeys) {
 		try {
@@ -118,13 +131,19 @@ function buildDependencyMap(container: Container | TypedContainer<BindingMap>): 
 						dependencyMap.set(key, deps)
 					}
 				}
+
+				// Store implementation class name
+				const implClassName = getImplementationClassName(key)
+				if (implClassName) {
+					implementationMap.set(key, implClassName)
+				}
 			}
 		} catch {
 			// Ignore errors
 		}
 	}
 
-	return { boundKeys, dependencyMap }
+	return { boundKeys, dependencyMap, implementationMap }
 }
 
 /**
@@ -132,21 +151,24 @@ function buildDependencyMap(container: Container | TypedContainer<BindingMap>): 
  */
 function printBindingsWithDependencies(
 	boundKeys: string[],
-	dependencyMap: Map<string, string[]>
+	dependencyMap: Map<string, string[]>,
+	implementationMap: Map<string, string>
 ): void {
 	for (const key of boundKeys) {
 		const deps = dependencyMap.get(key)
+		const implClassName = implementationMap.get(key)
+		const implNameDisplay = implClassName ? ` (${implClassName})` : ''
 
 		if (deps && deps.length > 0) {
 			// biome-ignore lint/suspicious/noConsole: Debug utility
-			console.log(`\n🔑 ${key}`)
+			console.log(`\n🔑 ${key}${implNameDisplay}`)
 			for (const dep of deps) {
 				// biome-ignore lint/suspicious/noConsole: Debug utility
 				console.log(`   └─ depends on: ${dep}`)
 			}
 		} else {
 			// biome-ignore lint/suspicious/noConsole: Debug utility
-			console.log(`\n🔑 ${key} (no dependencies)`)
+			console.log(`\n🔑 ${key}${implNameDisplay} (no dependencies)`)
 		}
 	}
 }
@@ -196,7 +218,7 @@ function printDependencyTree(boundKeys: string[], dependencyMap: Map<string, str
  * Fallback method: Check known InjectionKeys using isBound and extract dependencies
  */
 function debugViaIsBound(container: Container | TypedContainer<BindingMap>): void {
-	const { boundKeys, dependencyMap } = buildDependencyMap(container)
+	const { boundKeys, dependencyMap, implementationMap } = buildDependencyMap(container)
 
 	if (boundKeys.length === 0) {
 		// biome-ignore lint/suspicious/noConsole: Debug utility
@@ -210,7 +232,7 @@ function debugViaIsBound(container: Container | TypedContainer<BindingMap>): voi
 	console.log('═'.repeat(80))
 
 	boundKeys.sort()
-	printBindingsWithDependencies(boundKeys, dependencyMap)
+	printBindingsWithDependencies(boundKeys, dependencyMap, implementationMap)
 
 	if (dependencyMap.size > 0) {
 		// biome-ignore lint/suspicious/noConsole: Debug utility
