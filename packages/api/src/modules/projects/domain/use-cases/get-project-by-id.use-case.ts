@@ -14,7 +14,7 @@ export class GetProjectByIdUseCase {
 			throw new ValidationError('Project id is required')
 		}
 
-		const project = await this.projectRepository.findById(normalizedId)
+		const project = await this.projectRepository.findOne({ id: normalizedId })
 
 		if (!project) {
 			throw new BusinessRuleError(`Project with id ${normalizedId} was not found`)

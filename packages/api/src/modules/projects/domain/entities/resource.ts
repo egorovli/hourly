@@ -1,71 +1,44 @@
 import { ValidationError } from '../../../../core/errors/validation-error.ts'
 
-export interface ResourceProps {
+export interface ResourceInit {
 	id: string
 	name: string
 	url: string
-	scopes?: string[]
 	avatarUrl?: string
+	scopes?: string[]
 }
 
 export class Resource {
-	private readonly props: ResourceProps
+	readonly id: string
+	readonly name: string
+	readonly url: string
+	readonly avatarUrl?: string
+	readonly scopes: string[]
 
-	constructor(props: ResourceProps) {
-		const normalizedId = props.id?.trim()
-		const normalizedName = props.name?.trim() ?? ''
-		const normalizedUrl = props.url?.trim() ?? ''
-		const normalizedAvatarUrl = props.avatarUrl?.trim()
-		const uniqueScopes = props.scopes
-			? Array.from(new Set(props.scopes.map(scope => scope.trim()).filter(Boolean)))
-			: undefined
+	constructor(init: ResourceInit) {
+		this.validate(init)
 
-		this.props = {
-			...props,
-			id: normalizedId ?? '',
-			name: normalizedName,
-			url: normalizedUrl,
-			avatarUrl: normalizedAvatarUrl,
-			scopes: uniqueScopes
-		}
-
-		this.validate()
-	}
-
-	get id(): string {
-		return this.props.id
-	}
-
-	get name(): string {
-		return this.props.name
-	}
-
-	get url(): string {
-		return this.props.url
-	}
-
-	get avatarUrl(): string | undefined {
-		return this.props.avatarUrl
-	}
-
-	get scopes(): string[] {
-		return this.props.scopes ?? []
+		this.id = init.id
+		this.name = init.name
+		this.url = init.url
+		this.avatarUrl = init.avatarUrl
+		this.scopes = init.scopes ?? []
 	}
 
 	matchesScope(scope: string): boolean {
 		return this.scopes.includes(scope)
 	}
 
-	private validate(): void {
-		if (!this.props.id) {
+	private validate(init: ResourceInit): void {
+		if (typeof init.id !== 'string' || init.id.trim().length === 0) {
 			throw new ValidationError('Resource id is required')
 		}
 
-		if (!this.props.name) {
+		if (typeof init.name !== 'string' || init.name.trim().length === 0) {
 			throw new ValidationError('Resource name is required')
 		}
 
-		if (!this.props.url) {
+		if (typeof init.url !== 'string' || init.url.trim().length === 0) {
 			throw new ValidationError('Resource url is required')
 		}
 	}

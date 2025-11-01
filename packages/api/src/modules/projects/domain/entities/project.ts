@@ -3,17 +3,7 @@ import type { ProjectProvider } from '../value-objects/project-provider.ts'
 import { ValidationError } from '../../../../core/errors/validation-error.ts'
 import { isProjectProvider } from '../value-objects/project-provider.ts'
 
-export interface JiraProjectDetails {
-	url?: string
-	avatarUrl?: string
-	projectTypeKey?: string
-	simplified?: boolean
-	style?: string
-	isPrivate?: boolean
-	description?: string
-}
-
-export interface ProjectProps {
+export interface ProjectInit {
 	id: string
 	key: string
 	name: string
@@ -21,135 +11,47 @@ export interface ProjectProps {
 	provider: ProjectProvider
 	lastActivityAt?: string
 	archived?: boolean
-	jira?: JiraProjectDetails
 }
 
 export class Project {
-	private readonly props: ProjectProps
+	readonly id: string
+	readonly key: string
+	readonly name: string
+	readonly resourceId: string
+	readonly provider: ProjectProvider
+	readonly lastActivityAt?: string
+	readonly archived?: boolean
 
-	constructor(props: ProjectProps) {
-		const normalizedId = props.id?.trim()
-		const normalizedKey = props.key?.trim()
-		const normalizedName = props.name?.trim()
-		const normalizedResourceId = props.resourceId?.trim()
+	constructor(init: ProjectInit) {
+		this.validate(init)
 
-		this.props = {
-			...props,
-			id: normalizedId ?? '',
-			key: normalizedKey ?? '',
-			name: normalizedName ?? '',
-			resourceId: normalizedResourceId ?? '',
-			jira: this.normalizeJiraDetails(props.jira)
-		}
-
-		this.validate()
+		this.id = init.id
+		this.key = init.key
+		this.name = init.name
+		this.resourceId = init.resourceId
+		this.provider = init.provider
+		this.lastActivityAt = init.lastActivityAt
+		this.archived = init.archived
 	}
 
-	get id(): string {
-		return this.props.id
-	}
-
-	get key(): string {
-		return this.props.key
-	}
-
-	get name(): string {
-		return this.props.name
-	}
-
-	get provider(): ProjectProvider {
-		return this.props.provider
-	}
-
-	get resourceId(): string {
-		return this.props.resourceId
-	}
-
-	get lastActivityAt(): string | undefined {
-		return this.props.lastActivityAt
-	}
-
-	get isArchived(): boolean {
-		return Boolean(this.props.archived)
-	}
-
-	get jiraDetails(): JiraProjectDetails | undefined {
-		return this.props.jira
-	}
-
-	get avatarUrl(): string | undefined {
-		return this.props.jira?.avatarUrl
-	}
-
-	get url(): string | undefined {
-		return this.props.jira?.url
-	}
-
-	get projectTypeKey(): string | undefined {
-		return this.props.jira?.projectTypeKey
-	}
-
-	get isSimplified(): boolean {
-		return Boolean(this.props.jira?.simplified)
-	}
-
-	get style(): string | undefined {
-		return this.props.jira?.style
-	}
-
-	get isPrivate(): boolean {
-		return Boolean(this.props.jira?.isPrivate)
-	}
-
-	get description(): string | undefined {
-		return this.props.jira?.description
-	}
-
-	matchesKey(key: string): boolean {
-		return this.props.key.toLowerCase() === key.trim().toLowerCase()
-	}
-
-	matchesName(name: string): boolean {
-		return this.props.name.toLowerCase() === name.trim().toLowerCase()
-	}
-
-	belongsToResource(resourceId: string): boolean {
-		return this.props.resourceId === resourceId.trim()
-	}
-
-	private normalizeJiraDetails(details?: JiraProjectDetails): JiraProjectDetails | undefined {
-		if (!details) {
-			return undefined
-		}
-
-		return {
-			...details,
-			url: details.url?.trim(),
-			avatarUrl: details.avatarUrl?.trim(),
-			projectTypeKey: details.projectTypeKey?.trim(),
-			style: details.style?.trim(),
-			description: details.description?.trim()
-		}
-	}
-
-	private validate(): void {
-		if (!this.props.id) {
+	private validate(init: ProjectInit): void {
+		if (typeof init.id !== 'string' || init.id.trim().length === 0) {
 			throw new ValidationError('Project id is required')
 		}
 
-		if (!this.props.key) {
+		if (typeof init.key !== 'string' || init.key.trim().length === 0) {
 			throw new ValidationError('Project key is required')
 		}
 
-		if (!this.props.name) {
+		if (typeof init.name !== 'string' || init.name.trim().length === 0) {
 			throw new ValidationError('Project name is required')
 		}
 
-		if (!this.props.resourceId) {
+		if (typeof init.resourceId !== 'string' || init.resourceId.trim().length === 0) {
 			throw new ValidationError('Project resource id is required')
 		}
 
-		if (!isProjectProvider(this.props.provider)) {
+		if (!isProjectProvider(init.provider)) {
 			throw new ValidationError('Project provider is invalid')
 		}
 	}

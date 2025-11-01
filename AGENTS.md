@@ -27,6 +27,8 @@ Example: infinite scroll → Context7 "TanStack Query useInfiniteQuery"; DDG "Re
 - Save tokens: ignore formatting; run `bun run lint:fix` (or `bunx --bun biome check . --write --unsafe`)
 - Biome: single quotes, tabs (vw=2), 100 cols, named exports (no default), `~/` alias, kebab-case filenames
 - TS strict; prefer explicit return types for shared utils; keep enums/zod/XState in `app/domain`
+- Prefer `undefined` over `null` throughout the codebase
+- Avoid `Boolean(value)` casts; prefer explicit checks like `typeof value === 'string' && value.length > 0`
 
 ## Import Ordering (Required)
 Follow eslint-plugin-import order rules. Group imports in this order, separated by blank lines:

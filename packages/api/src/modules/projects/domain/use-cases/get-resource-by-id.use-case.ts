@@ -14,7 +14,7 @@ export class GetResourceByIdUseCase {
 			throw new ValidationError('Resource id is required')
 		}
 
-		const resource = await this.resourceRepository.findById(normalizedId)
+		const resource = await this.resourceRepository.findOne({ id: normalizedId })
 
 		if (!resource) {
 			throw new BusinessRuleError(`Resource with id ${normalizedId} was not found`)

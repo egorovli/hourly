@@ -51,6 +51,8 @@ bun run --filter @hourly/web test
 - Ignore formatting; run `bun run lint:fix` (or `bunx --bun biome check . --write --unsafe`)
 - Conventions: no default exports (except routes/config/tests), single quotes, tabs (vw=2), 100 cols, import extensions, kebab-case, `~/` alias
 - TS strict; explicit return types for shared utils; domain types/schemas in `app/domain`
+- Prefer `undefined` over `null` for “no value” semantics
+- Avoid using the `Boolean(...)` constructor for casting; use explicit comparisons instead (e.g. `typeof name === 'string' && name.length > 0`)
 
 ## Import Ordering (Required)
 Follow eslint-plugin-import order rules. Group imports in this order, separated by blank lines:

@@ -1,7 +1,11 @@
 import type { Resource } from '../entities/resource.ts'
 
+export interface ResourceSearchCriteria {
+	id?: string
+	name?: string
+}
+
 export interface ResourceRepository {
 	listAll(): Promise<Resource[]>
-	findById(id: string): Promise<Resource | null>
-	findByName(name: string): Promise<Resource | null>
+	findOne(criteria: ResourceSearchCriteria): Promise<Resource | undefined>
 }

@@ -8,16 +8,11 @@ export interface ProjectSearchCriteria {
 	resourceId?: string
 	provider?: ProjectProvider
 	includeArchived?: boolean
-	projectTypeKey?: string
-	isPrivate?: boolean
-	simplified?: boolean
-	style?: string
 }
 
 export interface ProjectRepository {
 	listAll(): Promise<Project[]>
 	listByResource(resourceId: string): Promise<Project[]>
-	findById(id: string): Promise<Project | null>
-	findOne(criteria: ProjectSearchCriteria): Promise<Project | null>
+	findOne(criteria: ProjectSearchCriteria): Promise<Project | undefined>
 	search(criteria: ProjectSearchCriteria): Promise<Project[]>
 }

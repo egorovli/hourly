@@ -14,16 +14,12 @@ export interface FindProjectInput {
 	resourceId?: string
 	provider?: ProjectProvider
 	includeArchived?: boolean
-	projectTypeKey?: string
-	isPrivate?: boolean
-	simplified?: boolean
-	style?: string
 }
 
 export class FindProjectUseCase {
 	constructor(private readonly projectRepository: ProjectRepository) {}
 
-	async execute(input: FindProjectInput): Promise<Project | null> {
+	async execute(input: FindProjectInput): Promise<Project | undefined> {
 		if (!input) {
 			throw new ValidationError('Find project input is required')
 		}
@@ -35,7 +31,7 @@ export class FindProjectUseCase {
 				throw new ValidationError('Project id cannot be empty')
 			}
 
-			return this.projectRepository.findById(trimmedId)
+			return this.projectRepository.findOne({ id: trimmedId })
 		}
 
 		const criteria = this.buildCriteria(input)
@@ -51,19 +47,13 @@ export class FindProjectUseCase {
 		const trimmedName = input.name?.trim()
 		const trimmedKey = input.key?.trim()
 		const trimmedResourceId = input.resourceId?.trim()
-		const trimmedProjectTypeKey = input.projectTypeKey?.trim()
-		const trimmedStyle = input.style?.trim()
 
 		const hasCriteria =
 			Boolean(trimmedName) ||
 			Boolean(trimmedKey) ||
 			Boolean(input.provider) ||
 			Boolean(trimmedResourceId) ||
-			Boolean(trimmedProjectTypeKey) ||
-			Boolean(trimmedStyle) ||
-			typeof input.includeArchived === 'boolean' ||
-			typeof input.isPrivate === 'boolean' ||
-			typeof input.simplified === 'boolean'
+			typeof input.includeArchived === 'boolean'
 
 		if (!hasCriteria) {
 			return undefined
@@ -74,11 +64,7 @@ export class FindProjectUseCase {
 			key: trimmedKey,
 			provider: input.provider,
 			resourceId: trimmedResourceId,
-			includeArchived: input.includeArchived,
-			projectTypeKey: trimmedProjectTypeKey,
-			isPrivate: input.isPrivate,
-			simplified: input.simplified,
-			style: trimmedStyle
+			includeArchived: input.includeArchived
 		}
 	}
 }
