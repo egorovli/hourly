@@ -6,7 +6,10 @@
 	"scripts": {
 		"dev": "run-p dev:serve",
 		"dev:serve": "bun run --hot --no-clear-screen ./src/index.ts",
-		"types:check": "tsc"
+		"types:check": "tsc",
+		"test": "bun test",
+		"test:watch": "bun test --watch",
+		"test:coverage": "bun test --coverage"
 	},
 	"devDependencies": {
 		"@total-typescript/ts-reset": "^0.6.1",
