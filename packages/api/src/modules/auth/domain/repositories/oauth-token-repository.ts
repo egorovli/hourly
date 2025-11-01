@@ -39,4 +39,3 @@ export interface OAuthTokenRepository {
 	 */
 	deleteByAuthenticationId(authenticationId: string): Promise<void>
 }
-

@@ -127,4 +127,3 @@ export class Authentication {
 		return this.id === other.id
 	}
 }
-

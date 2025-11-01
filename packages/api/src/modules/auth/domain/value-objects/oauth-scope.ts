@@ -44,4 +44,3 @@ export class OAuthScope {
 		return this.value
 	}
 }
-

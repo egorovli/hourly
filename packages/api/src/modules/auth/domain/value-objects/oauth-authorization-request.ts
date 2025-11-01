@@ -118,4 +118,3 @@ export class OAuthAuthorizationRequest {
 		return this.state === other.state
 	}
 }
-

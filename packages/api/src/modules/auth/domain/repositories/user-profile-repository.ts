@@ -57,4 +57,3 @@ export interface UserProfileRepository {
 	 */
 	delete(id: string, providerType: ProviderType): Promise<void>
 }
-

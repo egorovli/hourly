@@ -22,10 +22,12 @@ export const container = new Container()
 container.bind<ListProjectsUseCase>(InjectionKey.ListProjectsUseCase).to(ListProjectsUseCase)
 
 // Auth module bindings
-container.bind<UserProfileValidator>(InjectionKey.UserProfileValidator)
+container
+	.bind<UserProfileValidator>(InjectionKey.UserProfileValidator)
 	.to(ZodUserProfileValidator)
 	.inSingletonScope()
 
-container.bind<UserProfileFactory>(InjectionKey.UserProfileFactory)
+container
+	.bind<UserProfileFactory>(InjectionKey.UserProfileFactory)
 	.to(UserProfileFactory)
 	.inSingletonScope()

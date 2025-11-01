@@ -49,4 +49,3 @@ export interface OAuthStateService {
 	 */
 	isValid(state: string): Promise<boolean>
 }
-

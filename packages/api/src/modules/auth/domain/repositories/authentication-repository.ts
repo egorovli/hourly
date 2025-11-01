@@ -66,4 +66,3 @@ export interface AuthenticationRepository {
 	 */
 	delete(id: string): Promise<void>
 }
-

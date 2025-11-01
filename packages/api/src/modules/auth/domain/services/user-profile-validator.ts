@@ -16,4 +16,3 @@ import type { Validator } from '../../../../core/base/validator.ts'
  * - Domain Language: Uses domain types (UserProfileInit)
  */
 export interface UserProfileValidator extends Validator<UserProfileInit> {}
-

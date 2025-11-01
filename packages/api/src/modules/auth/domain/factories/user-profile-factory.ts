@@ -36,4 +36,3 @@ export class UserProfileFactory {
 		return new UserProfile(init, this.validator)
 	}
 }
-

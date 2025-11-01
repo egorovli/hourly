@@ -23,4 +23,3 @@ export enum ProviderType {
 	 */
 	GIT_REPOSITORY = 'GIT_REPOSITORY'
 }
-

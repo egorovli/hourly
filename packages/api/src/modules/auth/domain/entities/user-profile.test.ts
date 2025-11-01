@@ -235,4 +235,3 @@ describe('UserProfileFactory', () => {
 		expect(profile1.equals(profile2)).toBe(false)
 	})
 })
-

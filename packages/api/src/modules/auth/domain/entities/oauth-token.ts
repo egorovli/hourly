@@ -141,4 +141,3 @@ export class OAuthToken {
 		return this.authenticationId === other.authenticationId
 	}
 }
-
