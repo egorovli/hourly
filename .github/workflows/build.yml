@@ -24,25 +24,25 @@ on:
   workflow_call:
     outputs:
       image_version:
-        description: 'Docker image version/tag'
+        description: "Docker image version/tag"
         value: ${{ jobs.build-and-push-web.outputs.image_version }}
       image_tags:
-        description: 'All Docker image tags generated'
+        description: "All Docker image tags generated"
         value: ${{ jobs.build-and-push-web.outputs.image_tags }}
       image_digest:
-        description: 'Docker image digest'
+        description: "Docker image digest"
         value: ${{ jobs.build-and-push-web.outputs.image_digest }}
       build_sha:
-        description: 'Commit SHA of the build'
+        description: "Commit SHA of the build"
         value: ${{ jobs.build-and-push-web.outputs.build_sha }}
       api_image_version:
-        description: 'API Docker image version/tag'
+        description: "API Docker image version/tag"
         value: ${{ jobs.build-and-push-api.outputs.image_version }}
       api_image_tags:
-        description: 'All API Docker image tags generated'
+        description: "All API Docker image tags generated"
         value: ${{ jobs.build-and-push-api.outputs.image_tags }}
       api_image_digest:
-        description: 'API Docker image digest'
+        description: "API Docker image digest"
         value: ${{ jobs.build-and-push-api.outputs.image_digest }}
 
 env:
@@ -55,9 +55,9 @@ defaults:
     shell: bash
 
 jobs:
-  # Pre-stage: Lint and format root
-  lint-root:
-    name: Lint and Format Root
+  # Preliminary: Install dependencies with caching
+  install-deps:
+    name: Install Dependencies
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -69,8 +69,83 @@ jobs:
         with:
           bun-version: 1.2.23
 
+      - name: Get Bun install cache path
+        id: bun-cache-path
+        run: echo "cache-path=$(bun pm cache)" >> $GITHUB_OUTPUT
+
+      - name: Cache Bun install cache
+        id: cache-bun-install
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.bun-cache-path.outputs.cache-path }}
+          key: bun-install-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-install-${{ runner.os }}-
+
+      - name: Cache node_modules
+        id: cache-node-modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            node-modules-${{ runner.os }}-
+
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Upload node_modules artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: node_modules
+          path: node_modules
+          retention-days: 1
+          compression-level: 9
+
+  # Pre-stage: Lint and format root
+  lint-root:
+    name: Lint and Format Root
+    needs:
+      - install-deps
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.23
+
+      - name: Get Bun install cache path
+        id: bun-cache-path
+        run: echo "cache-path=$(bun pm cache)" >> $GITHUB_OUTPUT
+
+      - name: Cache Bun install cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.bun-cache-path.outputs.cache-path }}
+          key: bun-install-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-install-${{ runner.os }}-
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            node-modules-${{ runner.os }}-
+
+      - name: Restore node_modules from artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: node_modules
+          path: node_modules
+
+      - name: Verify dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Run linting and formatting (root)
         run: bunx --bun biome check .
@@ -78,7 +153,9 @@ jobs:
   # Web chain: lint → type-check → test → build
   lint-web:
     name: Lint and Format Web
-    needs: lint-root
+    needs:
+      - install-deps
+      - lint-root
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -90,15 +167,43 @@ jobs:
         with:
           bun-version: 1.2.23
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+      - name: Get Bun install cache path
+        id: bun-cache-path
+        run: echo "cache-path=$(bun pm cache)" >> $GITHUB_OUTPUT
+
+      - name: Cache Bun install cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.bun-cache-path.outputs.cache-path }}
+          key: bun-install-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-install-${{ runner.os }}-
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            node-modules-${{ runner.os }}-
+
+      - name: Restore node_modules from artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: node_modules
+          path: node_modules
+
+      - name: Verify dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Run linting and formatting (web)
         run: bunx --bun biome check packages/web
 
   type-check-web:
     name: Type Check Web
-    needs: lint-web
+    needs:
+      - install-deps
+      - lint-web
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -110,8 +215,34 @@ jobs:
         with:
           bun-version: 1.2.23
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+      - name: Get Bun install cache path
+        id: bun-cache-path
+        run: echo "cache-path=$(bun pm cache)" >> $GITHUB_OUTPUT
+
+      - name: Cache Bun install cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.bun-cache-path.outputs.cache-path }}
+          key: bun-install-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-install-${{ runner.os }}-
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            node-modules-${{ runner.os }}-
+
+      - name: Restore node_modules from artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: node_modules
+          path: node_modules
+
+      - name: Verify dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Type check web package
         run: bun run --filter "@hourly/web" types:check
@@ -139,7 +270,9 @@ jobs:
   # API chain: lint → type-check → test → build
   lint-api:
     name: Lint and Format API
-    needs: lint-root
+    needs:
+      - install-deps
+      - lint-root
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -151,15 +284,43 @@ jobs:
         with:
           bun-version: 1.2.23
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+      - name: Get Bun install cache path
+        id: bun-cache-path
+        run: echo "cache-path=$(bun pm cache)" >> $GITHUB_OUTPUT
+
+      - name: Cache Bun install cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.bun-cache-path.outputs.cache-path }}
+          key: bun-install-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-install-${{ runner.os }}-
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            node-modules-${{ runner.os }}-
+
+      - name: Restore node_modules from artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: node_modules
+          path: node_modules
+
+      - name: Verify dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Run linting and formatting (API)
         run: bunx --bun biome check packages/api
 
   type-check-api:
     name: Type Check API
-    needs: lint-api
+    needs:
+      - install-deps
+      - lint-api
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -171,15 +332,43 @@ jobs:
         with:
           bun-version: 1.2.23
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+      - name: Get Bun install cache path
+        id: bun-cache-path
+        run: echo "cache-path=$(bun pm cache)" >> $GITHUB_OUTPUT
+
+      - name: Cache Bun install cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.bun-cache-path.outputs.cache-path }}
+          key: bun-install-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-install-${{ runner.os }}-
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            node-modules-${{ runner.os }}-
+
+      - name: Restore node_modules from artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: node_modules
+          path: node_modules
+
+      - name: Verify dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Type check API package
         run: bun run --filter "@hourly/api" types:check
 
   test-api:
     name: Test API
-    needs: type-check-api
+    needs:
+      - install-deps
+      - type-check-api
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -191,103 +380,72 @@ jobs:
         with:
           bun-version: 1.2.23
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+      - name: Get Bun install cache path
+        id: bun-cache-path
+        run: echo "cache-path=$(bun pm cache)" >> $GITHUB_OUTPUT
+
+      - name: Cache Bun install cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.bun-cache-path.outputs.cache-path }}
+          key: bun-install-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-install-${{ runner.os }}-
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            node-modules-${{ runner.os }}-
+
+      - name: Restore node_modules from artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: node_modules
+          path: node_modules
+
+      - name: Verify dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Run API tests with coverage
-        run: bun run --filter "@hourly/api" test --coverage
-
-      - name: Debug coverage file location
-        run: |
-          echo "Searching for coverage files..."
-          find . -type f -name "lcov.info" 2>/dev/null | head -10 || echo "No lcov.info found"
-          find . -type d -name "coverage" 2>/dev/null | head -10 || echo "No coverage directory found"
-          echo ""
-          echo "Current directory structure:"
-          ls -la packages/api/ 2>/dev/null || echo "packages/api not found"
-          echo ""
-          echo "Checking if coverage exists in root:"
-          ls -la coverage/ 2>/dev/null || echo "No root coverage directory"
-
-      - name: Find coverage file
-        id: find-coverage
-        run: |
-          # Try multiple possible locations
-          COVERAGE_PATHS=(
-            "packages/api/coverage/lcov.info"
-            "coverage/lcov.info"
-            "coverage/api/lcov.info"
-            "packages/api/coverage/lcov-report/lcov.info"
-          )
-          
-          for path in "${COVERAGE_PATHS[@]}"; do
-            if [ -f "$path" ]; then
-              echo "Found coverage file at: $path"
-              echo "coverage_path=$path" >> $GITHUB_OUTPUT
-              exit 0
-            fi
-          done
-          
-          # Last resort: search for any lcov.info file
-          FOUND=$(find . -name "lcov.info" -type f 2>/dev/null | head -1)
-          if [ -n "$FOUND" ]; then
-            echo "Found coverage file at: $FOUND"
-            echo "coverage_path=$FOUND" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          
-          echo "⚠️ No coverage file found. This might be expected if no tests ran or coverage isn't generated."
-          echo "coverage_path=" >> $GITHUB_OUTPUT
-          exit 0
+        run: bun run --filter "@hourly/api" test:coverage
 
       - name: Generate coverage summary
         uses: irongut/CodeCoverageSummary@v1.3.0
-        if: steps.find-coverage.outputs.coverage_path != ''
+        continue-on-error: true
         with:
-          filename: ${{ steps.find-coverage.outputs.coverage_path }}
+          filename: ./packages/api/coverage/lcov.info
           badge: true
           format: markdown
           output: both
-          thresholds: '50 75'
+          thresholds: "50 75"
           fail_below_min: false
 
-      - name: Generate coverage summary (no coverage file)
-        if: steps.find-coverage.outputs.coverage_path == ''
-        run: |
-          echo "## ⚠️ Coverage Report" >> code-coverage-results.md
-          echo "" >> code-coverage-results.md
-          echo "No coverage file was generated. This might happen if:" >> code-coverage-results.md
-          echo "- No tests were executed" >> code-coverage-results.md
-          echo "- Coverage reporting failed" >> code-coverage-results.md
-          echo "- Tests are disabled" >> code-coverage-results.md
-          echo "" >> code-coverage-results.md
-          echo "**Note:** Coverage files are generated when tests run successfully." >> code-coverage-results.md
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        continue-on-error: true
+        with:
+          file: ./packages/api/coverage/lcov.info
+          flags: api
+          name: api-coverage
 
       - name: Upload coverage artifacts
         uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: api-coverage-report
-          path: |
-            packages/api/coverage/
-            coverage/
-            code-coverage-results.md
+          path: packages/api/coverage/lcov.info
           retention-days: 30
           if-no-files-found: warn
-
-      - name: Add coverage comment to PR
-        uses: marocchino/sticky-pull-request-comment@v2
-        if: github.event_name == 'pull_request'
-        with:
-          recreate: true
-          path: code-coverage-results.md
 
       - name: Add coverage to job summary
         run: cat code-coverage-results.md >> $GITHUB_STEP_SUMMARY
 
   build-and-push-web:
     name: Build, Scan, and Push Web Docker Image
-    needs: type-check-web
+    needs:
+      - type-check-web
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -393,16 +551,16 @@ jobs:
         uses: aquasecurity/trivy-action@0.33.1
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WEB }}:scan
-          format: 'sarif'
-          output: 'trivy-results-web.sarif'
-          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+          format: "sarif"
+          output: "trivy-results-web.sarif"
+          severity: "CRITICAL,HIGH,MEDIUM,LOW"
           # exit-code: '0' = don't fail build, scan for visibility
           # Change to '1' to fail build on vulnerabilities found
-          exit-code: '0'
-          vuln-type: 'os,library'
-          scanners: 'vuln,secret,misconfig'
+          exit-code: "0"
+          vuln-type: "os,library"
+          scanners: "vuln,secret,misconfig"
           ignore-unfixed: false
-          timeout: '10m'
+          timeout: "10m"
           cache-dir: ~/.cache/trivy
 
       - name: Upload Trivy results to GitHub Security (Web)
@@ -410,8 +568,8 @@ jobs:
         uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
-          sarif_file: 'trivy-results-web.sarif'
-          category: 'trivy-container-scan-web'
+          sarif_file: "trivy-results-web.sarif"
+          category: "trivy-container-scan-web"
           wait-for-processing: true
 
       - name: Run Trivy vulnerability scanner (table output) - Web
@@ -421,13 +579,13 @@ jobs:
         continue-on-error: true
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WEB }}:scan
-          format: 'table'
-          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
-          exit-code: '0'
-          vuln-type: 'os,library'
-          scanners: 'vuln,secret,misconfig'
+          format: "table"
+          severity: "CRITICAL,HIGH,MEDIUM,LOW"
+          exit-code: "0"
+          vuln-type: "os,library"
+          scanners: "vuln,secret,misconfig"
           ignore-unfixed: false
-          timeout: '10m'
+          timeout: "10m"
           cache-dir: ~/.cache/trivy
 
       - name: Build and push Docker image (multi-platform) - Web
@@ -490,7 +648,8 @@ jobs:
 
   build-and-push-api:
     name: Build, Scan, and Push API Docker Image
-    needs: test-api
+    needs:
+      - test-api
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -592,16 +751,16 @@ jobs:
         uses: aquasecurity/trivy-action@0.33.1
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}:scan
-          format: 'sarif'
-          output: 'trivy-results-api.sarif'
-          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+          format: "sarif"
+          output: "trivy-results-api.sarif"
+          severity: "CRITICAL,HIGH,MEDIUM,LOW"
           # exit-code: '0' = don't fail build, scan for visibility
           # Change to '1' to fail build on vulnerabilities found
-          exit-code: '0'
-          vuln-type: 'os,library'
-          scanners: 'vuln,secret,misconfig'
+          exit-code: "0"
+          vuln-type: "os,library"
+          scanners: "vuln,secret,misconfig"
           ignore-unfixed: false
-          timeout: '10m'
+          timeout: "10m"
           cache-dir: ~/.cache/trivy
 
       - name: Upload Trivy results to GitHub Security (API)
@@ -609,8 +768,8 @@ jobs:
         uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
-          sarif_file: 'trivy-results-api.sarif'
-          category: 'trivy-container-scan-api'
+          sarif_file: "trivy-results-api.sarif"
+          category: "trivy-container-scan-api"
           wait-for-processing: true
 
       - name: Run Trivy vulnerability scanner (table output) - API
@@ -620,13 +779,13 @@ jobs:
         continue-on-error: true
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}:scan
-          format: 'table'
-          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
-          exit-code: '0'
-          vuln-type: 'os,library'
-          scanners: 'vuln,secret,misconfig'
+          format: "table"
+          severity: "CRITICAL,HIGH,MEDIUM,LOW"
+          exit-code: "0"
+          vuln-type: "os,library"
+          scanners: "vuln,secret,misconfig"
           ignore-unfixed: false
-          timeout: '10m'
+          timeout: "10m"
           cache-dir: ~/.cache/trivy
 
       - name: Build and push Docker image (multi-platform) - API
