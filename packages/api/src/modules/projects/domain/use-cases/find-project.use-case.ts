@@ -5,7 +5,10 @@ import type {
 } from '../repositories/project-repository.ts'
 import type { ProjectProvider } from '../value-objects/project-provider.ts'
 
+import { inject, injectable } from 'inversify'
+
 import { ValidationError } from '../../../../core/errors/validation-error.ts'
+import { InjectionKey } from '../../../../core/ioc/injection-key.enum.ts'
 
 export interface FindProjectInput {
 	id?: string
@@ -16,8 +19,12 @@ export interface FindProjectInput {
 	includeArchived?: boolean
 }
 
+@injectable()
 export class FindProjectUseCase {
-	constructor(private readonly projectRepository: ProjectRepository) {}
+	constructor(
+		@inject(InjectionKey.ProjectRepository)
+		private readonly projectRepository: ProjectRepository
+	) {}
 
 	async execute(input: FindProjectInput): Promise<Project | undefined> {
 		if (!input) {

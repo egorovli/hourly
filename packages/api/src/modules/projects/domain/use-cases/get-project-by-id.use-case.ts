@@ -1,11 +1,18 @@
 import type { Project } from '../entities/project.ts'
 import type { ProjectRepository } from '../repositories/project-repository.ts'
 
+import { inject, injectable } from 'inversify'
+
 import { ValidationError } from '../../../../core/errors/validation-error.ts'
 import { BusinessRuleError } from '../../../../core/errors/business-rule-error.ts'
+import { InjectionKey } from '../../../../core/ioc/injection-key.enum.ts'
 
+@injectable()
 export class GetProjectByIdUseCase {
-	constructor(private readonly projectRepository: ProjectRepository) {}
+	constructor(
+		@inject(InjectionKey.ProjectRepository)
+		private readonly projectRepository: ProjectRepository
+	) {}
 
 	async execute(id: string): Promise<Project> {
 		const normalizedId = id?.trim()

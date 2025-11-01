@@ -5,6 +5,10 @@ import type {
 } from '../repositories/project-repository.ts'
 import type { ProjectProvider } from '../value-objects/project-provider.ts'
 
+import { inject, injectable } from 'inversify'
+
+import { InjectionKey } from '../../../../core/ioc/injection-key.enum.ts'
+
 export interface ListProjectsInput {
 	resourceId?: string
 	provider?: ProjectProvider
@@ -13,8 +17,12 @@ export interface ListProjectsInput {
 	includeArchived?: boolean
 }
 
+@injectable()
 export class ListProjectsUseCase {
-	constructor(private readonly projectRepository: ProjectRepository) {}
+	constructor(
+		@inject(InjectionKey.ProjectRepository)
+		private readonly projectRepository: ProjectRepository
+	) {}
 
 	async execute(input: ListProjectsInput = {}): Promise<Project[]> {
 		const trimmedResourceId = input.resourceId?.trim()
