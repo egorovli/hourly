@@ -52,6 +52,31 @@ bun run --filter @hourly/web test
 - Conventions: no default exports (except routes/config/tests), single quotes, tabs (vw=2), 100 cols, import extensions, kebab-case, `~/` alias
 - TS strict; explicit return types for shared utils; domain types/schemas in `app/domain`
 
+## Import Ordering (Required)
+Follow eslint-plugin-import order rules. Group imports in this order, separated by blank lines:
+1. **Type imports** (`import type { ... } from ...`) - ALL type-only imports first
+2. **Node/Bun built-ins** - Built-in modules (e.g., `fs`, `path`)
+3. **External modules** - Dependencies from `node_modules` (e.g., `inversify`, `elysia`)
+4. **Local imports** - Relative imports from the project (e.g., `../domain/...`)
+
+**Rules:**
+- Always use `import type { ... }` syntax, NOT `import { type ... }`
+- Never mix value and type imports in the same statement
+- Separate groups with blank lines
+- Alphabetize within each group
+- Value imports use the class/function, type imports use only types/interfaces
+
+**Example:**
+```ts
+import type { Project } from '../../domain/entities/project.js'
+import type { ProjectRepository } from '../../domain/repositories/project-repository.js'
+
+import { injectable, inject } from 'inversify'
+
+import { ValidationError } from '../../../core/errors/validation-error.js'
+import { ListProjectsUseCase } from '../use-cases/list-projects-use-case.js'
+```
+
 ### Dev-safe singleton
 ```ts
 export let connection: ConnectionType

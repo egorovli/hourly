@@ -11,6 +11,8 @@ import { ServerRouter } from 'react-router'
 import { isbot } from 'isbot'
 import { renderToPipeableStream } from 'react-dom/server'
 
+import 'source-map-support/register'
+
 export const streamTimeout = 60_000
 
 export default function handleRequest(
