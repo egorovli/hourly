@@ -3,5 +3,9 @@ export enum InjectionKey {
 
 	// Project module
 	ProjectRepository = 'ProjectRepository',
-	ListProjectsUseCase = 'ListProjectsUseCase'
+	ListProjectsUseCase = 'ListProjectsUseCase',
+
+	// Auth module
+	UserProfileValidator = 'UserProfileValidator',
+	UserProfileFactory = 'UserProfileFactory'
 }

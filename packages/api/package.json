@@ -19,6 +19,7 @@
 	"dependencies": {
 		"commander": "^14.0.2",
 		"elysia": "^1.4.13",
-		"inversify": "^7.10.4"
+		"inversify": "^7.10.4",
+		"zod": "^4.1.12"
 	}
 }
