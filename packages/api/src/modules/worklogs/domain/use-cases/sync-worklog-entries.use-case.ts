@@ -1,9 +1,7 @@
 import type { WorklogEntryRepository } from '../repositories/worklog-entry-repository.ts'
-import type { IdGenerator } from '../../../../core/services/id-generator.ts'
+import type { WorklogEntryFactory } from '../services/worklog-entry-factory.ts'
 
 import { inject, injectable } from 'inversify'
-
-import { WorklogEntry } from '../entities/worklog-entry.ts'
 
 import { ValidationError } from '../../../../core/errors/validation-error.ts'
 import { InjectionKey } from '../../../../core/ioc/injection-key.enum.ts'
@@ -44,8 +42,8 @@ export class SyncWorklogEntriesUseCase {
 	constructor(
 		@inject(InjectionKey.WorklogEntryRepository)
 		private readonly worklogEntryRepository: WorklogEntryRepository,
-		@inject(InjectionKey.IdGenerator)
-		private readonly idGenerator: IdGenerator
+		@inject(InjectionKey.WorklogEntryFactory)
+		private readonly worklogEntryFactory: WorklogEntryFactory
 	) {}
 
 	async execute(input: SyncWorklogEntriesInput): Promise<SyncWorklogEntriesOutput> {
@@ -84,8 +82,7 @@ export class SyncWorklogEntriesUseCase {
 			try {
 				// The repository needs to resolve issueId from issueKey
 				// For now, we'll use issueKey as issueId placeholder - repository should handle this
-				const entry = new WorklogEntry({
-					id: this.idGenerator.generate(),
+				const entry = this.worklogEntryFactory.create({
 					issueKey: entryInput.issueKey,
 					issueId: entryInput.issueKey, // Temporary - repository should resolve this
 					summary: entryInput.summary,

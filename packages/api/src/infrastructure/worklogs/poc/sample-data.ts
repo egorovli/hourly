@@ -1,18 +1,22 @@
-import type { IdGenerator } from '../../../core/services/id-generator.ts'
+import type { WorklogEntryRepository } from '../../../modules/worklogs/domain/repositories/worklog-entry-repository.ts'
+import type { WorklogEntryFactory } from '../../../modules/worklogs/domain/services/worklog-entry-factory.ts'
 
-import { WorklogEntry } from '../../../modules/worklogs/domain/entities/worklog-entry.ts'
-
-import { InMemoryWorklogEntryRepository } from './in-memory-worklog-entry-repository.ts'
+import { DefaultWorklogEntryFactory } from '../../../modules/worklogs/infrastructure/default-worklog-entry-factory.ts'
+import { ZodWorklogEntryValidator } from '../../../modules/worklogs/infrastructure/zod-worklog-entry-validator.ts'
+import { BunUuidV7Generator } from '../../../infrastructure/ids/bun-uuid-v7-generator.ts'
 
 /**
  * Initialize sample worklog entries for POC demonstration
  */
 export function initializeSampleWorklogEntries(
-	repository: InMemoryWorklogEntryRepository,
-	idGenerator: IdGenerator
-): WorklogEntry[] {
+	repository: WorklogEntryRepository,
+	factory: WorklogEntryFactory = new DefaultWorklogEntryFactory(
+		new BunUuidV7Generator(),
+		new ZodWorklogEntryValidator()
+	)
+): ReturnType<WorklogEntryFactory['create']>[] {
 	const now = new Date()
-	const entries: WorklogEntry[] = []
+	const entries: ReturnType<WorklogEntryFactory['create']>[] = []
 
 	// Create sample entries for the last 7 days
 	for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
@@ -29,8 +33,7 @@ export function initializeSampleWorklogEntries(
 
 			const timeSpentSeconds = (2 + Math.floor(Math.random() * 4)) * 3600 // 2-6 hours
 
-			const entry = new WorklogEntry({
-				id: idGenerator.generate(),
+			const entry = factory.create({
 				issueKey: `PROJ-${100 + dayOffset * 10 + i}`,
 				issueId: `issue-${100 + dayOffset * 10 + i}`,
 				summary: `Worked on feature ${100 + dayOffset * 10 + i}`,
@@ -49,4 +52,3 @@ export function initializeSampleWorklogEntries(
 
 	return entries
 }
-

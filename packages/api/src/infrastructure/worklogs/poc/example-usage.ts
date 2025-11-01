@@ -1,10 +1,7 @@
-import type { Container } from 'inversify'
-import type { IdGenerator } from '../../../core/services/id-generator.ts'
+import type { TypedContainer } from '@inversifyjs/strongly-typed'
 
+import type { BindingMap } from '../../../core/ioc/binding-map.ts'
 import { InjectionKey } from '../../../core/ioc/injection-key.enum.ts'
-import { ListWorklogEntriesUseCase } from '../../../modules/worklogs/domain/use-cases/list-worklog-entries.use-case.ts'
-import { SyncWorklogEntriesUseCase } from '../../../modules/worklogs/domain/use-cases/sync-worklog-entries.use-case.ts'
-import { InMemoryWorklogEntryRepository } from './in-memory-worklog-entry-repository.ts'
 import { initializeSampleWorklogEntries } from './sample-data.ts'
 
 /**
@@ -15,22 +12,20 @@ import { initializeSampleWorklogEntries } from './sample-data.ts'
  * 2. Initialize sample data
  * 3. Use the use cases
  */
-export async function exampleWorklogsPocUsage(container: Container): Promise<void> {
-	// Get the repository (already bound via container)
-	const repository = container.get<InMemoryWorklogEntryRepository>(
-		InjectionKey.WorklogEntryRepository
-	)
-	const idGenerator = container.get<IdGenerator>(InjectionKey.IdGenerator)
+export async function exampleWorklogsPocUsage(
+	container: TypedContainer<BindingMap>
+): Promise<void> {
+	// Get the repository (already bound via container) - type is automatically inferred
+	const repository = container.get(InjectionKey.WorklogEntryRepository)
+	const factory = container.get(InjectionKey.WorklogEntryFactory)
 
 	// Initialize sample data
 	console.log('Initializing sample worklog entries...')
-	const sampleEntries = initializeSampleWorklogEntries(repository, idGenerator)
+	const sampleEntries = initializeSampleWorklogEntries(repository, factory)
 	console.log(`Created ${sampleEntries.length} sample entries`)
 
-	// Example 1: List worklog entries
-	const listUseCase = container.get<ListWorklogEntriesUseCase>(
-		InjectionKey.ListWorklogEntriesUseCase
-	)
+	// Example 1: List worklog entries - type is automatically inferred
+	const listUseCase = container.get(InjectionKey.ListWorklogEntriesUseCase)
 
 	const now = new Date()
 	const sevenDaysAgo = new Date(now)
@@ -49,12 +44,12 @@ export async function exampleWorklogsPocUsage(container: Container): Promise<voi
 	})
 
 	console.log(`Found ${listResult.entries.length} entries`)
-	console.log(`Total: ${listResult.pageInfo.total}, Has next page: ${listResult.pageInfo.hasNextPage}`)
-
-	// Example 2: Sync worklog entries
-	const syncUseCase = container.get<SyncWorklogEntriesUseCase>(
-		InjectionKey.SyncWorklogEntriesUseCase
+	console.log(
+		`Total: ${listResult.pageInfo.total}, Has next page: ${listResult.pageInfo.hasNextPage}`
 	)
+
+	// Example 2: Sync worklog entries - type is automatically inferred
+	const syncUseCase = container.get(InjectionKey.SyncWorklogEntriesUseCase)
 
 	const syncResult = await syncUseCase.execute({
 		entries: [
@@ -77,4 +72,3 @@ export async function exampleWorklogsPocUsage(container: Container): Promise<voi
 	)
 	console.log(`Deleted: ${syncResult.deleted.success}, Created: ${syncResult.created.success}`)
 }
-

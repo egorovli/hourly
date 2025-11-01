@@ -1,59 +1,18 @@
-import { Container } from 'inversify'
+import type { TypedContainer } from '@inversifyjs/strongly-typed'
 
-export const container = new Container()
+import { Container as InversifyContainer } from 'inversify'
 
-// /**
-//  * CoreContainerModule - Core application services
-//  *
-//  * Binds cross-cutting concerns and infrastructure services that are used
-//  * throughout the application (e.g., ID generation, logging).
-//  */
-// export const coreContainerModule = new ContainerModule(options => {
-// 	options.bind<IdGenerator>(InjectionKey.IdGenerator).to(BunUuidV7Generator).inSingletonScope()
-// })
+import type { BindingMap } from './binding-map.ts'
 
-// /**
-//  * Default container modules for the application
-//  *
-//  * These modules are loaded by default when creating a container.
-//  * Add module-specific container modules here to include them automatically.
-//  */
-// export const defaultContainerModules: ContainerModule[] = [coreContainerModule]
+/**
+ * Typed container instance with compile-time type safety
+ *
+ * Uses type assertion to keep @inversifyjs/strongly-typed out of the runtime
+ * dependency tree while still providing full type safety.
+ *
+ * @see https://inversify.io/docs/ecosystem/strongly-typed/
+ */
+export const container = new InversifyContainer() as TypedContainer<BindingMap>
 
-// export interface CreateContainerOptions {
-// 	/**
-// 	 * Additional container modules to load
-// 	 */
-// 	modules?: ContainerModule[]
-// 	/**
-// 	 * Whether to include default modules (core, etc.)
-// 	 * @default true
-// 	 */
-// 	includeDefaults?: boolean
-// }
-
-// /**
-//  * Creates a configured Inversify container
-//  *
-//  * This is the composition root for dependency injection. All dependencies
-//  * should be resolved here and passed down to application components.
-//  *
-//  * @param options - Configuration options for container creation
-//  * @returns Configured Inversify container
-//  *
-//  * @example
-//  * ```typescript
-//  * const container = createContainer({
-//  *   modules: [projectsContainerModule],
-//  *   includeDefaults: true
-//  * })
-//  * ```
-//  */
-// export function createContainer(options: CreateContainerOptions = {}): Container {
-// 	const container = new Container()
-// 	const extraModules = options.modules ?? []
-// 	const modulesToLoad =
-// 		options.includeDefaults === false ? extraModules : [...defaultContainerModules, ...extraModules]
-// 	container.load(...modulesToLoad)
-// 	return container
-// }
+// Re-export BindingMap for use in container modules
+export type { BindingMap }

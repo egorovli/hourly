@@ -1,5 +1,8 @@
+import type { TypedContainerModule } from '@inversifyjs/strongly-typed'
+
 import { ContainerModule } from 'inversify'
 
+import type { BindingMap } from '../../../core/ioc/binding-map.ts'
 import { InjectionKey } from '../../../core/ioc/injection-key.enum.ts'
 import { InMemoryWorklogEntryRepository } from './in-memory-worklog-entry-repository.ts'
 
@@ -15,5 +18,4 @@ export const worklogsPocContainerModule = new ContainerModule(options => {
 		.bind(InjectionKey.WorklogEntryRepository)
 		.to(InMemoryWorklogEntryRepository)
 		.inSingletonScope()
-})
-
+}) as TypedContainerModule<BindingMap>

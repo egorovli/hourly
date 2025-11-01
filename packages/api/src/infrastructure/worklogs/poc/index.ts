@@ -3,4 +3,3 @@ export * from './in-memory-worklog-entry-repository.ts'
 export * from './worklogs-poc-container-module.ts'
 export * from './sample-data.ts'
 export * from './example-usage.ts'
-

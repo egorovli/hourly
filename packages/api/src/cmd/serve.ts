@@ -1,6 +1,3 @@
-import type { IdGenerator } from '../core/services/id-generator.ts'
-import type { InMemoryWorklogEntryRepository } from '../infrastructure/worklogs/poc/in-memory-worklog-entry-repository.ts'
-
 import { Command } from 'commander'
 
 import { container, debugContainer, InjectionKey } from '../core/ioc/index.ts'
@@ -29,9 +26,9 @@ serve.action(function serve() {
 	container.load(worklogsPocContainerModule)
 
 	// Bind core services
-	container.bind<IdGenerator>(InjectionKey.IdGenerator).to(BunUuidV7Generator).inSingletonScope()
+	container.bind(InjectionKey.IdGenerator).to(BunUuidV7Generator).inSingletonScope()
 
-	const idGenerator = container.get<IdGenerator>(InjectionKey.IdGenerator)
+	const idGenerator = container.get(InjectionKey.IdGenerator)
 	const serverId = idGenerator.generate()
 	const duration = Number((process.hrtime.bigint() - start) / BigInt(1e6))
 
@@ -41,10 +38,10 @@ serve.action(function serve() {
 	// Initialize sample data in development mode
 	if (Bun.env.NODE_ENV === 'development') {
 		try {
-			const repository = container.get<InMemoryWorklogEntryRepository>(
-				InjectionKey.WorklogEntryRepository
-			)
-			const sampleEntries = initializeSampleWorklogEntries(repository, idGenerator)
+			// Type is automatically inferred from BindingMap
+			const repository = container.get(InjectionKey.WorklogEntryRepository)
+			const factory = container.get(InjectionKey.WorklogEntryFactory)
+			const sampleEntries = initializeSampleWorklogEntries(repository, factory)
 			process.stdout.write(
 				`[${serverId}] Initialized ${sampleEntries.length} sample worklog entries\n`
 			)

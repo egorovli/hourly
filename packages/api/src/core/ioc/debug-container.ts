@@ -1,5 +1,7 @@
 import type { Container } from 'inversify'
+import type { TypedContainer } from '@inversifyjs/strongly-typed'
 
+import type { BindingMap } from './binding-map.ts'
 import { InjectionKey } from './injection-key.enum.ts'
 
 // Import all use case classes to access their metadata
@@ -12,6 +14,8 @@ import { ListWorklogEntriesUseCase } from '../../modules/worklogs/domain/use-cas
 import { SyncWorklogEntriesUseCase } from '../../modules/worklogs/domain/use-cases/sync-worklog-entries.use-case.ts'
 import { BunUuidV7Generator } from '../../infrastructure/ids/bun-uuid-v7-generator.ts'
 import { InMemoryWorklogEntryRepository } from '../../infrastructure/worklogs/poc/in-memory-worklog-entry-repository.ts'
+import { DefaultWorklogEntryFactory } from '../../modules/worklogs/infrastructure/default-worklog-entry-factory.ts'
+import { ZodWorklogEntryValidator } from '../../modules/worklogs/infrastructure/zod-worklog-entry-validator.ts'
 
 /**
  * Maps InjectionKey to implementation class
@@ -25,7 +29,9 @@ const KEY_TO_CLASS_MAP: Record<string, unknown> = {
 	[InjectionKey.ListWorklogEntriesUseCase]: ListWorklogEntriesUseCase,
 	[InjectionKey.SyncWorklogEntriesUseCase]: SyncWorklogEntriesUseCase,
 	[InjectionKey.IdGenerator]: BunUuidV7Generator,
-	[InjectionKey.WorklogEntryRepository]: InMemoryWorklogEntryRepository
+	[InjectionKey.WorklogEntryRepository]: InMemoryWorklogEntryRepository,
+	[InjectionKey.WorklogEntryValidator]: ZodWorklogEntryValidator,
+	[InjectionKey.WorklogEntryFactory]: DefaultWorklogEntryFactory
 }
 
 /**
@@ -53,7 +59,7 @@ function getDependenciesFromMetadata(target: unknown): string[] {
 						tags?: Record<string, unknown>
 						[key: string]: unknown
 					}>
-				}
+			  }
 			| undefined
 
 		if (classMetadata?.constructorArguments) {
@@ -84,19 +90,26 @@ function getImplementationClass(key: string): unknown {
 /**
  * Builds dependency map for all bound keys
  */
-function buildDependencyMap(container: Container): {
+function buildDependencyMap(container: Container | TypedContainer<BindingMap>): {
 	boundKeys: string[]
 	dependencyMap: Map<string, string[]>
 } {
 	const knownKeys = Object.values(InjectionKey)
 	const boundKeys: string[] = []
 	const dependencyMap = new Map<string, string[]>()
-	
+
 	for (const key of knownKeys) {
 		try {
-			if (container.isBound(key)) {
+			// Skip keys that aren't in BindingMap (like Logger)
+			if (!(key in KEY_TO_CLASS_MAP)) {
+				continue
+			}
+
+			// Use type assertion to check if bound (TypedContainer.isBound requires BindingMap keys)
+			const containerForCheck = container as Container
+			if (containerForCheck.isBound(key)) {
 				boundKeys.push(key)
-				
+
 				// Get implementation class from static map
 				const implClass = getImplementationClass(key)
 				if (implClass) {
@@ -123,7 +136,7 @@ function printBindingsWithDependencies(
 ): void {
 	for (const key of boundKeys) {
 		const deps = dependencyMap.get(key)
-		
+
 		if (deps && deps.length > 0) {
 			// biome-ignore lint/suspicious/noConsole: Debug utility
 			console.log(`\n🔑 ${key}`)
@@ -141,24 +154,21 @@ function printBindingsWithDependencies(
 /**
  * Prints dependency tree visualization
  */
-function printDependencyTree(
-	boundKeys: string[],
-	dependencyMap: Map<string, string[]>
-): void {
+function printDependencyTree(boundKeys: string[], dependencyMap: Map<string, string[]>): void {
 	const visited = new Set<string>()
-	
+
 	function printTree(key: string, indent: string, isLast: boolean): void {
 		if (visited.has(key)) {
 			// biome-ignore lint/suspicious/noConsole: Debug utility
 			console.log(`${indent}${isLast ? '└─' : '├─'} ${key} (circular reference)`)
 			return
 		}
-		
+
 		visited.add(key)
 		const prefix = indent + (isLast ? '└─' : '├─')
 		// biome-ignore lint/suspicious/noConsole: Debug utility
 		console.log(`${prefix} ${key}`)
-		
+
 		const deps = dependencyMap.get(key)
 		if (deps && deps.length > 0) {
 			const newIndent = indent + (isLast ? '   ' : '│  ')
@@ -173,10 +183,10 @@ function printDependencyTree(
 				}
 			}
 		}
-		
+
 		visited.delete(key)
 	}
-	
+
 	for (const key of boundKeys) {
 		printTree(key, '', false)
 	}
@@ -185,7 +195,7 @@ function printDependencyTree(
 /**
  * Fallback method: Check known InjectionKeys using isBound and extract dependencies
  */
-function debugViaIsBound(container: Container): void {
+function debugViaIsBound(container: Container | TypedContainer<BindingMap>): void {
 	const { boundKeys, dependencyMap } = buildDependencyMap(container)
 
 	if (boundKeys.length === 0) {
@@ -209,7 +219,7 @@ function debugViaIsBound(container: Container): void {
 		console.log('\n🌳 Dependency Tree:')
 		// biome-ignore lint/suspicious/noConsole: Debug utility
 		console.log('─'.repeat(80))
-		
+
 		printDependencyTree(boundKeys, dependencyMap)
 	}
 

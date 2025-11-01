@@ -11,6 +11,8 @@ export enum InjectionKey {
 	FindProjectUseCase = 'FindProjectUseCase',
 	// Worklogs module
 	WorklogEntryRepository = 'WorklogEntryRepository',
+	WorklogEntryValidator = 'WorklogEntryValidator',
+	WorklogEntryFactory = 'WorklogEntryFactory',
 	ListWorklogEntriesUseCase = 'ListWorklogEntriesUseCase',
 	SyncWorklogEntriesUseCase = 'SyncWorklogEntriesUseCase'
 }

@@ -100,4 +100,3 @@ export class InMemoryWorklogEntryRepository implements WorklogEntryRepository {
 		return Array.from(this.entries.values())
 	}
 }
-

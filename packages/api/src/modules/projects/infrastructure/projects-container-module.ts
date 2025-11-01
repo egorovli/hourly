@@ -1,5 +1,8 @@
+import type { TypedContainerModule } from '@inversifyjs/strongly-typed'
+
 import { ContainerModule } from 'inversify'
 
+import type { BindingMap } from '../../../core/ioc/binding-map.ts'
 import { InjectionKey } from '../../../core/ioc/injection-key.enum.ts'
 import { FindProjectUseCase } from '../domain/use-cases/find-project.use-case.ts'
 import { GetProjectByIdUseCase } from '../domain/use-cases/get-project-by-id.use-case.ts'
@@ -46,4 +49,4 @@ export const projectsContainerModule = new ContainerModule(options => {
 	// Repository interfaces - implementations must be bound separately in infrastructure
 	// Example: bind<ProjectRepository>(InjectionKey.ProjectRepository).to(SomeProjectRepositoryImpl).inSingletonScope()
 	// This is done in infrastructure modules, not here
-})
+}) as TypedContainerModule<BindingMap>
