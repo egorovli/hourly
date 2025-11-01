@@ -1,0 +1,20 @@
+[test]
+# Generate both text and LCOV reports
+coverageReporter = ["text", "lcov"]
+
+# Output directory for coverage reports
+coverageDir = "coverage"
+
+# Skip test files from coverage (recommended)
+coverageSkipTestFiles = true
+
+# Ignore specific patterns from coverage
+coveragePathIgnorePatterns = [
+  "**/*.test.ts",
+  "**/*.spec.ts",
+  "**/node_modules/**",
+  "**/dist/**",
+  "**/build/**",
+  "**/temp/**"
+]
+
