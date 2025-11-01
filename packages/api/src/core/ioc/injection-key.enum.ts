@@ -1,3 +1,7 @@
 export enum InjectionKey {
-	Logger = 'Logger'
+	Logger = 'Logger',
+
+	// Project module
+	ProjectRepository = 'ProjectRepository',
+	ListProjectsUseCase = 'ListProjectsUseCase'
 }

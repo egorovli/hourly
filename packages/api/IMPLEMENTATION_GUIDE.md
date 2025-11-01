@@ -354,3 +354,4 @@ Once Project module is complete and working:
 - **Authentication**: You'll need to handle OAuth tokens. Consider creating a middleware or context that provides authenticated clients.
 - **Error Handling**: Add proper error handling at each layer (domain errors, infrastructure errors, validation errors).
 
+
