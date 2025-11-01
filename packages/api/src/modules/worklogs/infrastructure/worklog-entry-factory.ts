@@ -1,11 +1,12 @@
+import type { IdGenerator } from '../../../core/services/id-generator.ts'
+import type { WorklogEntryInit } from '../domain/entities/worklog-entry.ts'
+import type { WorklogEntryValidator } from '../domain/services/worklog-entry-validator.ts'
+
 import { inject, injectable } from 'inversify'
 
 import { ValidationError } from '../../../core/errors/validation-error.ts'
 import { InjectionKey } from '../../../core/ioc/injection-key.enum.ts'
-import type { IdGenerator } from '../../../core/services/id-generator.ts'
 import { WorklogEntry } from '../domain/entities/worklog-entry.ts'
-import type { WorklogEntryInit } from '../domain/entities/worklog-entry.ts'
-import type { WorklogEntryValidator } from '../domain/services/worklog-entry-validator.ts'
 
 /**
  * WorklogEntryFactoryInput - Input for creating a worklog entry

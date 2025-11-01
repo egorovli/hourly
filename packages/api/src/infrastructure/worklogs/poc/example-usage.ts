@@ -18,11 +18,7 @@ export async function exampleWorklogsPocUsage(
 	// Get the repository (already bound via container) - type is automatically inferred
 	const repository = container.get(InjectionKey.WorklogEntryRepository)
 	const factory = container.get(InjectionKey.WorklogEntryFactory)
-
-	// Initialize sample data
-	console.log('Initializing sample worklog entries...')
 	const sampleEntries = initializeSampleWorklogEntries(repository, factory)
-	console.log(`Created ${sampleEntries.length} sample entries`)
 
 	// Example 1: List worklog entries - type is automatically inferred
 	const listUseCase = container.get(InjectionKey.ListWorklogEntriesUseCase)
@@ -43,11 +39,6 @@ export async function exampleWorklogsPocUsage(
 		size: 10
 	})
 
-	console.log(`Found ${listResult.entries.length} entries`)
-	console.log(
-		`Total: ${listResult.pageInfo.total}, Has next page: ${listResult.pageInfo.hasNextPage}`
-	)
-
 	// Example 2: Sync worklog entries - type is automatically inferred
 	const syncUseCase = container.get(InjectionKey.SyncWorklogEntriesUseCase)
 
@@ -66,9 +57,4 @@ export async function exampleWorklogsPocUsage(
 		dateTo,
 		authorAccountId: 'user-account-123'
 	})
-
-	console.log(
-		`Sync completed: ${syncResult.totalSuccess} succeeded, ${syncResult.totalFailed} failed`
-	)
-	console.log(`Deleted: ${syncResult.deleted.success}, Created: ${syncResult.created.success}`)
 }

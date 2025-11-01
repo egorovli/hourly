@@ -3,8 +3,8 @@ import type { TypedContainer } from '@inversifyjs/strongly-typed'
 
 import type { BindingMap } from './binding-map.ts'
 import { InjectionKey } from './injection-key.enum.ts'
-
-// Import all use case classes to access their metadata
+import { BunUuidV7Generator } from '../../infrastructure/ids/bun-uuid-v7-generator.ts'
+import { InMemoryWorklogEntryRepository } from '../../infrastructure/worklogs/poc/in-memory-worklog-entry-repository.ts'
 import { FindProjectUseCase } from '../../modules/projects/domain/use-cases/find-project.use-case.ts'
 import { GetProjectByIdUseCase } from '../../modules/projects/domain/use-cases/get-project-by-id.use-case.ts'
 import { GetResourceByIdUseCase } from '../../modules/projects/domain/use-cases/get-resource-by-id.use-case.ts'
@@ -12,8 +12,6 @@ import { ListProjectsUseCase } from '../../modules/projects/domain/use-cases/lis
 import { ListResourcesUseCase } from '../../modules/projects/domain/use-cases/list-resources.use-case.ts'
 import { ListWorklogEntriesUseCase } from '../../modules/worklogs/domain/use-cases/list-worklog-entries.use-case.ts'
 import { SyncWorklogEntriesUseCase } from '../../modules/worklogs/domain/use-cases/sync-worklog-entries.use-case.ts'
-import { BunUuidV7Generator } from '../../infrastructure/ids/bun-uuid-v7-generator.ts'
-import { InMemoryWorklogEntryRepository } from '../../infrastructure/worklogs/poc/in-memory-worklog-entry-repository.ts'
 import { WorklogEntryFactory } from '../../modules/worklogs/infrastructure/worklog-entry-factory.ts'
 import { ZodWorklogEntryValidator } from '../../modules/worklogs/infrastructure/zod-worklog-entry-validator.ts'
 

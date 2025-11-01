@@ -1,6 +1,6 @@
-import { injectable } from 'inversify'
-
 import type { IdGenerator } from '../../core/services/id-generator.ts'
+
+import { injectable } from 'inversify'
 
 /**
  * BunUuidV7Generator - ID generator using Bun.randomUUIDv7().

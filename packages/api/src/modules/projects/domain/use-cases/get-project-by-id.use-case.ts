@@ -3,8 +3,8 @@ import type { ProjectRepository } from '../repositories/project-repository.ts'
 
 import { inject, injectable } from 'inversify'
 
-import { ValidationError } from '../../../../core/errors/validation-error.ts'
 import { BusinessRuleError } from '../../../../core/errors/business-rule-error.ts'
+import { ValidationError } from '../../../../core/errors/validation-error.ts'
 import { InjectionKey } from '../../../../core/ioc/injection-key.enum.ts'
 
 @injectable()

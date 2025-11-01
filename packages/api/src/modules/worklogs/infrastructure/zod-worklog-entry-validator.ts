@@ -1,9 +1,9 @@
-import { injectable } from 'inversify'
-import { z } from 'zod'
-
 import type { ValidationResult } from '../../../core/base/validator.ts'
 import type { WorklogEntryInit } from '../domain/entities/worklog-entry.ts'
 import type { WorklogEntryValidator } from '../domain/services/worklog-entry-validator.ts'
+
+import { injectable } from 'inversify'
+import { z } from 'zod'
 
 /**
  * Zod schema for WorklogEntryInit validation

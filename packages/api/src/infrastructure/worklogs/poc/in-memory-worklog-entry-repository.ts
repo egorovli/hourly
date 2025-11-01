@@ -25,12 +25,12 @@ export class InMemoryWorklogEntryRepository implements WorklogEntryRepository {
 
 		// Filter by projectIds
 		if (criteria.projectIds && criteria.projectIds.length > 0) {
-			results = results.filter(entry => criteria.projectIds!.includes(entry.projectId))
+			results = results.filter(entry => criteria.projectIds?.includes(entry.projectId))
 		}
 
 		// Filter by userIds (authorAccountId)
 		if (criteria.userIds && criteria.userIds.length > 0) {
-			results = results.filter(entry => criteria.userIds!.includes(entry.authorAccountId))
+			results = results.filter(entry => criteria.userIds?.includes(entry.authorAccountId))
 		}
 
 		// Filter by date range

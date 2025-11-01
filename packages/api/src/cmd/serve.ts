@@ -1,11 +1,11 @@
 import { Command } from 'commander'
 
+import { BunUuidV7Generator } from '../infrastructure/ids/bun-uuid-v7-generator.ts'
 import { container, debugContainer, InjectionKey } from '../core/ioc/index.ts'
 import { projectsContainerModule } from '../modules/projects/infrastructure/projects-container-module.ts'
 import { worklogsContainerModule } from '../modules/worklogs/infrastructure/worklogs-container-module.ts'
-import { worklogsPocContainerModule } from '../infrastructure/worklogs/poc/worklogs-poc-container-module.ts'
 import { initializeSampleWorklogEntries } from '../infrastructure/worklogs/poc/sample-data.ts'
-import { BunUuidV7Generator } from '../infrastructure/ids/bun-uuid-v7-generator.ts'
+import { worklogsPocContainerModule } from '../infrastructure/worklogs/poc/worklogs-poc-container-module.ts'
 
 /**
  * Composition Root - Entry point for dependency resolution

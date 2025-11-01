@@ -1,5 +1,6 @@
-import { inject, multiInject } from 'inversify'
 import type { TypedInject, TypedMultiInject } from '@inversifyjs/strongly-typed'
+
+import { inject, multiInject } from 'inversify'
 
 import type { BindingMap } from './binding-map.ts'
 

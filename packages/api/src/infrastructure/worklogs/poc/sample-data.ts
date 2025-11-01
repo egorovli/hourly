@@ -1,8 +1,8 @@
 import type { WorklogEntryRepository } from '../../../modules/worklogs/domain/repositories/worklog-entry-repository.ts'
 
+import { BunUuidV7Generator } from '../../../infrastructure/ids/bun-uuid-v7-generator.ts'
 import { WorklogEntryFactory } from '../../../modules/worklogs/infrastructure/worklog-entry-factory.ts'
 import { ZodWorklogEntryValidator } from '../../../modules/worklogs/infrastructure/zod-worklog-entry-validator.ts'
-import { BunUuidV7Generator } from '../../../infrastructure/ids/bun-uuid-v7-generator.ts'
 
 /**
  * Initialize sample worklog entries for POC demonstration
