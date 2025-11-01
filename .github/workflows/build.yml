@@ -240,29 +240,11 @@ jobs:
           echo "coverage_path=" >> $GITHUB_OUTPUT
           exit 0
 
-      - name: Enhance coverage with untested files
-        if: steps.find-coverage.outputs.coverage_path != ''
-        run: |
-          bun run scripts/enhance-coverage.ts "${{ steps.find-coverage.outputs.coverage_path }}" coverage/enhanced-lcov.info || {
-            echo "⚠️ Coverage enhancement failed, using original coverage file"
-            cp "${{ steps.find-coverage.outputs.coverage_path }}" coverage/enhanced-lcov.info || true
-          }
-
-      - name: Update coverage path to enhanced version
-        if: steps.find-coverage.outputs.coverage_path != ''
-        id: enhanced-coverage
-        run: |
-          if [ -f "coverage/enhanced-lcov.info" ]; then
-            echo "coverage_path=coverage/enhanced-lcov.info" >> $GITHUB_OUTPUT
-          else
-            echo "coverage_path=${{ steps.find-coverage.outputs.coverage_path }}" >> $GITHUB_OUTPUT
-          fi
-
       - name: Generate coverage summary
         uses: irongut/CodeCoverageSummary@v1.3.0
         if: steps.find-coverage.outputs.coverage_path != ''
         with:
-          filename: ${{ steps.enhanced-coverage.outputs.coverage_path != '' && steps.enhanced-coverage.outputs.coverage_path || steps.find-coverage.outputs.coverage_path }}
+          filename: ${{ steps.find-coverage.outputs.coverage_path }}
           badge: true
           format: markdown
           output: both
