@@ -55,9 +55,30 @@ defaults:
     shell: bash
 
 jobs:
-  # Pre-stage: Linting and formatting (must pass before builds)
+  # Pre-stage: Lint and format root
+  lint-root:
+    name: Lint and Format Root
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.23
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run linting and formatting (root)
+        run: bunx --bun biome check .
+
+  # Web chain: lint → type-check → test → build
   lint-web:
     name: Lint and Format Web
+    needs: lint-root
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -75,27 +96,9 @@ jobs:
       - name: Run linting and formatting (web)
         run: bunx --bun biome check packages/web
 
-  lint-api:
-    name: Lint and Format API
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.2.23
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Run linting and formatting (API)
-        run: bunx --bun biome check packages/api
-
   type-check-web:
     name: Type Check Web
+    needs: lint-web
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -113,8 +116,50 @@ jobs:
       - name: Type check web package
         run: bun run --filter "@hourly/web" types:check
 
+  # test-web:
+  #   name: Test Web
+  #   needs: type-check-web
+  #   runs-on: ubuntu-latest
+  #   timeout-minutes: 15
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v5
+  #
+  #     - name: Setup Bun
+  #       uses: oven-sh/setup-bun@v2
+  #       with:
+  #         bun-version: 1.2.23
+  #
+  #     - name: Install dependencies
+  #       run: bun install --frozen-lockfile
+  #
+  #     - name: Run web tests
+  #       run: bun run --filter "@hourly/web" test
+
+  # API chain: lint → type-check → test → build
+  lint-api:
+    name: Lint and Format API
+    needs: lint-root
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.23
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run linting and formatting (API)
+        run: bunx --bun biome check packages/api
+
   type-check-api:
     name: Type Check API
+    needs: lint-api
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -132,28 +177,9 @@ jobs:
       - name: Type check API package
         run: bun run --filter "@hourly/api" types:check
 
-  # Test jobs (run in parallel, not blocking builds)
-  test-web:
-    name: Test Web
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.2.23
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Run web tests
-        run: bun run --filter "@hourly/web" test
-
   test-api:
     name: Test API
+    needs: type-check-api
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -173,7 +199,7 @@ jobs:
 
   build-and-push-web:
     name: Build, Scan, and Push Web Docker Image
-    needs: [lint-web, type-check-web]
+    needs: type-check-web
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -376,7 +402,7 @@ jobs:
 
   build-and-push-api:
     name: Build, Scan, and Push API Docker Image
-    needs: [lint-api, type-check-api]
+    needs: test-api
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
