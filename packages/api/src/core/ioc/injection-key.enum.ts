@@ -8,5 +8,9 @@ export enum InjectionKey {
 	ListResourcesUseCase = 'ListResourcesUseCase',
 	GetProjectByIdUseCase = 'GetProjectByIdUseCase',
 	GetResourceByIdUseCase = 'GetResourceByIdUseCase',
-	FindProjectUseCase = 'FindProjectUseCase'
+	FindProjectUseCase = 'FindProjectUseCase',
+	// Worklogs module
+	WorklogEntryRepository = 'WorklogEntryRepository',
+	ListWorklogEntriesUseCase = 'ListWorklogEntriesUseCase',
+	SyncWorklogEntriesUseCase = 'SyncWorklogEntriesUseCase'
 }
