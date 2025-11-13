@@ -1,10 +1,9 @@
 import type { Route } from './+types/auth.sign-in.ts'
 
-import { RequestContext } from '@mikro-orm/core'
 import { Link } from 'react-router'
 
-import { orm } from '~/lib/mikro-orm/index.ts'
 import { createSessionStorage } from '~/lib/session/index.ts'
+import { withRequestContext } from '~/lib/mikro-orm/index.ts'
 
 export default function SignInPage({ loaderData }: Route.ComponentProps): React.ReactNode {
 	return (
@@ -20,14 +19,12 @@ export default function SignInPage({ loaderData }: Route.ComponentProps): React.
 	)
 }
 
-export async function loader({ request }: Route.LoaderArgs) {
-	return RequestContext.create(orm.em, async () => {
-		const url = new URL(request.url)
-		const sessionStorage = createSessionStorage()
-		const session = await sessionStorage.getSession(request.headers.get('Cookie'))
+export const loader = withRequestContext(async function loader({ request }: Route.LoaderArgs) {
+	const url = new URL(request.url)
+	const sessionStorage = createSessionStorage()
+	const session = await sessionStorage.getSession(request.headers.get('Cookie'))
 
-		const redirectedFrom = url.searchParams.get('redirected-from') ?? undefined
+	const redirectedFrom = url.searchParams.get('redirected-from') ?? undefined
 
-		return {}
-	})
-}
+	return {}
+})

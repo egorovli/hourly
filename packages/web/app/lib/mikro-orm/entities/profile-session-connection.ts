@@ -31,4 +31,3 @@ export class ProfileSessionConnection {
 	// This is needed for proper type checks in `FilterQuery`
 	declare [PrimaryKeyProp]: ['profile', 'session']
 }
-

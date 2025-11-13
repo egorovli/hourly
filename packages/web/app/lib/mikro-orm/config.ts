@@ -20,12 +20,7 @@ export const config: Options = {
 	driver: PostgreSqlDriver,
 	clientUrl: process.env.DATABASE_URL,
 
-	entities: [
-		entities.Profile,
-		entities.ProfileSessionConnection,
-		entities.Session,
-		entities.Token
-	],
+	entities: [entities.Profile, entities.ProfileSessionConnection, entities.Session, entities.Token],
 
 	discovery: {
 		requireEntitiesArray: true

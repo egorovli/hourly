@@ -8,26 +8,14 @@
 		".old/app/use-mobile.ts"
 	],
 	"compilerOptions": {
-		"lib": [
-			"DOM",
-			"DOM.Iterable",
-			"ES2022"
-		],
-		"types": [
-			"node",
-			"vite/client"
-		],
+		"lib": ["DOM", "DOM.Iterable", "ES2022"],
+		"types": ["node", "vite/client"],
 		"target": "ES2022",
 		"module": "ES2022",
-		"rootDirs": [
-			".",
-			"./.react-router/types"
-		],
+		"rootDirs": [".", "./.react-router/types"],
 		"baseUrl": ".",
 		"paths": {
-			"~/*": [
-				"./app/*"
-			]
+			"~/*": ["./app/*"]
 		},
 		"plugins": [
 			{
