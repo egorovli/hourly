@@ -6,7 +6,7 @@ import { OAuth2Strategy } from 'remix-auth-oauth2'
 
 import { AtlassianClient } from '~/lib/atlassian/index.ts'
 
-import { cookieOptionsDefaults, resolveExpiresAt, resolveScopes } from './common.ts'
+import { cookieOptionsDefaults, Provider, resolveExpiresAt, resolveScopes } from './common.ts'
 
 export class AtlassianStrategy<User> extends OAuth2Strategy<User> {
 	override name = 'atlassian'
@@ -63,7 +63,7 @@ export const atlassianStrategy = new AtlassianStrategy<ProviderAccount>(
 		const profile = await client.getMe()
 
 		return {
-			provider: 'atlassian',
+			provider: Provider.Atlassian,
 			id: profile.account_id,
 			accountId: profile.account_id,
 			accountType: profile.account_type,

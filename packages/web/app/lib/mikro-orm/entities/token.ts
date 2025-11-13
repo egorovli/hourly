@@ -23,16 +23,16 @@ export class Token {
 	@Property({ name: 'refresh_token', columnType: 'text', nullable: true })
 	refreshToken?: string
 
-	@Property({ name: 'expires_at', columnType: 'text', nullable: true })
-	expiresAt?: string
+	@Property({ name: 'expires_at', columnType: 'timestamptz', nullable: true })
+	expiresAt?: Date
 
-	@Property({ type: 'json' })
+	@Property({ columnType: 'text[]' })
 	scopes!: string[]
 
-	@Property({ name: 'created_at', columnType: 'real' })
+	@Property({ name: 'created_at', columnType: 'timestamptz' })
 	createdAt = new Date()
 
-	@Property({ name: 'updated_at', columnType: 'real', onUpdate: () => new Date() })
+	@Property({ name: 'updated_at', columnType: 'timestamptz', onUpdate: () => new Date() })
 	updatedAt = new Date()
 
 	// This is needed for proper type checks in `FilterQuery`

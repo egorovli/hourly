@@ -1,30 +1,26 @@
 /** biome-ignore-all lint/style/noDefaultExport: It's fine in this case */
 /** biome-ignore-all lint/style/noProcessEnv: It's fine in this case */
 
-import type { Options } from '@mikro-orm/sqlite'
+import type { Options } from '@mikro-orm/postgresql'
 
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { SqliteDriver, GeneratedCacheAdapter } from '@mikro-orm/sqlite'
+import { PostgreSqlDriver, GeneratedCacheAdapter } from '@mikro-orm/postgresql'
 import { TsMorphMetadataProvider } from '@mikro-orm/reflection'
 import { SqlHighlighter } from '@mikro-orm/sql-highlighter'
 
-import { Profile, Session, Token } from './entities/index.ts'
-
-const databaseRelativePath =
-	process.env.DATABASE_URL?.replace('sqlite:', '') || './data/database.sqlite3'
+import * as entities from './entities/index.ts'
 
 const __dirname = path.resolve(import.meta.dirname)
 const projectRoot = path.resolve(__dirname, '../../..')
 const metadataFilepath = path.resolve(projectRoot, './temp/metadata.json')
-const databaseFilepath = path.resolve(projectRoot, databaseRelativePath)
 
 export const config: Options = {
-	driver: SqliteDriver,
-	dbName: databaseFilepath,
+	driver: PostgreSqlDriver,
+	clientUrl: process.env.DATABASE_URL,
 
-	entities: [Profile, Session, Token],
+	entities: [entities.Profile, entities.Session, entities.Token],
 
 	discovery: {
 		requireEntitiesArray: true
@@ -57,7 +53,7 @@ export const config: Options = {
 			}
 		: {}),
 
-	dynamicImportProvider: async id => import(id)
+	dynamicImportProvider: async id => import(/* @vite-ignore */ id)
 }
 
 export default config

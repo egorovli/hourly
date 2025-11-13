@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/style/noProcessEnv: It's fine in this case */
 
-import { MikroORM } from '@mikro-orm/sqlite'
+import { MikroORM } from '@mikro-orm/postgresql'
 
 import { config } from './config.ts'
 

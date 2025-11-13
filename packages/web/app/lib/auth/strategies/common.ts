@@ -10,13 +10,16 @@ type OAuthCookieOptions = Omit<SetCookieInit, 'value'> & {
 export const cookieOptionsDefaults: Partial<OAuthCookieOptions> = {
 	httpOnly: true,
 	sameSite: 'Lax',
-	...(process.env.SESSION_SECURE === 'true' ? { secure: true as const } : {})
+	secure: process.env.SESSION_SECURE === 'true' ? true : undefined
 }
 
-export type ProviderKey = 'atlassian' | 'gitlab'
+export enum Provider {
+	Atlassian = 'atlassian',
+	GitLab = 'gitlab'
+}
 
 interface ProviderAccountBase {
-	provider: ProviderKey
+	provider: Provider
 	id: string
 	displayName: string
 	email?: string
@@ -28,13 +31,13 @@ interface ProviderAccountBase {
 }
 
 export interface AtlassianAccount extends ProviderAccountBase {
-	provider: 'atlassian'
+	provider: Provider.Atlassian
 	accountId: string
 	accountType: string
 }
 
 export interface GitLabAccount extends ProviderAccountBase {
-	provider: 'gitlab'
+	provider: Provider.GitLab
 	username: string
 	webUrl?: string
 }

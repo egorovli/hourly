@@ -1,48 +1,37 @@
+import type { FlashSessionData } from 'react-router'
+
 import { createSessionStorage } from 'react-router'
 
 import { session } from '../cookies/session.ts'
-import { Session } from '../mikro-orm/entities/session.ts'
-import { orm } from '../mikro-orm/index.ts'
-
-export interface ProviderAuth {
-	id: string
-	displayName: string
-	email?: string
-	tokenExpiresAt?: string
-	avatarUrl?: string
-	hasRefreshToken?: boolean
-	baseUrl?: string
-}
-
-export interface SessionUser {
-	atlassian?: ProviderAuth
-	gitlab?: ProviderAuth
-}
+import { orm, Session } from '../mikro-orm/index.ts'
 
 export interface SessionData {
-	'user'?: SessionUser
-	'redirected-from'?: string
+	user?: {
+		oauth?: Record<string, string>
+	}
 }
 
-export interface SessionFlashData {
+export interface FlashData {
 	error: string
+	foo: string
 }
 
-export const sessionStorage = createSessionStorage<SessionData, SessionFlashData>({
+export const sessionStorage = createSessionStorage<SessionData, FlashData>({
 	cookie: session,
 
-	async createData(data, expires) {
+	async createData(data, expires): Promise<string> {
 		const em = orm.em.fork()
 
 		const session = new Session()
-		session.data = data as Record<string, unknown>
+		session.data = data
 		session.expiresAt = expires
 
 		await em.persist(session).flush()
+		console.log('created session', session.id)
 		return session.id
 	},
 
-	async readData(id) {
+	async readData(id): Promise<FlashSessionData<SessionData, FlashData> | null> {
 		const em = orm.em.fork()
 		const session = await em.findOne(Session, { id })
 
@@ -55,21 +44,21 @@ export const sessionStorage = createSessionStorage<SessionData, SessionFlashData
 			return null
 		}
 
-		return session.data as SessionData
+		return session.data
 	},
 
-	async updateData(id, data, expires) {
+	async updateData(id, data, expires): Promise<void> {
 		const em = orm.em.fork()
 		const session = await em.findOne(Session, { id })
 
 		if (session) {
-			session.data = data as Record<string, unknown>
+			session.data = data
 			session.expiresAt = expires
 			await em.flush()
 		}
 	},
 
-	async deleteData(id) {
+	async deleteData(id): Promise<void> {
 		const em = orm.em.fork()
 		const session = await em.findOne(Session, { id })
 

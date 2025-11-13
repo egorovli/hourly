@@ -6,7 +6,7 @@ import { OAuth2Strategy } from 'remix-auth-oauth2'
 
 import { GitLabClient } from '~/lib/gitlab/index.ts'
 
-import { cookieOptionsDefaults, resolveExpiresAt, resolveScopes } from './common.ts'
+import { cookieOptionsDefaults, Provider, resolveExpiresAt, resolveScopes } from './common.ts'
 
 export class GitlabStrategy<User> extends OAuth2Strategy<User> {
 	override name = 'atlassian'
@@ -45,7 +45,7 @@ export const gitlabStrategy = new GitlabStrategy<ProviderAccount>(
 		const profile = await client.getCurrentUser()
 
 		return {
-			provider: 'gitlab',
+			provider: Provider.GitLab,
 			id: profile.id.toString(),
 			username: profile.username,
 			displayName: profile.name ?? profile.username,

@@ -1,5 +1,4 @@
 /** biome-ignore-all lint/style/noProcessEnv: We pass env from process.env via loader */
-/** biome-ignore-all lint/correctness/useUniqueElementIds: We need custom ID to reference it in global styles */
 /** biome-ignore-all lint/security/noDangerouslySetInnerHtml: We need to pass env to the client */
 
 import type { Route } from './+types/root.ts'
@@ -17,13 +16,11 @@ import {
 } from 'react-router'
 
 import * as cookies from '~/lib/cookies/index.ts'
-import { mergePreferencesWithDefaults } from '~/lib/preferences/defaults.ts'
 import { cn } from '~/lib/util/index.ts'
-import { AppProviders } from '~/providers/index.ts'
 
 import 'temporal-polyfill/global'
-import 'react-big-calendar/lib/css/react-big-calendar.css'
-import 'react-big-calendar/lib/addons/dragAndDrop/styles.css'
+// import 'react-big-calendar/lib/css/react-big-calendar.css'
+// import 'react-big-calendar/lib/addons/dragAndDrop/styles.css'
 import '~/styles/global.css'
 
 export const links: Route.LinksFunction = () => []
@@ -99,11 +96,9 @@ export function Layout({ children }: LayoutProps): React.ReactNode {
 
 export default function App({ loaderData }: Route.ComponentProps): React.ReactNode {
 	return (
-		<AppProviders>
-			<div className='min-h-screen'>
-				<Outlet />
-			</div>
-		</AppProviders>
+		<div className='min-h-screen'>
+			<Outlet />
+		</div>
 	)
 }
 
@@ -139,9 +134,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const url = new URL(request.url)
 	const header = request.headers.get('Cookie')
 
-	const rawPreferences: Partial<Preferences> = (await cookies.preferences.parse(header)) ?? {}
-	const preferences = mergePreferencesWithDefaults(rawPreferences, request)
-
+	const preferences: Partial<Preferences> = (await cookies.preferences.parse(header)) ?? {}
 	const locale = url.searchParams.get('locale') ?? preferences.locale ?? 'en'
 
 	const env = {
