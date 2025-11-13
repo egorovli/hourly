@@ -13,6 +13,9 @@ const schema = {
 }
 
 export async function loader({ request, ...args }: Route.LoaderArgs) {
+	const url = new URL(request.url)
+	const redirectedFrom = url.searchParams.get('redirected-from') ?? undefined
+
 	const params = schema.loader.params.parse(args.params)
 	const strategy = authenticator.get(params.provider)
 

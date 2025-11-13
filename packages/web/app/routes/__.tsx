@@ -1,14 +1,13 @@
 import type React from 'react'
 import type { Route } from './+types/__.ts'
 
-import { Outlet } from 'react-router'
+import { Outlet, redirect } from 'react-router'
 
-import { withRequestContext } from '~/lib/mikro-orm/index.ts'
+import { ProfileConnectionType } from '~/domain/index.ts'
+import { orm, ProfileSessionConnection, withRequestContext } from '~/lib/mikro-orm/index.ts'
 import { createSessionStorage } from '~/lib/session/index.ts'
 
 export default function CommonLayout({ loaderData }: Route.ComponentProps): React.ReactNode {
-	// const session = await sessionStorage.getSession(request.headers.get('Cookie'))
-
 	return (
 		<div>
 			<Outlet />
@@ -19,13 +18,36 @@ export default function CommonLayout({ loaderData }: Route.ComponentProps): Reac
 }
 
 export let loader = withRequestContext(async function loader({ request }: Route.LoaderArgs) {
-	// TODO: Implement common layout loader
-	// throw new Error('Not implemented')
+	function redirectToSignIn(): never {
+		const url = new URL(request.url)
+
+		const target =
+			url.pathname === '/'
+				? '/auth/sign-in'
+				: `/auth/sign-in?redirected-from=${encodeURIComponent(url.pathname + url.search)}`
+
+		throw redirect(target)
+	}
 
 	const sessionStorage = createSessionStorage()
-	const session = await sessionStorage.getSession(request.headers.get('Cookie'))
+	const cookieSession = await sessionStorage.getSession(request.headers.get('Cookie'))
+
+	// Check if session exists
+	if (!cookieSession || !cookieSession.id) {
+		redirectToSignIn()
+	}
+
+	// Check if session has worklog target profile connection
+	const worklogTargetConnection = await orm.em.findOne(ProfileSessionConnection, {
+		session: { id: cookieSession.id },
+		connectionType: ProfileConnectionType.WorklogTarget
+	})
+
+	if (!worklogTargetConnection) {
+		redirectToSignIn()
+	}
 
 	return {
-		session
+		session: cookieSession
 	}
 })

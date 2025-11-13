@@ -3,10 +3,17 @@
 import type { ProviderAccount } from './common.ts'
 
 import { OAuth2Strategy } from 'remix-auth-oauth2'
+import { nanoid } from 'nanoid'
 
 import { AtlassianClient } from '~/lib/atlassian/index.ts'
 
 import { cookieOptionsDefaults, Provider, resolveExpiresAt, resolveScopes } from './common.ts'
+
+interface CreateAuthorizationURLResult {
+	state: string
+	codeVerifier: string
+	url: URL
+}
 
 export class AtlassianStrategy<User> extends OAuth2Strategy<User> {
 	override name = 'atlassian'
@@ -29,6 +36,21 @@ export class AtlassianStrategy<User> extends OAuth2Strategy<User> {
 		resolved.set('prompt', resolved.get('prompt') ?? 'consent')
 
 		return resolved
+	}
+
+	protected override createAuthorizationURL(): CreateAuthorizationURLResult {
+		const result = super.createAuthorizationURL()
+
+		const state = nanoid()
+		const url = new URL(result.url)
+
+		url.searchParams.set('state', state)
+
+		return {
+			...result,
+			state,
+			url
+		}
 	}
 }
 
