@@ -34,8 +34,8 @@ export class Profile extends BaseEntity {
 		pivotEntity: () => ProfileSessionConnection,
 		inversedBy: session => session.profiles
 	})
-	sessions = new Collection<Session>(this)
+	sessions = new Collection<Session>(this);
 
 	// This is needed for proper type checks in `FilterQuery`
-	declare [PrimaryKeyProp]: ['id', 'provider']
+	[PrimaryKeyProp]?: ['id', 'provider']
 }

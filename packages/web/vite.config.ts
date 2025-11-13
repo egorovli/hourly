@@ -37,7 +37,7 @@ export default defineConfig(config => ({
 	},
 
 	build: {
-		sourcemap: true,
+		// sourcemap: false,
 
 		rollupOptions: {
 			output: {

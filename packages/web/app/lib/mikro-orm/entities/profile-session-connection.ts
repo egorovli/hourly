@@ -26,8 +26,8 @@ export class ProfileSessionConnection {
 	createdAt = new Date()
 
 	@Property({ name: 'updated_at', columnType: 'timestamptz', onUpdate: () => new Date() })
-	updatedAt = new Date()
+	updatedAt = new Date();
 
 	// This is needed for proper type checks in `FilterQuery`
-	declare [PrimaryKeyProp]: ['profile', 'session']
+	[PrimaryKeyProp]?: ['profile', 'session']
 }

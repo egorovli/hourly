@@ -22,6 +22,7 @@ import 'temporal-polyfill/global'
 // import 'react-big-calendar/lib/css/react-big-calendar.css'
 // import 'react-big-calendar/lib/addons/dragAndDrop/styles.css'
 import '~/styles/global.css'
+// import '~/styles/fonts/inter.css'
 
 export const links: Route.LinksFunction = () => []
 export const meta: Route.MetaFunction = () => []
