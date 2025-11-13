@@ -27,13 +27,12 @@ export const sessionStorage = createSessionStorage<SessionData, FlashData>({
 		session.expiresAt = expires
 
 		await em.persist(session).flush()
-		console.log('created session', session.id)
 		return session.id
 	},
 
 	async readData(id): Promise<FlashSessionData<SessionData, FlashData> | null> {
 		const em = orm.em.fork()
-		const session = await em.findOne(Session, { id })
+		const session = await em.findOne(Session, { id }, { populate: ['profiles'] })
 
 		if (!session) {
 			return null
@@ -43,6 +42,9 @@ export const sessionStorage = createSessionStorage<SessionData, FlashData>({
 			await em.remove(session).flush()
 			return null
 		}
+
+		// Ensure profiles are loaded
+		await session.profiles.loadItems()
 
 		return session.data
 	},

@@ -3,8 +3,10 @@ import type { Route } from './+types/auth.$provider.callback.ts'
 import { redirect } from 'react-router'
 import { z } from 'zod'
 
+import { ProfileConnectionType } from '~/domain/index.ts'
+import { Provider } from '~/lib/auth/strategies/common.ts'
 import { authenticator } from '~/lib/auth/index.ts'
-import { orm, Profile, Token } from '~/lib/mikro-orm/index.ts'
+import { orm, Profile, ProfileSessionConnection, Session, Token } from '~/lib/mikro-orm/index.ts'
 import * as sessionStorage from '~/lib/session/index.ts'
 
 const schema = {
@@ -67,7 +69,6 @@ export async function loader({ request, ...args }: Route.LoaderArgs) {
 
 	await em.flush()
 
-	// Update session
 	const session = await sessionStorage.getSession(request.headers.get('Cookie'))
 	const user = session.get('user')
 
@@ -75,13 +76,41 @@ export async function loader({ request, ...args }: Route.LoaderArgs) {
 		...user,
 		oauth: {
 			...user?.oauth,
-			[params.provider]: account
+			[profile.provider]: profile.id
 		}
 	})
 
+	const cookieHeader = await sessionStorage.commitSession(session)
+	const sessionEntity = await em.findOne(Session, { id: session.id })
+
+	if (sessionEntity) {
+		// TODO: Shouldn't be based on provider,
+		// because some providers can be both worklog target and data source.
+		// Need to refactor all logic around this in the future.
+		const connectionType =
+			account.provider === Provider.Atlassian
+				? ProfileConnectionType.WorklogTarget
+				: ProfileConnectionType.DataSource
+
+		let connection = await em.findOne(ProfileSessionConnection, {
+			profile: { id: profile.id, provider: profile.provider },
+			session: sessionEntity,
+			connectionType
+		})
+
+		if (!connection) {
+			connection = new ProfileSessionConnection()
+			connection.profile = profile
+			connection.session = sessionEntity
+			connection.connectionType = connectionType
+			em.persist(connection)
+			await em.flush()
+		}
+	}
+
 	return redirect(redirectedFrom ?? '/', {
 		headers: {
-			'Set-Cookie': await sessionStorage.commitSession(session)
+			'Set-Cookie': cookieHeader
 		}
 	})
 }
