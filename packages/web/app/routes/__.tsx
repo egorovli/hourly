@@ -1,9 +1,11 @@
 import type React from 'react'
 import type { Route } from './+types/__.ts'
 
+import { RequestContext } from '@mikro-orm/core'
 import { Outlet } from 'react-router'
 
-import * as sessionStorage from '~/lib/session/index.ts'
+import { orm } from '~/lib/mikro-orm/index.ts'
+import { createSessionStorage } from '~/lib/session/index.ts'
 
 export default function CommonLayout({ loaderData }: Route.ComponentProps): React.ReactNode {
 	// const session = await sessionStorage.getSession(request.headers.get('Cookie'))
@@ -18,12 +20,15 @@ export default function CommonLayout({ loaderData }: Route.ComponentProps): Reac
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
-	// TODO: Implement common layout loader
-	// throw new Error('Not implemented')
+	return RequestContext.create(orm.em, async () => {
+		// TODO: Implement common layout loader
+		// throw new Error('Not implemented')
 
-	const session = await sessionStorage.getSession(request.headers.get('Cookie'))
+		const sessionStorage = createSessionStorage()
+		const session = await sessionStorage.getSession(request.headers.get('Cookie'))
 
-	return {
-		session
-	}
+		return {
+			session
+		}
+	})
 }

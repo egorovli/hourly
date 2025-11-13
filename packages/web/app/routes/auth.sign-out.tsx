@@ -1,16 +1,21 @@
 import type { Route } from './+types/auth.sign-out.ts'
 
+import { RequestContext } from '@mikro-orm/core'
 import { redirect } from 'react-router'
 
-import * as sessionStorage from '~/lib/session/storage.ts'
+import { orm } from '~/lib/mikro-orm/index.ts'
+import { createSessionStorage } from '~/lib/session/index.ts'
 
 export async function loader({ request }: Route.LoaderArgs) {
-	const cookie = request.headers.get('Cookie')
-	const session = await sessionStorage.getSession(cookie)
+	return RequestContext.create(orm.em, async () => {
+		const cookie = request.headers.get('Cookie')
+		const sessionStorage = createSessionStorage()
+		const session = await sessionStorage.getSession(cookie)
 
-	return redirect('/auth/sign-in', {
-		headers: {
-			'Set-Cookie': await sessionStorage.destroySession(session)
-		}
+		return redirect('/auth/sign-in', {
+			headers: {
+				'Set-Cookie': await sessionStorage.destroySession(session)
+			}
+		})
 	})
 }
