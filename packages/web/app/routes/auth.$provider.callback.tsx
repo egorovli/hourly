@@ -2,11 +2,13 @@ import type { Route } from './+types/auth.$provider.callback.ts'
 
 import { redirect } from 'react-router'
 import { z } from 'zod'
+import { DateTime } from 'luxon'
 
 import { ProfileConnectionType } from '~/domain/index.ts'
 import { authenticator } from '~/lib/auth/index.ts'
 import { Provider } from '~/lib/auth/strategies/common.ts'
 import { createSessionStorage } from '~/lib/session/index.ts'
+import { invariant } from '~/lib/util/invariant.ts'
 
 import {
 	orm,
@@ -41,10 +43,8 @@ export const loader = withRequestContext(async function loader({
 	}
 
 	const account = await authenticator.authenticate(params.provider, request)
-	const { em } = orm
 
-	// Find or create Profile
-	let profile = await em.findOne(Profile, {
+	let profile = await orm.em.findOne(Profile, {
 		id: account.id,
 		provider: account.provider
 	})
@@ -53,14 +53,14 @@ export const loader = withRequestContext(async function loader({
 		profile = new Profile()
 		profile.id = account.id
 		profile.provider = account.provider
-		em.persist(profile)
+		orm.em.persist(profile)
 	}
 
 	const { accessToken, refreshToken, expiresAt, scopes, ...rest } = account
 	profile.data = rest
+	profile.updatedAt = new Date()
 
-	// Find or create Token
-	let token = await em.findOne(Token, {
+	let token = await orm.em.findOne(Token, {
 		profileId: profile.id,
 		provider: account.provider
 	})
@@ -70,59 +70,59 @@ export const loader = withRequestContext(async function loader({
 		token.profileId = profile.id
 		token.provider = account.provider
 		token.profile = profile
-		em.persist(token)
+		orm.em.persist(token)
 	}
 
-	// Update token data
 	token.accessToken = account.accessToken
 	token.refreshToken = account.refreshToken
 	token.expiresAt = account.expiresAt ? new Date(account.expiresAt) : undefined
 	token.scopes = account.scopes
+	token.updatedAt = new Date()
 
-	await em.flush()
+	await orm.em.flush()
 
-	const session = await sessionStorage.getSession(request.headers.get('Cookie'))
-	const user = session.get('user')
+	let cookieSession = await sessionStorage.getSession(request.headers.get('Cookie'))
 
-	session.set('user', {
-		...user,
-		oauth: {
-			...user?.oauth,
-			[profile.provider]: profile.id
-		}
+	const setCookieHeader = await sessionStorage.commitSession(cookieSession, {
+		// TODO: Expiration should be based on all tokens, not just the current one.
+		// We should identify the token with the shortest expiration date and use
+		// it.
+		expires: token.expiresAt ?? DateTime.now().plus({ hours: 1 }).toJSDate()
 	})
 
-	const cookieHeader = await sessionStorage.commitSession(session)
-	const sessionEntity = await em.findOne(Session, { id: session.id })
+	// TODO: Not sure it's the best way, but it's the only one I've found to
+	// actually get the ID of the session.
+	cookieSession = await sessionStorage.getSession(setCookieHeader)
 
-	if (sessionEntity) {
-		// TODO: Shouldn't be based on provider,
-		// because some providers can be both worklog target and data source.
-		// Need to refactor all logic around this in the future.
-		const connectionType =
-			account.provider === Provider.Atlassian
-				? ProfileConnectionType.WorklogTarget
-				: ProfileConnectionType.DataSource
+	const session = await orm.em.findOne(Session, { id: cookieSession.id })
+	invariant(session, 'Session not found')
 
-		let connection = await em.findOne(ProfileSessionConnection, {
-			profile: { id: profile.id, provider: profile.provider },
-			session: sessionEntity,
-			connectionType
-		})
+	// TODO: Shouldn't be based on provider, because some providers can be both
+	// worklog target and data source. Need to refactor all logic around this in
+	// the future.
+	const connectionType =
+		account.provider === Provider.Atlassian
+			? ProfileConnectionType.WorklogTarget
+			: ProfileConnectionType.DataSource
 
-		if (!connection) {
-			connection = new ProfileSessionConnection()
-			connection.profile = profile
-			connection.session = sessionEntity
-			connection.connectionType = connectionType
-			em.persist(connection)
-			await em.flush()
-		}
+	let connection = await orm.em.findOne(ProfileSessionConnection, {
+		profile: { id: profile.id, provider: profile.provider },
+		session,
+		connectionType
+	})
+
+	if (!connection) {
+		connection = new ProfileSessionConnection()
+		connection.profile = profile
+		connection.session = session
+		connection.connectionType = connectionType
+		orm.em.persist(connection)
+		await orm.em.flush()
 	}
 
 	return redirect(redirectedFrom ?? '/', {
 		headers: {
-			'Set-Cookie': cookieHeader
+			'Set-Cookie': setCookieHeader
 		}
 	})
 })
