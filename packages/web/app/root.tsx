@@ -97,7 +97,7 @@ export function Layout({ children }: LayoutProps): React.ReactNode {
 
 export default function App({ loaderData }: Route.ComponentProps): React.ReactNode {
 	return (
-		<div className='min-h-screen'>
+		<div className='flex h-screen flex-col overflow-hidden'>
 			<Outlet />
 		</div>
 	)

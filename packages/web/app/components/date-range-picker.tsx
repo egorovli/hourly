@@ -25,7 +25,9 @@ export function DateRangePicker({ dateRange, onDateRangeChange }: DateRangePicke
 	}
 
 	function formatDate(date: Date | undefined): string {
-		if (!date) return ''
+		if (!date) {
+			return ''
+		}
 		return date.toLocaleDateString('en-US', {
 			month: '2-digit',
 			day: '2-digit',

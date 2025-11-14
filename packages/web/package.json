@@ -68,6 +68,7 @@
 		"react-dom": "^19.2.0",
 		"react-router": "^7.9.6",
 		"react-syntax-highlighter": "^16.1.0",
+		"react-virtuoso": "^4.14.1",
 		"recharts": "2.15.4",
 		"remix-auth": "^4.2.0",
 		"remix-auth-oauth2": "^3.4.1",

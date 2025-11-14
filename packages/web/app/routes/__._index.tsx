@@ -1,12 +1,11 @@
 import type { Route } from './+types/__._index.ts'
 import type { DateRange } from 'react-day-picker'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Virtuoso } from 'react-virtuoso'
 
 import {
-	AlertCircle,
 	CalendarDays,
-	CheckCircle2,
 	ChevronDown,
 	ChevronLeft,
 	ChevronRight,
@@ -21,20 +20,16 @@ import {
 	Search,
 	Timer,
 	Trash2,
-	User,
 	X,
 	Zap
 } from 'lucide-react'
 
 import { DateRangePicker } from '~/components/date-range-picker.tsx'
 import { ProjectsCommand } from '~/components/projects-command.tsx'
-import { Badge } from '~/components/shadcn/ui/badge.tsx'
 import { Button } from '~/components/shadcn/ui/button.tsx'
-import { Card, CardContent } from '~/components/shadcn/ui/card.tsx'
 import { Checkbox } from '~/components/shadcn/ui/checkbox.tsx'
 import { Input } from '~/components/shadcn/ui/input.tsx'
 import { Label } from '~/components/shadcn/ui/label.tsx'
-import { Progress } from '~/components/shadcn/ui/progress.tsx'
 import { ScrollArea } from '~/components/shadcn/ui/scroll-area.tsx'
 import { Separator } from '~/components/shadcn/ui/separator.tsx'
 import { useHeaderActions } from '~/hooks/use-header-actions.tsx'
@@ -283,6 +278,35 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 	const [selectedProject, setSelectedProject] = useState('all')
 	const { setActions } = useHeaderActions()
 
+	// Flatten all issues with section headers for virtualized list
+	const flattenedIssues = useMemo(() => {
+		const result: Array<
+			| { type: 'header'; section: string }
+			| {
+					type: 'issue'
+					id: string
+					title: string
+					assignee: string
+					assigneeAvatar: string
+					status: string
+					priority: string
+					estimated: string
+					logged: string
+					updated: string
+					source: 'calendar' | 'commit' | 'jira'
+					labels: string[]
+			  }
+		> = []
+
+		result.push({ type: 'header', section: 'Relevant Issues' })
+		result.push(...mockIssues.map(issue => ({ type: 'issue' as const, ...issue })))
+
+		result.push({ type: 'header', section: 'From Activity Data' })
+		result.push(...mockActivityIssues.map(issue => ({ type: 'issue' as const, ...issue })))
+
+		return result
+	}, [])
+
 	useEffect(() => {
 		setActions(
 			<>
@@ -310,11 +334,11 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 	}, [setActions])
 
 	return (
-		<div className='flex h-full flex-1 overflow-hidden bg-gradient-to-br from-slate-50 via-white to-slate-100'>
+		<div className='flex h-full flex-1 gap-0 overflow-hidden'>
 			{/* Left Filters Panel */}
-			<div className='w-72 flex-shrink-0 border-r border-slate-200 bg-white/95 backdrop-blur'>
+			<div className='flex flex-[0_1_240px] flex-col border-r border-slate-200 bg-white/95 backdrop-blur'>
 				<ScrollArea className='h-full'>
-					<div className='space-y-6 p-6'>
+					<div className='space-y-6 p-4'>
 						{/* Date Range */}
 						<div className='space-y-2'>
 							<Label className='text-sm font-medium text-slate-700'>Date Range</Label>
@@ -457,9 +481,9 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 			</div>
 
 			{/* Center Calendar Area */}
-			<div className='flex flex-1 flex-col overflow-hidden'>
+			<div className='flex flex-[1_1_0] flex-col overflow-hidden'>
 				<div className='flex-1 overflow-auto'>
-					<div className='p-6'>
+					<div className='p-4'>
 						{/* Week Navigation */}
 						<div className='mb-4 flex items-center justify-between'>
 							<div className='flex items-center gap-2'>
@@ -510,103 +534,103 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 			</div>
 
 			{/* Right Issues Sidebar */}
-			<div className='w-80 flex-shrink-0 border-l border-slate-200 bg-slate-50/80 backdrop-blur'>
-				<div className='flex h-full flex-col'>
-					{/* Search */}
-					<div className='border-b border-slate-200 p-4'>
-						<div className='mb-3 flex items-center justify-between'>
-							<h3 className='text-sm font-semibold text-slate-900'>Search Issues</h3>
-						</div>
-						<div className='relative'>
-							<Search className='absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400' />
-							<Input
-								className='border-slate-300 pl-9 focus-visible:ring-indigo-500'
-								placeholder='Find issues to log time...'
-							/>
-						</div>
+			<div className='flex flex-[0_1_260px] flex-col border-l border-slate-200 bg-slate-50/80 backdrop-blur'>
+				{/* Search */}
+				<div className='shrink-0 border-b border-slate-200 p-4'>
+					<div className='mb-3 flex items-center justify-between'>
+						<h3 className='text-sm font-semibold text-slate-900'>Search Issues</h3>
 					</div>
+					<div className='relative'>
+						<Search className='absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400' />
+						<Input
+							className='border-slate-300 pl-9 focus-visible:ring-indigo-500'
+							placeholder='Find issues to log time...'
+						/>
+					</div>
+				</div>
 
-					{/* Issues */}
-					<ScrollArea className='flex-1'>
-						<div className='space-y-4 p-4'>
-							<div>
-								<h4 className='mb-3 text-xs font-medium uppercase tracking-wide text-slate-500'>
-									Relevant Issues
-								</h4>
-								<div className='space-y-2'>
-									{mockIssues.map(issue => (
-										<IssueCard
-											key={issue.id}
-											{...issue}
-										/>
-									))}
-								</div>
-							</div>
-
-							<Separator className='bg-slate-200' />
-
-							<div>
-								<h4 className='mb-3 text-xs font-medium uppercase tracking-wide text-slate-500'>
-									From Activity Data
-								</h4>
-								<div className='space-y-2'>
-									{mockActivityIssues.map(issue => (
-										<IssueCard
-											key={issue.id}
-											{...issue}
-										/>
-									))}
-								</div>
-							</div>
-						</div>
-					</ScrollArea>
-
-					{/* Quick Insights */}
-					<div className='border-t border-slate-200 p-4'>
-						<Collapsible
-							open={insightsOpen}
-							onOpenChange={setInsightsOpen}
-						>
-							<CollapsibleTrigger asChild>
-								<Button
-									variant='ghost'
-									className='w-full justify-between p-0 hover:bg-transparent'
-								>
-									<div className='flex items-center gap-2'>
-										<svg
-											className='size-4 text-indigo-600'
-											fill='currentColor'
-											viewBox='0 0 24 24'
-											role='img'
-											aria-label='User icon'
-										>
-											<path d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z' />
-										</svg>
-										<span className='text-sm font-semibold text-slate-900'>Quick Insights</span>
+				{/* Issues - Virtualized */}
+				<div className='flex-1 overflow-hidden'>
+					<Virtuoso
+						style={{ height: '100%' }}
+						data={flattenedIssues}
+						itemContent={(index, item) => {
+							if (item.type === 'header') {
+								return (
+									<div className='px-4 pb-3 pt-4'>
+										<h4 className='text-xs font-medium uppercase tracking-wide text-slate-500'>
+											{item.section}
+										</h4>
 									</div>
-									<ChevronDown
-										className={`size-4 text-slate-500 transition-transform ${insightsOpen ? 'rotate-180' : ''}`}
-									/>
-								</Button>
-							</CollapsibleTrigger>
-							<CollapsibleContent className='mt-3'>
-								<div className='space-y-2 rounded-xl border border-slate-200 bg-white/80 p-3 shadow-sm backdrop-blur'>
-									<InsightRow
-										label='Total hours (Week)'
-										value='38h'
-									/>
-									<InsightRow
-										label='Avg per day'
-										value='7.6h'
-									/>
-									<InsightRow
-										label='Unlogged days'
-										value='0'
+								)
+							}
+
+							return (
+								<div className='px-4 pb-2'>
+									<IssueCard
+										id={item.id}
+										title={item.title}
+										assignee={item.assignee}
+										assigneeAvatar={item.assigneeAvatar}
+										status={item.status}
+										priority={item.priority}
+										estimated={item.estimated}
+										logged={item.logged}
+										updated={item.updated}
+										source={item.source}
+										labels={item.labels}
 									/>
 								</div>
-							</CollapsibleContent>
-						</Collapsible>
-					</div>
+							)
+						}}
+					/>
+				</div>
+
+				{/* Quick Insights */}
+				<div className='shrink-0 border-t border-slate-200 p-4'>
+					<Collapsible
+						open={insightsOpen}
+						onOpenChange={setInsightsOpen}
+					>
+						<CollapsibleTrigger asChild>
+							<Button
+								variant='ghost'
+								className='w-full justify-between p-0 hover:bg-transparent'
+							>
+								<div className='flex items-center gap-2'>
+									<svg
+										className='size-4 text-indigo-600'
+										fill='currentColor'
+										viewBox='0 0 24 24'
+										role='img'
+										aria-label='User icon'
+									>
+										<path d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z' />
+									</svg>
+									<span className='text-sm font-semibold text-slate-900'>Quick Insights</span>
+								</div>
+								<ChevronDown
+									className={`size-4 text-slate-500 transition-transform ${insightsOpen ? 'rotate-180' : ''}`}
+								/>
+							</Button>
+						</CollapsibleTrigger>
+						<CollapsibleContent className='mt-3'>
+							<div className='space-y-2 rounded-xl border border-slate-200 bg-white/80 p-3 shadow-sm backdrop-blur'>
+								<InsightRow
+									label='Total hours (Week)'
+									value='38h'
+								/>
+								<InsightRow
+									label='Avg per day'
+									value='7.6h'
+								/>
+								<InsightRow
+									label='Unlogged days'
+									value='0'
+								/>
+							</div>
+						</CollapsibleContent>
+					</Collapsible>
 				</div>
 			</div>
 		</div>
@@ -622,15 +646,15 @@ function CalendarGrid({ events }: { events: typeof mockEvents }) {
 	return (
 		<div className='overflow-hidden rounded-xl border border-slate-200 bg-white/95 shadow-sm backdrop-blur'>
 			{/* Day Headers */}
-			<div className='grid grid-cols-[60px_repeat(7,1fr)] border-b border-slate-200 bg-slate-50/50'>
+			<div className='grid grid-cols-[50px_repeat(7,1fr)] border-b border-slate-200 bg-slate-50/50'>
 				<div className='border-r border-slate-200' />
 				{days.map((day, idx) => (
 					<div
 						key={day}
-						className='border-r border-slate-200 p-4 text-center last:border-r-0'
+						className='border-r border-slate-200 p-2 text-center last:border-r-0'
 					>
 						<div className='text-xs font-medium uppercase tracking-wide text-slate-500'>{day}</div>
-						<div className='mt-1 text-2xl font-semibold text-slate-900'>{dates[idx]}</div>
+						<div className='mt-1 text-xl font-semibold text-slate-900'>{dates[idx]}</div>
 						{idx === 4 && <div className='mt-1 text-xs font-medium text-indigo-600'>Today</div>}
 					</div>
 				))}
@@ -641,10 +665,10 @@ function CalendarGrid({ events }: { events: typeof mockEvents }) {
 				{hours.map((hour, idx) => (
 					<div
 						key={hour}
-						className='grid grid-cols-[60px_repeat(7,1fr)]'
+						className='grid grid-cols-[50px_repeat(7,1fr)]'
 					>
 						{/* Time Label */}
-						<div className='flex h-20 items-start justify-end border-b border-r border-slate-200 bg-slate-50/30 pr-3 pt-1'>
+						<div className='flex h-16 items-start justify-end border-b border-r border-slate-200 bg-slate-50/30 pr-2 pt-1'>
 							<span className='text-xs font-medium text-slate-500'>
 								{hour > 12 ? hour - 12 : hour}:00 {hour >= 12 ? 'PM' : 'AM'}
 							</span>
@@ -654,7 +678,7 @@ function CalendarGrid({ events }: { events: typeof mockEvents }) {
 						{dates.map(date => (
 							<div
 								key={`${hour}-${date}`}
-								className='relative h-20 border-b border-r border-slate-200 bg-white last:border-r-0'
+								className='relative h-16 border-b border-r border-slate-200 bg-white last:border-r-0'
 							>
 								{/* Render events for this time slot */}
 								{events
@@ -663,8 +687,8 @@ function CalendarGrid({ events }: { events: typeof mockEvents }) {
 										return event.day === date && eventStart >= idx && eventStart < idx + 1
 									})
 									.map(event => {
-										const top = (timeToHourOffset(event.startTime) - idx) * 80
-										const height = getDuration(event.startTime, event.endTime) * 80
+										const top = (timeToHourOffset(event.startTime) - idx) * 64
+										const height = getDuration(event.startTime, event.endTime) * 64
 										return (
 											<EventBlock
 												key={event.id}

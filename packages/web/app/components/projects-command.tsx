@@ -1,4 +1,4 @@
-import { Check, ChevronRight, ChevronsUpDown, FolderIcon } from 'lucide-react'
+import { Check, ChevronsUpDown, FolderIcon } from 'lucide-react'
 import { useState } from 'react'
 
 import { Button } from '~/components/shadcn/ui/button.tsx'
@@ -70,11 +70,15 @@ export function ProjectsCommand({ value, onValueChange }: ProjectsCommandProps) 
 	}
 
 	function getSelectedLabel(): string {
-		if (selectedValue === 'all') return 'All Projects'
+		if (selectedValue === 'all') {
+			return 'All Projects'
+		}
 
 		for (const group of projectGroups) {
 			const project = group.projects.find(p => p.id === selectedValue)
-			if (project) return project.name
+			if (project) {
+				return project.name
+			}
 		}
 
 		return 'Select project...'
