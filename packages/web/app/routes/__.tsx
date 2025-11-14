@@ -3,17 +3,32 @@ import type { Route } from './+types/__.ts'
 
 import { Outlet, redirect } from 'react-router'
 
+import { AppSidebar } from '~/components/shadcn/blocks/sidebar/index.tsx'
+import { SidebarInset, SidebarProvider, SidebarTrigger } from '~/components/shadcn/ui/sidebar.tsx'
+import { Separator } from '~/components/shadcn/ui/separator.tsx'
 import { ProfileConnectionType } from '~/domain/index.ts'
 import { orm, ProfileSessionConnection, withRequestContext } from '~/lib/mikro-orm/index.ts'
 import { createSessionStorage } from '~/lib/session/index.ts'
 
 export default function CommonLayout({ loaderData }: Route.ComponentProps): React.ReactNode {
 	return (
-		<div>
-			<Outlet />
-
-			<pre>{JSON.stringify(loaderData, null, 2)}</pre>
-		</div>
+		<SidebarProvider>
+			<AppSidebar />
+			<SidebarInset>
+				<header className='flex h-16 shrink-0 items-center gap-2 border-b'>
+					<div className='flex items-center gap-2 px-4'>
+						<SidebarTrigger className='-ml-1' />
+						<Separator
+							orientation='vertical'
+							className='mr-2 h-4'
+						/>
+					</div>
+				</header>
+				<div className='flex flex-1 flex-col gap-4 p-4'>
+					<Outlet />
+				</div>
+			</SidebarInset>
+		</SidebarProvider>
 	)
 }
 
@@ -34,7 +49,7 @@ export let loader = withRequestContext(async function loader({ request }: Route.
 
 	// Check if session exists
 	if (!cookieSession || !cookieSession.id) {
-		redirectToSignIn()
+		// redirectToSignIn()
 	}
 
 	// Check if session has worklog target profile connection
@@ -44,7 +59,7 @@ export let loader = withRequestContext(async function loader({ request }: Route.
 	})
 
 	if (!worklogTargetConnection) {
-		redirectToSignIn()
+		// redirectToSignIn()
 	}
 
 	return {

@@ -18,6 +18,24 @@ export interface FlashData {
 	foo: string
 }
 
+// POC-only type for sidebar component
+export interface SessionUser {
+	atlassian?: {
+		displayName: string
+		email: string
+		avatarUrl: string
+		tokenExpiresAt?: string
+		hasRefreshToken?: boolean
+	}
+	gitlab?: {
+		displayName: string
+		email: string
+		avatarUrl: string
+		tokenExpiresAt?: string
+		hasRefreshToken?: boolean
+	}
+}
+
 export interface CreateSessionStorageOptions {
 	em?: EntityManager
 }
