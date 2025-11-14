@@ -1,3 +1,5 @@
+import type { SessionUser } from '~/lib/session/storage.ts'
+
 import { BadgeCheck, Bell, ChevronsUpDown, CreditCard, LogOut, Sparkles } from 'lucide-react'
 
 import { Avatar, AvatarFallback, AvatarImage } from '~/components/shadcn/ui/avatar.tsx'
@@ -20,6 +22,7 @@ import {
 } from '~/components/shadcn/ui/sidebar.tsx'
 
 export interface NavUserProps {
+	sessionUser?: SessionUser
 	user: {
 		name: string
 		email: string
