@@ -7,10 +7,13 @@ import { AppSidebar } from '~/components/shadcn/blocks/sidebar/index.tsx'
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '~/components/shadcn/ui/sidebar.tsx'
 import { Separator } from '~/components/shadcn/ui/separator.tsx'
 import { ProfileConnectionType } from '~/domain/index.ts'
+import { HeaderActionsProvider, useHeaderActions } from '~/hooks/use-header-actions.tsx'
 import { orm, ProfileSessionConnection, withRequestContext } from '~/lib/mikro-orm/index.ts'
 import { createSessionStorage } from '~/lib/session/index.ts'
 
-export default function CommonLayout({ loaderData }: Route.ComponentProps): React.ReactNode {
+function LayoutContent(): React.ReactNode {
+	const { actions } = useHeaderActions()
+
 	return (
 		<SidebarProvider>
 			<AppSidebar />
@@ -23,12 +26,21 @@ export default function CommonLayout({ loaderData }: Route.ComponentProps): Reac
 							className='mr-2 h-4'
 						/>
 					</div>
+					<div className='ml-auto flex items-center gap-2 px-4'>{actions}</div>
 				</header>
 				<div className='flex flex-1 flex-col gap-4 p-4'>
 					<Outlet />
 				</div>
 			</SidebarInset>
 		</SidebarProvider>
+	)
+}
+
+export default function CommonLayout({ loaderData }: Route.ComponentProps): React.ReactNode {
+	return (
+		<HeaderActionsProvider>
+			<LayoutContent />
+		</HeaderActionsProvider>
 	)
 }
 

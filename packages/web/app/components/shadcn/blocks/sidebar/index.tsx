@@ -1,7 +1,8 @@
+import type { LucideIcon } from 'lucide-react'
 import type { SessionUser } from '~/lib/session/storage.ts'
 
 import { BarChart3, CalendarIcon, Clock, FolderKanban, TimerIcon } from 'lucide-react'
-import { Link } from 'react-router'
+import { Link, NavLink, useMatch, useResolvedPath } from 'react-router'
 
 import {
 	Sidebar,
@@ -14,6 +15,37 @@ import {
 } from '~/components/shadcn/ui/sidebar.tsx'
 
 import { NavUser } from './user.tsx'
+
+type SidebarNavItem = {
+	to: string
+	label: string
+	icon: LucideIcon
+	end?: boolean
+}
+
+const primaryNavItems: SidebarNavItem[] = [
+	{
+		to: '/',
+		label: 'Calendar',
+		icon: CalendarIcon,
+		end: true
+	},
+	{
+		to: '/analytics',
+		label: 'Analytics',
+		icon: BarChart3
+	},
+	{
+		to: '/worklogs',
+		label: 'Worklogs',
+		icon: Clock
+	},
+	{
+		to: '/projects',
+		label: 'Projects',
+		icon: FolderKanban
+	}
+]
 
 export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 	sessionUser?: SessionUser
@@ -54,41 +86,12 @@ export function AppSidebar({ sessionUser, ...props }: AppSidebarProps) {
 			</SidebarHeader>
 			<SidebarContent>
 				<SidebarMenu>
-					<SidebarMenuItem>
-						<SidebarMenuButton
-							asChild
-							isActive
-						>
-							<Link to='/'>
-								<CalendarIcon />
-								<span>Calendar</span>
-							</Link>
-						</SidebarMenuButton>
-					</SidebarMenuItem>
-					<SidebarMenuItem>
-						<SidebarMenuButton asChild>
-							<Link to='/analytics'>
-								<BarChart3 />
-								<span>Analytics</span>
-							</Link>
-						</SidebarMenuButton>
-					</SidebarMenuItem>
-					<SidebarMenuItem>
-						<SidebarMenuButton asChild>
-							<Link to='/worklogs'>
-								<Clock />
-								<span>Worklogs</span>
-							</Link>
-						</SidebarMenuButton>
-					</SidebarMenuItem>
-					<SidebarMenuItem>
-						<SidebarMenuButton asChild>
-							<Link to='/projects'>
-								<FolderKanban />
-								<span>Projects</span>
-							</Link>
-						</SidebarMenuButton>
-					</SidebarMenuItem>
+					{primaryNavItems.map(item => (
+						<SidebarNavLink
+							key={item.to}
+							{...item}
+						/>
+					))}
 				</SidebarMenu>
 			</SidebarContent>
 			<SidebarFooter>
@@ -98,5 +101,29 @@ export function AppSidebar({ sessionUser, ...props }: AppSidebarProps) {
 				/>
 			</SidebarFooter>
 		</Sidebar>
+	)
+}
+
+function SidebarNavLink({ icon: Icon, label, to, end }: SidebarNavItem) {
+	const resolvedPath = useResolvedPath(to)
+	const shouldMatchExact = end ?? false
+	const match = useMatch({ path: resolvedPath.pathname, end: shouldMatchExact })
+	const isActive = Boolean(match)
+
+	return (
+		<SidebarMenuItem>
+			<SidebarMenuButton
+				asChild
+				isActive={isActive}
+			>
+				<NavLink
+					to={to}
+					end={shouldMatchExact}
+				>
+					<Icon />
+					<span>{label}</span>
+				</NavLink>
+			</SidebarMenuButton>
+		</SidebarMenuItem>
 	)
 }
