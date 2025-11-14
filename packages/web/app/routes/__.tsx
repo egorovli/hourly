@@ -23,12 +23,12 @@ function LayoutContent(): React.ReactNode {
 						<SidebarTrigger className='-ml-1' />
 						<Separator
 							orientation='vertical'
-							className='mr-2 h-4'
+							className='mr-2 h-4 bg-slate-300'
 						/>
 					</div>
 					<div className='ml-auto flex items-center gap-2 px-4'>{actions}</div>
 				</header>
-				<div className='flex flex-1 flex-col gap-4 p-4'>
+				<div className='flex flex-1 flex-col overflow-hidden'>
 					<Outlet />
 				</div>
 			</SidebarInset>
