@@ -1,8 +1,12 @@
 import type { DateRange } from 'react-day-picker'
 import type { NestedFilterOption } from '~/components/filter-multi-select.tsx'
 import type { Route } from './+types/__._index.ts'
+import type { Event, View } from 'react-big-calendar'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Calendar, luxonLocalizer } from 'react-big-calendar'
+
+import { DateTime } from 'luxon'
 import { Virtuoso } from 'react-virtuoso'
 
 import {
@@ -33,6 +37,7 @@ import { Button } from '~/components/shadcn/ui/button.tsx'
 import { Input } from '~/components/shadcn/ui/input.tsx'
 import { Label } from '~/components/shadcn/ui/label.tsx'
 import { useHeaderActions } from '~/hooks/use-header-actions.tsx'
+import { DragAndDropCalendar } from '~/lib/calendar/drag-and-drop-calendar.client.tsx'
 
 import {
 	Collapsible,
@@ -40,124 +45,144 @@ import {
 	CollapsibleTrigger
 } from '~/components/shadcn/ui/collapsible.tsx'
 
-// Mock data
-const mockEvents = [
+// Define event interface
+interface CalendarEvent extends Event {
+	id: number
+	title: string
+	project: string
+	color: string
+	isDraggable: boolean
+}
+
+// Setup react-big-calendar with Luxon localizer
+const localizer = luxonLocalizer(DateTime)
+// const DnDCalendar = withDragAndDrop<CalendarEvent, object>(Calendar)
+const DnDCalendar = Calendar
+
+// Helper to create Date objects for calendar events
+const createEventDate = (day: number, hour: number, minute = 0): Date => {
+	// Using January 2024 as base (0-indexed month)
+	return new Date(2024, 0, day, hour, minute)
+}
+
+// Mock data with proper Date objects for react-big-calendar
+const mockEvents: CalendarEvent[] = [
 	{
 		id: 1,
 		title: 'API Development',
 		project: 'PROJ-142',
-		startTime: '9:00',
-		endTime: '10:00',
-		day: 1,
-		color: 'indigo'
+		start: createEventDate(1, 9, 0),
+		end: createEventDate(1, 10, 0),
+		color: 'indigo',
+		isDraggable: true
 	},
 	{
 		id: 2,
 		title: 'UI Design',
 		project: 'PROJ-138',
-		startTime: '9:00',
-		endTime: '11:00',
-		day: 2,
-		color: 'slate'
+		start: createEventDate(2, 9, 0),
+		end: createEventDate(2, 11, 0),
+		color: 'slate',
+		isDraggable: true
 	},
 	{
 		id: 3,
 		title: 'API Development',
 		project: 'PROJ-142',
-		startTime: '10:00',
-		endTime: '12:00',
-		day: 1,
-		color: 'indigo'
+		start: createEventDate(1, 10, 0),
+		end: createEventDate(1, 12, 0),
+		color: 'indigo',
+		isDraggable: true
 	},
 	{
 		id: 4,
 		title: 'API Development',
 		project: 'PROJ-142',
-		startTime: '10:00',
-		endTime: '13:00',
-		day: 3,
-		color: 'indigo'
+		start: createEventDate(3, 10, 0),
+		end: createEventDate(3, 13, 0),
+		color: 'indigo',
+		isDraggable: true
 	},
 	{
 		id: 5,
 		title: 'Testing',
 		project: 'PROJ-156',
-		startTime: '10:00',
-		endTime: '11:30',
-		day: 4,
-		color: 'amber'
+		start: createEventDate(4, 10, 0),
+		end: createEventDate(4, 11, 30),
+		color: 'amber',
+		isDraggable: true
 	},
 	{
 		id: 6,
 		title: 'Code Review',
 		project: 'PROJ-149',
-		startTime: '11:00',
-		endTime: '12:00',
-		day: 1,
-		color: 'emerald'
+		start: createEventDate(1, 11, 0),
+		end: createEventDate(1, 12, 0),
+		color: 'emerald',
+		isDraggable: true
 	},
 	{
 		id: 7,
 		title: 'Code Review',
 		project: 'PROJ-149',
-		startTime: '11:00',
-		endTime: '12:30',
-		day: 2,
-		color: 'emerald'
+		start: createEventDate(2, 11, 0),
+		end: createEventDate(2, 12, 30),
+		color: 'emerald',
+		isDraggable: true
 	},
 	{
 		id: 8,
 		title: 'API Development',
 		project: 'PROJ-142',
-		startTime: '13:00',
-		endTime: '15:00',
-		day: 1,
-		color: 'indigo'
+		start: createEventDate(1, 13, 0),
+		end: createEventDate(1, 15, 0),
+		color: 'indigo',
+		isDraggable: true
 	},
 	{
 		id: 9,
 		title: 'API Development',
 		project: 'PROJ-142',
-		startTime: '13:00',
-		endTime: '16:00',
-		day: 2,
-		color: 'indigo'
+		start: createEventDate(2, 13, 0),
+		end: createEventDate(2, 16, 0),
+		color: 'indigo',
+		isDraggable: true
 	},
 	{
 		id: 10,
 		title: 'UI Design',
 		project: 'PROJ-138',
-		startTime: '13:00',
-		endTime: '15:00',
-		day: 3,
-		color: 'slate'
+		start: createEventDate(3, 13, 0),
+		end: createEventDate(3, 15, 0),
+		color: 'slate',
+		isDraggable: true
 	},
 	{
 		id: 11,
 		title: 'Testing',
 		project: 'PROJ-156',
-		startTime: '13:00',
-		endTime: '14:00',
-		day: 4,
-		color: 'amber'
+		start: createEventDate(4, 13, 0),
+		end: createEventDate(4, 14, 0),
+		color: 'amber',
+		isDraggable: true
 	},
 	{
 		id: 12,
 		title: 'Meetings',
 		project: 'PROJ-151',
-		startTime: '14:00',
-		endTime: '16:00',
-		day: 3,
-		color: 'rose'
+		start: createEventDate(3, 14, 0),
+		end: createEventDate(3, 16, 0),
+		color: 'rose',
+		isDraggable: true
 	},
 	{
 		id: 13,
 		title: 'UI Design',
 		project: 'PROJ-138',
-		startTime: '15:00',
-		endTime: '17:00',
-		day: 1,
-		color: 'slate'
+		start: createEventDate(1, 15, 0),
+		end: createEventDate(1, 17, 0),
+		color: 'slate',
+		isDraggable: true
 	}
 ]
 
@@ -412,25 +437,6 @@ const mockUserOptions: NestedFilterOption[] = [
 const defaultProjectSelection = ['PROJ-142', 'PROJ-138']
 const defaultUserSelection = ['john-anderson', 'sarah-mitchell']
 
-// Helper to convert time to hour offset
-function timeToHourOffset(time: string): number {
-	const parts = time.split(':').map(Number)
-	const hours = parts[0] ?? 0
-	const minutes = parts[1] ?? 0
-	return hours - 9 + minutes / 60
-}
-
-// Helper to calculate duration in hours
-function getDuration(start: string, end: string): number {
-	const startParts = start.split(':').map(Number)
-	const endParts = end.split(':').map(Number)
-	const startHours = startParts[0] ?? 0
-	const startMinutes = startParts[1] ?? 0
-	const endHours = endParts[0] ?? 0
-	const endMinutes = endParts[1] ?? 0
-	return endHours - startHours + (endMinutes - startMinutes) / 60
-}
-
 // Solid color mappings - Pastel palette accents
 const eventColorTokens = {
 	indigo: 'border-light-sky-blue-500 bg-light-sky-blue-800 text-light-sky-blue-100',
@@ -459,6 +465,84 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 		selectedUserIds.length === 0 ? 'All users' : `${selectedUserIds.length} users selected`
 	const [rightPanelWidth, setRightPanelWidth] = useState(260)
 	const { setActions } = useHeaderActions()
+
+	// Calendar state
+	const [events, setEvents] = useState<CalendarEvent[]>(mockEvents)
+	const [currentDate, setCurrentDate] = useState(new Date(2024, 0, 1))
+	const [currentView, setCurrentView] = useState<View>('week')
+
+	// Drag and drop handlers
+	const handleEventDrop = useCallback(
+		({ event, start, end }: { event: CalendarEvent; start: string | Date; end: string | Date }) => {
+			const startDate = typeof start === 'string' ? new Date(start) : start
+			const endDate = typeof end === 'string' ? new Date(end) : end
+			setEvents(prev =>
+				prev.map(ev => (ev.id === event.id ? { ...ev, start: startDate, end: endDate } : ev))
+			)
+		},
+		[]
+	)
+
+	const handleEventResize = useCallback(
+		({ event, start, end }: { event: CalendarEvent; start: string | Date; end: string | Date }) => {
+			const startDate = typeof start === 'string' ? new Date(start) : start
+			const endDate = typeof end === 'string' ? new Date(end) : end
+			setEvents(prev =>
+				prev.map(ev => (ev.id === event.id ? { ...ev, start: startDate, end: endDate } : ev))
+			)
+		},
+		[]
+	)
+
+	// Custom event style getter
+	const eventStyleGetter = useCallback((event: CalendarEvent) => {
+		const colorClass = eventColorTokens[event.color as ColorKey]
+		return {
+			className: `worklog-calendar__event ${colorClass}`
+		}
+	}, [])
+
+	// Custom event component
+	const EventComponent = useCallback(({ event }: { event: CalendarEvent }) => {
+		return (
+			<div className='flex flex-col h-full'>
+				<div className='text-xs font-semibold leading-tight truncate'>{event.title}</div>
+				<div className='text-xs font-bold leading-tight truncate'>{event.project}</div>
+			</div>
+		)
+	}, [])
+
+	// Navigation handlers
+	const handleNavigate = useCallback(
+		(action: 'PREV' | 'NEXT' | 'TODAY') => {
+			const luxonDate = DateTime.fromJSDate(currentDate)
+			let newDate: DateTime
+
+			if (action === 'TODAY') {
+				newDate = DateTime.now()
+			} else if (action === 'PREV') {
+				newDate =
+					currentView === 'week' ? luxonDate.minus({ weeks: 1 }) : luxonDate.minus({ days: 1 })
+			} else {
+				newDate =
+					currentView === 'week' ? luxonDate.plus({ weeks: 1 }) : luxonDate.plus({ days: 1 })
+			}
+
+			setCurrentDate(newDate.toJSDate())
+		},
+		[currentDate, currentView]
+	)
+
+	// Format date range for display
+	const dateRangeLabel = useMemo(() => {
+		const luxonDate = DateTime.fromJSDate(currentDate)
+		if (currentView === 'week') {
+			const startOfWeek = luxonDate.startOf('week')
+			const endOfWeek = luxonDate.endOf('week')
+			return `${startOfWeek.toFormat('MMM d')} - ${endOfWeek.toFormat('MMM d, yyyy')}`
+		}
+		return luxonDate.toFormat('MMMM d, yyyy')
+	}, [currentDate, currentView])
 
 	// Flatten all issues with section headers for virtualized list
 	const flattenedIssues = useMemo(() => {
@@ -604,20 +688,23 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 									variant='outline'
 									size='icon'
 									className='size-9 border-border hover:bg-surface-muted'
+									onClick={() => handleNavigate('PREV')}
 								>
 									<ChevronLeft className='size-4' />
 								</Button>
-								<span className='text-sm font-medium text-foreground'>Jan 1 - Jan 7, 2024</span>
+								<span className='text-sm font-medium text-foreground'>{dateRangeLabel}</span>
 								<Button
 									variant='outline'
 									size='icon'
 									className='size-9 border-border hover:bg-surface-muted'
+									onClick={() => handleNavigate('NEXT')}
 								>
 									<ChevronRight className='size-4' />
 								</Button>
 								<Button
 									variant='outline'
 									className='ml-2 h-9 border-border px-4 hover:bg-surface-muted'
+									onClick={() => handleNavigate('TODAY')}
 								>
 									Today
 								</Button>
@@ -625,18 +712,50 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 							<div className='flex items-center gap-1 rounded-lg border border-border bg-white/95 p-1 shadow-sm backdrop-blur'>
 								<Button
 									variant='ghost'
-									className='h-8 px-3 text-muted'
+									className={`h-8 px-3 ${currentView === 'day' ? 'bg-light-sky-blue-500 text-light-sky-blue-100 shadow-sm hover:bg-light-sky-blue-400' : 'text-muted'}`}
+									onClick={() => setCurrentView('day')}
 								>
-									Month
+									Day
 								</Button>
-								<Button className='h-8 bg-light-sky-blue-500 px-3 text-light-sky-blue-100 shadow-sm hover:bg-light-sky-blue-400'>
+								<Button
+									className={`h-8 px-3 ${currentView === 'week' ? 'bg-light-sky-blue-500 text-light-sky-blue-100 shadow-sm hover:bg-light-sky-blue-400' : 'text-muted'}`}
+									variant={currentView === 'week' ? 'default' : 'ghost'}
+									onClick={() => setCurrentView('week')}
+								>
 									Week
 								</Button>
 							</div>
 						</div>
 
 						<div className='flex-1 overflow-hidden'>
-							<CalendarGrid events={mockEvents} />
+							<div className='worklog-calendar h-full'>
+								<DragAndDropCalendar
+									localizer={localizer}
+									events={events}
+									startAccessor='start'
+									endAccessor='end'
+									date={currentDate}
+									onNavigate={setCurrentDate}
+									view={currentView}
+									onView={setCurrentView}
+									views={['week', 'day']}
+									defaultView='week'
+									step={60}
+									timeslots={1}
+									min={new Date(2024, 0, 1, 9, 0)}
+									max={new Date(2024, 0, 1, 18, 0)}
+									onEventDrop={handleEventDrop}
+									onEventResize={handleEventResize}
+									draggableAccessor={(event: CalendarEvent) => event.isDraggable}
+									resizable
+									eventPropGetter={eventStyleGetter}
+									components={{
+										event: EventComponent
+									}}
+									toolbar={false}
+									style={{ height: '100%' }}
+								/>
+							</div>
 						</div>
 					</div>
 
@@ -845,118 +964,6 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 	)
 }
 
-// Calendar Grid Component
-function CalendarGrid({ events }: { events: typeof mockEvents }) {
-	const days = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
-	const dates = [1, 2, 3, 4, 5, 6, 7]
-	const hours = [9, 10, 11, 12, 13, 14, 15, 16, 17]
-
-	return (
-		<div className='overflow-hidden rounded-xl border border-border bg-white/95 shadow-sm backdrop-blur'>
-			{/* Day Headers */}
-			<div className='grid grid-cols-[50px_repeat(7,1fr)] border-b border-border bg-surface-muted/50'>
-				<div className='border-r border-border' />
-				{days.map((day, idx) => (
-					<div
-						key={day}
-						className='border-r border-border p-2 text-center last:border-r-0'
-					>
-						<div className='text-xs font-medium uppercase tracking-wide text-muted'>{day}</div>
-						<div className='mt-1 text-xl font-semibold text-foreground'>{dates[idx]}</div>
-						{idx === 4 && (
-							<div className='mt-1 text-xs font-medium text-light-sky-blue-400'>Today</div>
-						)}
-					</div>
-				))}
-			</div>
-
-			{/* Time Grid */}
-			<div className='relative'>
-				{hours.map((hour, idx) => (
-					<div
-						key={hour}
-						className='grid grid-cols-[50px_repeat(7,1fr)]'
-					>
-						{/* Time Label */}
-						<div className='flex h-16 items-start justify-end border-b border-r border-border bg-surface-muted/30 pr-2 pt-1'>
-							<span className='text-xs font-medium text-muted'>
-								{hour > 12 ? hour - 12 : hour}:00 {hour >= 12 ? 'PM' : 'AM'}
-							</span>
-						</div>
-
-						{/* Day Cells */}
-						{dates.map(date => (
-							<div
-								key={`${hour}-${date}`}
-								className='relative h-16 border-b border-r border-border bg-white last:border-r-0'
-							>
-								{/* Render events for this time slot */}
-								{events
-									.filter(event => {
-										const eventStart = timeToHourOffset(event.startTime)
-										return event.day === date && eventStart >= idx && eventStart < idx + 1
-									})
-									.map(event => {
-										const top = (timeToHourOffset(event.startTime) - idx) * 64
-										const height = getDuration(event.startTime, event.endTime) * 64
-										return (
-											<EventBlock
-												key={event.id}
-												event={event}
-												style={{
-													position: 'absolute',
-													top: `${top}px`,
-													height: `${height}px`,
-													left: '4px',
-													right: '4px'
-												}}
-											/>
-										)
-									})}
-							</div>
-						))}
-					</div>
-				))}
-			</div>
-		</div>
-	)
-}
-
-// Event Block Component
-function EventBlock({
-	event,
-	style
-}: {
-	event: (typeof mockEvents)[0]
-	style: React.CSSProperties
-}) {
-	const eventClass = eventColorTokens[event.color as ColorKey]
-
-	return (
-		<div
-			className={`group cursor-pointer rounded-lg border p-3 shadow-sm transition-all hover:shadow-md ${eventClass}`}
-			style={style}
-		>
-			<div className='flex items-start justify-between'>
-				<div className='flex-1 overflow-hidden'>
-					<p className='truncate text-xs font-semibold leading-tight'>{event.title}</p>
-					<p className='mt-0.5 truncate text-xs font-bold leading-tight'>{event.project}</p>
-					<p className='mt-1 text-xs leading-tight opacity-80'>
-						{event.startTime} - {event.endTime}
-					</p>
-				</div>
-				<Button
-					variant='ghost'
-					size='icon'
-					className='size-6 opacity-0 transition-opacity group-hover:opacity-100'
-				>
-					<MoreVertical className='size-4' />
-				</Button>
-			</div>
-		</div>
-	)
-}
-
 // Issue Card Component
 function IssueCard({
 	id,
@@ -1013,7 +1020,7 @@ function IssueCard({
 		<div className='group cursor-grab rounded-lg border border-border bg-white p-3 shadow-sm transition-all hover:border-light-sky-blue-400 hover:shadow-md active:cursor-grabbing'>
 			{/* Header Row */}
 			<div className='mb-2 flex items-start gap-2'>
-				<GripVertical className='mt-0.5 size-4 flex-shrink-0 text-muted transition-opacity group-hover:text-muted' />
+				<GripVertical className='mt-0.5 size-4 shrink-0 text-muted transition-opacity group-hover:text-muted' />
 
 				<div className='flex flex-1 items-start justify-between gap-2'>
 					<div className='flex items-center gap-2'>

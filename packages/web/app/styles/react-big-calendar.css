@@ -2,6 +2,12 @@
    Based on: https://github.com/list-jonas/shadcn-ui-big-calendar
    Extended with custom worklog-specific styles */
 
+/* Import base react-big-calendar styles */
+@import "react-big-calendar/lib/css/react-big-calendar.css";
+
+/* Import drag and drop addon styles */
+@import "react-big-calendar/lib/addons/dragAndDrop/styles.css";
+
 /* ============================================
    Base Button & Calendar Styles
    ============================================ */
@@ -42,6 +48,13 @@ button.rbc-input::-moz-focus-inner {
 .rbc-calendar *:before,
 .rbc-calendar *:after {
 	box-sizing: inherit;
+}
+
+.worklog-calendar {
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	width: 100%;
 }
 
 /* ============================================
@@ -217,7 +230,21 @@ button.rbc-input::-moz-focus-inner {
 /* ============================================
    Event Styles
    ============================================ */
-.rbc-event,
+.rbc-event {
+	border-radius: 0.375rem;
+	padding: 0.25rem 0.5rem;
+	box-shadow:
+		0 1px 3px 0 hsl(var(--foreground) / 0.1),
+		0 1px 2px -1px hsl(var(--foreground) / 0.1);
+	transition:
+		transform 0.15s ease,
+		box-shadow 0.15s ease,
+		background-color 0.15s ease,
+		border-color 0.15s ease;
+	cursor: pointer;
+	font-weight: 500;
+}
+
 .rbc-slot-selection {
 	background-color: hsl(var(--primary));
 	border: 2px solid hsl(var(--primary));
@@ -238,8 +265,6 @@ button.rbc-input::-moz-focus-inner {
 
 .rbc-event:hover {
 	transform: translateY(-1px);
-	background-color: hsl(var(--primary) / 0.9);
-	border-color: hsl(var(--primary) / 0.9);
 	box-shadow:
 		0 4px 6px -1px hsl(var(--foreground) / 0.1),
 		0 2px 4px -2px hsl(var(--foreground) / 0.1);
@@ -249,8 +274,6 @@ button.rbc-input::-moz-focus-inner {
 .rbc-event:focus {
 	outline: 2px solid hsl(var(--ring));
 	outline-offset: 2px;
-	background-color: hsl(var(--primary));
-	border-color: hsl(var(--primary));
 }
 
 .rbc-slot-selecting .rbc-event {
@@ -273,6 +296,33 @@ button.rbc-input::-moz-focus-inner {
 	font-size: 0.8125rem;
 	line-height: 1.3;
 	color: hsl(var(--primary-foreground));
+}
+
+.worklog-calendar__event.rbc-event {
+	border-radius: 0.75rem;
+	box-shadow:
+		0 10px 25px -15px hsl(var(--foreground) / 0.45),
+		0 8px 16px -12px hsl(var(--foreground) / 0.35);
+	padding: 0.5rem 0.65rem;
+	transition:
+		box-shadow 0.2s ease,
+		transform 0.2s ease;
+}
+
+.worklog-calendar__event.rbc-event:hover {
+	box-shadow:
+		0 15px 30px -15px hsl(var(--foreground) / 0.55),
+		0 12px 20px -12px hsl(var(--foreground) / 0.4);
+	transform: translateY(-1px);
+}
+
+.worklog-calendar__event.rbc-event .rbc-event-content {
+	width: 100%;
+	color: inherit;
+}
+
+.worklog-calendar__event.rbc-event .rbc-event-label {
+	display: none;
 }
 
 .rbc-event-overlaps {
@@ -406,6 +456,11 @@ button.rbc-input::-moz-focus-inner {
 	background-color: hsl(var(--background));
 	border-right: 1px solid hsl(var(--border));
 	transition: background-color 0.2s ease;
+}
+
+.worklog-calendar .rbc-day-bg + .rbc-day-bg,
+.worklog-calendar .rbc-time-header-content .rbc-row > .rbc-header + .rbc-header {
+	border-left: 1px solid hsl(var(--border) / 0.2);
 }
 
 /* ============================================
@@ -551,6 +606,24 @@ button.rbc-input::-moz-focus-inner {
 	position: relative;
 }
 
+.worklog-calendar .rbc-time-view {
+	border: none;
+	background: transparent;
+}
+
+.worklog-calendar .rbc-time-header {
+	background: transparent;
+}
+
+.worklog-calendar .rbc-time-content {
+	border-top: 1px solid hsl(var(--border) / 0.6);
+	box-shadow: inset 0 1px 0 hsl(var(--border) / 0.2);
+}
+
+.worklog-calendar .rbc-time-gutter {
+	background-color: hsl(var(--muted) / 0.05);
+}
+
 .rbc-time-content > .rbc-time-gutter {
 	flex: none;
 }
@@ -562,6 +635,10 @@ button.rbc-input::-moz-focus-inner {
 .rbc-time-content > .rbc-day-slot {
 	width: 100%;
 	user-select: none;
+}
+
+.worklog-calendar .rbc-time-content > .rbc-day-slot + .rbc-day-slot {
+	box-shadow: inset 1px 0 0 hsl(var(--border) / 0.12);
 }
 
 /* ============================================
@@ -592,10 +669,26 @@ button.rbc-input::-moz-focus-inner {
 	padding-left: 4px;
 }
 
+.worklog-calendar .rbc-time-slot {
+	border-top: 1px solid hsl(var(--border) / 0.18);
+}
+
 .rbc-time-slot,
 /* biome-ignore lint/style/noDescendingSpecificity: Intentional override order following upstream styles */
 	.rbc-timeslot-group {
 	border-color: hsl(var(--border) / 0.18);
+}
+
+.worklog-calendar .rbc-timeslot-group {
+	border-bottom: 1px solid hsl(var(--border) / 0.15);
+}
+
+.worklog-calendar .rbc-time-gutter .rbc-time-slot {
+	border-color: hsl(var(--border) / 0.18);
+}
+
+.worklog-calendar .rbc-day-slot .rbc-time-slot:nth-of-type(2n) {
+	background: hsl(var(--muted) / 0.06);
 }
 
 .rbc-time-slot.rbc-now {
@@ -642,9 +735,6 @@ button.rbc-input::-moz-focus-inner {
 }
 
 .rbc-day-slot .rbc-event {
-	background-color: hsl(var(--primary));
-	border: 2px solid hsl(var(--primary));
-	color: hsl(var(--primary-foreground));
 	display: flex;
 	max-height: 100%;
 	min-height: 20px;
@@ -652,11 +742,6 @@ button.rbc-input::-moz-focus-inner {
 	align-items: flex-start;
 	overflow: hidden;
 	position: absolute;
-	border-radius: 0.375rem;
-	padding: 0.25rem 0.5rem;
-	box-shadow:
-		0 1px 3px 0 hsl(var(--foreground) / 0.1),
-		0 1px 2px -1px hsl(var(--foreground) / 0.1);
 }
 
 .rbc-day-slot .rbc-event-label {
