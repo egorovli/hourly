@@ -1,5 +1,6 @@
-import type { Route } from './+types/__._index.ts'
 import type { DateRange } from 'react-day-picker'
+import type { NestedFilterOption } from '~/components/filter-multi-select.tsx'
+import type { Route } from './+types/__._index.ts'
 
 import { useEffect, useMemo, useState } from 'react'
 import { Virtuoso } from 'react-virtuoso'
@@ -11,6 +12,7 @@ import {
 	ChevronRight,
 	Clock,
 	Download,
+	Filter,
 	GitCommit,
 	GripVertical,
 	MoreVertical,
@@ -26,12 +28,10 @@ import {
 
 import { DateRangePicker } from '~/components/date-range-picker.tsx'
 import { DraggableSeparator } from '~/components/draggable-separator.tsx'
-import { ProjectsCommand } from '~/components/projects-command.tsx'
+import { FilterMultiSelect } from '~/components/filter-multi-select.tsx'
 import { Button } from '~/components/shadcn/ui/button.tsx'
-import { Checkbox } from '~/components/shadcn/ui/checkbox.tsx'
 import { Input } from '~/components/shadcn/ui/input.tsx'
 import { Label } from '~/components/shadcn/ui/label.tsx'
-import { ScrollArea } from '~/components/shadcn/ui/scroll-area.tsx'
 import { useHeaderActions } from '~/hooks/use-header-actions.tsx'
 
 import {
@@ -232,6 +232,186 @@ const mockActivityIssues = [
 	}
 ]
 
+const mockProjectOptions: NestedFilterOption[] = [
+	{
+		id: 'portfolio-customer',
+		label: 'Customer Platforms',
+		description: 'Customer-facing Jira programs grouped by initiative',
+		children: [
+			{
+				id: 'program-experience',
+				label: 'Experience',
+				description: 'Surface-level improvements that affect the schedule UI',
+				children: [
+					{
+						id: 'project-proj-138',
+						label: 'Customer Portal Experience',
+						value: 'PROJ-138',
+						meta: 'CXP',
+						description: 'Dashboard refresh & automation (PROJ-138)',
+						avatar: { fallback: 'CP' },
+						searchTerms: ['dashboard', 'design', 'customer']
+					},
+					{
+						id: 'project-proj-156',
+						label: 'Responsive Shell',
+						value: 'PROJ-156',
+						meta: 'SHELL',
+						description: 'Calendar responsive cleanup for mobile (PROJ-156)',
+						avatar: { fallback: 'RS' },
+						searchTerms: ['mobile', 'qa', 'shell']
+					}
+				]
+			},
+			{
+				id: 'program-activation',
+				label: 'Activation',
+				description: 'Tracking work that aligns Jira issues to GitLab commits',
+				children: [
+					{
+						id: 'project-proj-151',
+						label: 'Issue Enrichment Service',
+						value: 'PROJ-151',
+						meta: 'IES',
+						description: 'Surfacing Jira context inside GitLab (PROJ-151)',
+						avatar: { fallback: 'IE' },
+						searchTerms: ['jira', 'gitlab', 'activation']
+					}
+				]
+			}
+		]
+	},
+	{
+		id: 'portfolio-engineering',
+		label: 'Engineering Foundations',
+		description: 'API stability, reconciliation, and integration projects',
+		children: [
+			{
+				id: 'program-reconcile',
+				label: 'Reconciliation',
+				description: 'Bridges monthly hours across Jira + GitLab',
+				children: [
+					{
+						id: 'project-proj-142',
+						label: 'Identity Sync Service',
+						value: 'PROJ-142',
+						meta: 'IDS',
+						description: 'Auth + session service powering auto-reconcile (PROJ-142)',
+						avatar: { fallback: 'IS' },
+						searchTerms: ['auth', 'api', 'sync']
+					},
+					{
+						id: 'project-proj-149',
+						label: 'Commit Meter',
+						value: 'PROJ-149',
+						meta: 'METER',
+						description: 'Rate limiting & guardrails for GitLab events (PROJ-149)',
+						avatar: { fallback: 'CM' },
+						searchTerms: ['rate limiting', 'gitlab', 'commits']
+					}
+				]
+			},
+			{
+				id: 'program-insights',
+				label: 'Insights',
+				description: 'Internal-only work for finance, time tracking, and reporting',
+				children: [
+					{
+						id: 'project-proj-162',
+						label: 'Insights Hub',
+						value: 'PROJ-162',
+						meta: 'INSIGHT',
+						description: 'Worklog intelligence & approvals (PROJ-162)',
+						avatar: { fallback: 'IH' },
+						searchTerms: ['reports', 'worklog', 'approvals']
+					}
+				]
+			}
+		]
+	}
+]
+
+const mockUserOptions: NestedFilterOption[] = [
+	{
+		id: 'group-engineering',
+		label: 'Engineering',
+		description: 'People with GitLab write access',
+		children: [
+			{
+				id: 'team-platform',
+				label: 'Platform',
+				description: 'Schedule + automation owners',
+				children: [
+					{
+						id: 'user-john-anderson',
+						label: 'John Anderson',
+						value: 'john-anderson',
+						description: 'john.anderson@hourly.dev',
+						avatar: { fallback: 'JA' },
+						searchTerms: ['platform', 'lead', 'backend']
+					},
+					{
+						id: 'user-michael-chen',
+						label: 'Michael Chen',
+						value: 'michael-chen',
+						description: 'michael.chen@hourly.dev',
+						avatar: { fallback: 'MC' },
+						searchTerms: ['api', 'planner']
+					}
+				]
+			},
+			{
+				id: 'team-experience',
+				label: 'Experience',
+				description: 'UI + workflow design partners',
+				children: [
+					{
+						id: 'user-sarah-mitchell',
+						label: 'Sarah Mitchell',
+						value: 'sarah-mitchell',
+						description: 'sarah.mitchell@hourly.dev',
+						avatar: { fallback: 'SM' },
+						searchTerms: ['design', 'frontend']
+					},
+					{
+						id: 'user-emma-thompson',
+						label: 'Emma Thompson',
+						value: 'emma-thompson',
+						description: 'emma.thompson@hourly.dev',
+						avatar: { fallback: 'ET' },
+						searchTerms: ['ux', 'research']
+					}
+				]
+			}
+		]
+	},
+	{
+		id: 'group-external',
+		label: 'External Collaborators',
+		description: 'Vendors with Jira-only access',
+		children: [
+			{
+				id: 'team-qa',
+				label: 'QA Vendors',
+				description: 'Short term QA contractors',
+				children: [
+					{
+						id: 'user-ajay-patel',
+						label: 'Ajay Patel',
+						value: 'ajay-patel',
+						description: 'ajay.patel@contractor.dev',
+						avatar: { fallback: 'AP' },
+						searchTerms: ['qa', 'contractor']
+					}
+				]
+			}
+		]
+	}
+]
+
+const defaultProjectSelection = ['PROJ-142', 'PROJ-138']
+const defaultUserSelection = ['john-anderson', 'sarah-mitchell']
+
 // Helper to convert time to hour offset
 function timeToHourOffset(time: string): number {
 	const parts = time.split(':').map(Number)
@@ -263,21 +443,20 @@ const eventColorTokens = {
 type ColorKey = keyof typeof eventColorTokens
 
 // Mock users data
-const mockUsers = [
-	{ id: '1', name: 'John Anderson', avatar: 'JA', checked: true },
-	{ id: '2', name: 'Sarah Mitchell', avatar: 'SM', checked: false },
-	{ id: '3', name: 'Michael Chen', avatar: 'MC', checked: false }
-]
-
 export default function POCRoute({ loaderData }: Route.ComponentProps) {
 	const [insightsOpen, setInsightsOpen] = useState(true)
-	const [unsavedChangesOpen, setUnsavedChangesOpen] = useState(true)
+	const [filtersOpen, setFiltersOpen] = useState(true)
+	const [unsavedChangesOpen, setUnsavedChangesOpen] = useState(false)
 	const [dateRange, setDateRange] = useState<DateRange | undefined>({
 		from: new Date(2024, 0, 1),
 		to: new Date(2024, 0, 7)
 	})
-	const [selectedProject, setSelectedProject] = useState('all')
-	const [leftPanelWidth, setLeftPanelWidth] = useState(240)
+	const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>(defaultProjectSelection)
+	const [selectedUserIds, setSelectedUserIds] = useState<string[]>(defaultUserSelection)
+	const projectFilterSummary =
+		selectedProjectIds.length === 0 ? 'All projects' : `${selectedProjectIds.length} selected`
+	const userFilterSummary =
+		selectedUserIds.length === 0 ? 'All users' : `${selectedUserIds.length} users selected`
 	const [rightPanelWidth, setRightPanelWidth] = useState(260)
 	const { setActions } = useHeaderActions()
 
@@ -332,166 +511,95 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 		}
 	}, [setActions])
 
-	const handleLeftSeparatorDrag = (deltaX: number) => {
-		setLeftPanelWidth(prev => Math.max(180, Math.min(400, prev + deltaX)))
-	}
-
 	const handleRightSeparatorDrag = (deltaX: number) => {
 		setRightPanelWidth(prev => Math.max(200, Math.min(500, prev - deltaX)))
 	}
 
 	return (
 		<div className='flex h-full flex-1 overflow-hidden'>
-			{/* Left Filters Panel */}
-			<div
-				className='flex flex-col border-r border-border bg-white/95 shadow-sm backdrop-blur'
-				style={{ width: `${leftPanelWidth}px`, flexShrink: 0 }}
-			>
-				{/* Scrollable Filters */}
-				<ScrollArea className='flex-1'>
-					<div className='space-y-6 p-4'>
-						{/* Date Range */}
-						<div className='space-y-2'>
-							<Label className='text-sm font-medium text-muted'>Date Range</Label>
-							<DateRangePicker
-								dateRange={dateRange}
-								onDateRangeChange={setDateRange}
-							/>
-						</div>
-
-						{/* Projects */}
-						<div className='space-y-2'>
-							<Label className='text-sm font-medium text-muted'>
-								Projects <span className='text-xs text-muted'>(affects Users)</span>
-							</Label>
-							<ProjectsCommand
-								value={selectedProject}
-								onValueChange={setSelectedProject}
-							/>
-						</div>
-
-						{/* Users */}
-						<div className='space-y-3'>
-							<Label className='text-sm font-medium text-muted'>Users</Label>
-							<div className='space-y-3'>
-								{mockUsers.map(user => (
-									<div
-										key={user.id}
-										className='flex items-center gap-3'
-									>
-										<Checkbox
-											id={`user-${user.id}`}
-											defaultChecked={user.checked}
-											className='border-border'
-										/>
-										<div className='flex items-center gap-2'>
-											<div className='flex size-8 items-center justify-center rounded-full bg-light-sky-blue-500 text-xs font-semibold text-light-sky-blue-100'>
-												{user.avatar}
-											</div>
-											<label
-												htmlFor={`user-${user.id}`}
-												className='text-sm text-muted'
-											>
-												{user.name}
-											</label>
-										</div>
-									</div>
-								))}
-							</div>
-						</div>
-					</div>
-				</ScrollArea>
-
-				{/* Fixed Unsaved Changes at Bottom */}
-				<div className='shrink-0 border-t border-border p-4'>
-					<Collapsible
-						open={unsavedChangesOpen}
-						onOpenChange={setUnsavedChangesOpen}
-					>
-						<CollapsibleTrigger asChild>
-							<Button
-								variant='ghost'
-								className='w-full justify-between p-0 hover:bg-transparent'
-							>
-								<div className='flex items-center gap-2'>
-									<Clock className='size-4 text-light-sky-blue-400' />
-									<span className='text-sm font-semibold text-foreground'>Unsaved Changes</span>
-									<div className='rounded-md bg-surface-muted px-2 py-1'>
-										<span className='text-xs font-semibold text-foreground'>12</span>
-									</div>
-								</div>
-								<ChevronDown
-									className={`size-4 text-muted transition-transform ${unsavedChangesOpen ? 'rotate-180' : ''}`}
-								/>
-							</Button>
-						</CollapsibleTrigger>
-						<CollapsibleContent className='mt-3'>
-							<div className='space-y-3 rounded-lg border border-border bg-white p-4 shadow-sm'>
-								{/* Header */}
-								<div className='flex items-center justify-between border-b border-border pb-3'>
-									<div className='space-y-0.5'>
-										<h3 className='text-sm font-semibold text-foreground'>Changes Summary</h3>
-										<p className='text-xs text-muted'>Last sync: 5m ago</p>
-									</div>
-								</div>
-
-								{/* Change Summary */}
-								<div className='space-y-2 text-xs'>
-									<div className='flex items-center justify-between'>
-										<div className='flex items-center gap-2'>
-											<Plus className='size-3.5 text-muted' />
-											<span className='text-muted'>New</span>
-										</div>
-										<span className='font-semibold text-foreground'>3</span>
-									</div>
-
-									<div className='flex items-center justify-between'>
-										<div className='flex items-center gap-2'>
-											<Pencil className='size-3.5 text-muted' />
-											<span className='text-muted'>Modified</span>
-										</div>
-										<span className='font-semibold text-foreground'>7</span>
-									</div>
-
-									<div className='flex items-center justify-between'>
-										<div className='flex items-center gap-2'>
-											<Trash2 className='size-3.5 text-muted' />
-											<span className='text-muted'>Deleted</span>
-										</div>
-										<span className='font-semibold text-foreground'>2</span>
-									</div>
-								</div>
-
-								{/* Actions */}
-								<div className='space-y-2 border-t border-border pt-3'>
-									<Button className='h-9 w-full bg-light-sky-blue-500 text-light-sky-blue-100 hover:bg-light-sky-blue-400'>
-										<RefreshCw className='size-4' />
-										Sync to Jira
-									</Button>
-									<Button
-										variant='ghost'
-										className='h-9 w-full text-muted hover:bg-surface-muted hover:text-foreground'
-									>
-										<X className='size-4' />
-										Discard All
-									</Button>
-								</div>
-							</div>
-						</CollapsibleContent>
-					</Collapsible>
-				</div>
-			</div>
-
-			{/* Left Separator */}
-			<DraggableSeparator onDrag={handleLeftSeparatorDrag} />
-
 			{/* Center Calendar Area */}
+
 			<div className='flex flex-1 flex-col overflow-hidden'>
-				<div className='flex-1 overflow-auto'>
-					<div className='p-4'>
+				<div className='flex flex-1 flex-col gap-4 p-4 overflow-hidden'>
+					{/* Filters */}
+					<Collapsible
+						open={filtersOpen}
+						onOpenChange={setFiltersOpen}
+					>
+						<div className='rounded-xl border border-border bg-white/95 p-4 shadow-sm backdrop-blur'>
+							<CollapsibleTrigger asChild>
+								<Button
+									variant='ghost'
+									className='w-full items-center justify-between gap-4 p-0 text-left hover:bg-transparent'
+								>
+									<div className='flex flex-1 flex-wrap items-center gap-4'>
+										<div className='flex items-center gap-3'>
+											<div className='rounded-full bg-surface-muted p-2'>
+												<Filter className='size-4 text-light-sky-blue-400' />
+											</div>
+											<div>
+												<p className='text-sm font-semibold text-foreground'>Schedule Filters</p>
+												<p className='text-xs text-muted'>
+													Refine events and assignees shown below
+												</p>
+											</div>
+										</div>
+										<div className='flex flex-wrap items-center gap-3 text-xs font-medium text-muted'>
+											<span>Date range: Jan 1-7</span>
+											<span>Project scope: {projectFilterSummary}</span>
+											<span>{userFilterSummary}</span>
+										</div>
+									</div>
+									<ChevronDown
+										className={`size-4 text-muted transition-transform ${filtersOpen ? 'rotate-180' : ''}`}
+									/>
+								</Button>
+							</CollapsibleTrigger>
+							<CollapsibleContent className='mt-4 border-t border-border pt-4'>
+								<div className='flex flex-wrap items-start gap-4'>
+									<div className='flex min-w-[240px] flex-1 flex-col gap-2'>
+										<Label className='text-sm font-medium text-muted'>Date Range</Label>
+										<DateRangePicker
+											dateRange={dateRange}
+											onDateRangeChange={setDateRange}
+										/>
+									</div>
+
+									<div className='flex min-w-[220px] flex-1 flex-col gap-2'>
+										<Label className='text-sm font-medium text-muted'>
+											Projects <span className='text-xs text-muted'>(affects Users)</span>
+										</Label>
+										<FilterMultiSelect
+											options={mockProjectOptions}
+											selectedValues={selectedProjectIds}
+											onChange={setSelectedProjectIds}
+											placeholder='Select projects'
+											searchPlaceholder='Search projects...'
+											emptyLabel='No projects found.'
+										/>
+									</div>
+
+									<div className='flex min-w-[260px] flex-1 flex-col gap-2'>
+										<Label className='text-sm font-medium text-muted'>Users</Label>
+										<FilterMultiSelect
+											options={mockUserOptions}
+											selectedValues={selectedUserIds}
+											onChange={setSelectedUserIds}
+											placeholder='Select team members'
+											searchPlaceholder='Search users...'
+											emptyLabel='No users found.'
+										/>
+									</div>
+								</div>
+							</CollapsibleContent>
+						</div>
+					</Collapsible>
+
+					{/* Calendar Stack */}
+					<div className='flex flex-1 flex-col gap-4 overflow-hidden'>
 						{/* Week Navigation */}
-						<div className='mb-4 flex items-center justify-between'>
-							<div className='flex items-center gap-2'>
+						<div className='flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-white/95 px-4 py-3 shadow-sm backdrop-blur'>
+							<div className='flex flex-wrap items-center gap-2'>
 								<Button
 									variant='outline'
 									size='icon'
@@ -527,8 +635,102 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 							</div>
 						</div>
 
-						{/* Calendar Grid */}
-						<CalendarGrid events={mockEvents} />
+						<div className='flex-1 overflow-hidden'>
+							<CalendarGrid events={mockEvents} />
+						</div>
+					</div>
+
+					{/* Unsaved Changes */}
+					<div className='rounded-xl border border-border bg-white/95 p-4 shadow-sm backdrop-blur'>
+						<Collapsible
+							open={unsavedChangesOpen}
+							onOpenChange={setUnsavedChangesOpen}
+						>
+							<CollapsibleTrigger asChild>
+								<Button
+									variant='ghost'
+									className='w-full items-center justify-between gap-4 p-0 text-left hover:bg-transparent'
+								>
+									<div className='flex flex-1 flex-wrap items-center gap-4 text-left'>
+										<div className='flex items-center gap-3'>
+											<div className='flex items-center justify-center rounded-full bg-surface-muted p-2'>
+												<Clock className='size-4 text-light-sky-blue-400' />
+											</div>
+											<div>
+												<p className='text-sm font-semibold text-foreground'>Unsaved Changes</p>
+												<p className='text-xs text-muted'>Last sync: 5m ago</p>
+											</div>
+											<div className='rounded-md bg-surface-muted px-2 py-1'>
+												<span className='text-xs font-semibold text-foreground'>12</span>
+											</div>
+										</div>
+										<div className='flex flex-wrap items-center gap-4 text-xs font-medium text-muted'>
+											<span className='flex items-center gap-1 text-foreground'>
+												<Plus className='size-3.5 text-light-sky-blue-400' />3 new
+											</span>
+											<span className='flex items-center gap-1 text-foreground'>
+												<Pencil className='size-3.5 text-fairy-tale-400' />7 modified
+											</span>
+											<span className='flex items-center gap-1 text-foreground'>
+												<Trash2 className='size-3.5 text-carnation-pink-400' />2 removed
+											</span>
+										</div>
+									</div>
+									<ChevronDown
+										className={`size-4 text-muted transition-transform ${unsavedChangesOpen ? 'rotate-180' : ''}`}
+									/>
+								</Button>
+							</CollapsibleTrigger>
+							<CollapsibleContent className='mt-4 border-t border-border pt-4'>
+								<div className='grid gap-4 md:grid-cols-[2fr_1fr]'>
+									<div className='space-y-3 rounded-lg border border-border bg-white/95 p-4 shadow-sm'>
+										<div className='flex items-center justify-between border-b border-border pb-3'>
+											<div>
+												<h3 className='text-sm font-semibold text-foreground'>Changes Summary</h3>
+												<p className='text-xs text-muted'>Review before syncing to Jira</p>
+											</div>
+											<span className='text-xs font-semibold text-muted'>12 pending</span>
+										</div>
+										<div className='space-y-2 text-sm'>
+											<div className='flex items-center justify-between'>
+												<div className='flex items-center gap-2'>
+													<Plus className='size-3.5 text-light-sky-blue-400' />
+													<span className='text-muted'>New</span>
+												</div>
+												<span className='font-semibold text-foreground'>3</span>
+											</div>
+											<div className='flex items-center justify-between'>
+												<div className='flex items-center gap-2'>
+													<Pencil className='size-3.5 text-fairy-tale-400' />
+													<span className='text-muted'>Modified</span>
+												</div>
+												<span className='font-semibold text-foreground'>7</span>
+											</div>
+											<div className='flex items-center justify-between'>
+												<div className='flex items-center gap-2'>
+													<Trash2 className='size-3.5 text-carnation-pink-400' />
+													<span className='text-muted'>Deleted</span>
+												</div>
+												<span className='font-semibold text-foreground'>2</span>
+											</div>
+										</div>
+									</div>
+									<div className='flex flex-col gap-2 rounded-lg border border-dashed border-border bg-surface-muted/50 p-4'>
+										<Button className='h-10 w-full bg-light-sky-blue-500 text-light-sky-blue-100 shadow-sm hover:bg-light-sky-blue-400'>
+											<RefreshCw className='size-4' />
+											Sync to Jira
+										</Button>
+										<Button
+											variant='ghost'
+											className='h-10 w-full text-muted hover:bg-surface-muted hover:text-foreground'
+										>
+											<X className='size-4' />
+											Discard All
+										</Button>
+									</div>
+								</div>
+							</CollapsibleContent>
+						</Collapsible>
 					</div>
 				</div>
 			</div>

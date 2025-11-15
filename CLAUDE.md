@@ -9,7 +9,7 @@ Guidance for Claude Code when working in this repo.
 
 ## Serena MCP Project Activation (Mandatory)
 - **Always activate Serena MCP project at the start of new agent interactions** (if not already activated)
-- Use `mcp_serena_activate_project` with project name `'working-hours'` or project path
+- Use `mcp_serena_activate_project` with project name `'egorovli/hourly'` or project path
 - Check activation status with `mcp_serena_get_current_config` if unsure
 - Serena provides semantic coding tools for efficient code exploration and editing
 
