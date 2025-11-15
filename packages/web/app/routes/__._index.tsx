@@ -1,10 +1,10 @@
 import type { DateRange } from 'react-day-picker'
 import type { NestedFilterOption } from '~/components/filter-multi-select.tsx'
 import type { Route } from './+types/__._index.ts'
-import type { Event, View } from 'react-big-calendar'
+import type { Event } from 'react-big-calendar'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Calendar, luxonLocalizer } from 'react-big-calendar'
+import { luxonLocalizer } from 'react-big-calendar'
 
 import { DateTime } from 'luxon'
 import { Virtuoso } from 'react-virtuoso'
@@ -19,7 +19,6 @@ import {
 	Filter,
 	GitCommit,
 	GripVertical,
-	MoreVertical,
 	Pencil,
 	Plus,
 	RefreshCw,
@@ -55,9 +54,18 @@ interface CalendarEvent extends Event {
 }
 
 // Setup react-big-calendar with Luxon localizer
-const localizer = luxonLocalizer(DateTime)
-// const DnDCalendar = withDragAndDrop<CalendarEvent, object>(Calendar)
-const DnDCalendar = Calendar
+const localizer = luxonLocalizer(DateTime, { firstDayOfWeek: 1 })
+
+// Calendar formats for 24h time display
+const formats = {
+	timeGutterFormat: 'HH:mm',
+	eventTimeRangeFormat: ({ start, end }: { start: Date; end: Date }) => {
+		return `${DateTime.fromJSDate(start).toFormat('HH:mm')} - ${DateTime.fromJSDate(end).toFormat('HH:mm')}`
+	},
+	agendaTimeRangeFormat: ({ start, end }: { start: Date; end: Date }) => {
+		return `${DateTime.fromJSDate(start).toFormat('HH:mm')} - ${DateTime.fromJSDate(end).toFormat('HH:mm')}`
+	}
+}
 
 // Helper to create Date objects for calendar events
 const createEventDate = (day: number, hour: number, minute = 0): Date => {
@@ -469,7 +477,6 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 	// Calendar state
 	const [events, setEvents] = useState<CalendarEvent[]>(mockEvents)
 	const [currentDate, setCurrentDate] = useState(new Date(2024, 0, 1))
-	const [currentView, setCurrentView] = useState<View>('week')
 
 	// Drag and drop handlers
 	const handleEventDrop = useCallback(
@@ -521,28 +528,23 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 			if (action === 'TODAY') {
 				newDate = DateTime.now()
 			} else if (action === 'PREV') {
-				newDate =
-					currentView === 'week' ? luxonDate.minus({ weeks: 1 }) : luxonDate.minus({ days: 1 })
+				newDate = luxonDate.minus({ weeks: 1 })
 			} else {
-				newDate =
-					currentView === 'week' ? luxonDate.plus({ weeks: 1 }) : luxonDate.plus({ days: 1 })
+				newDate = luxonDate.plus({ weeks: 1 })
 			}
 
 			setCurrentDate(newDate.toJSDate())
 		},
-		[currentDate, currentView]
+		[currentDate]
 	)
 
 	// Format date range for display
 	const dateRangeLabel = useMemo(() => {
 		const luxonDate = DateTime.fromJSDate(currentDate)
-		if (currentView === 'week') {
-			const startOfWeek = luxonDate.startOf('week')
-			const endOfWeek = luxonDate.endOf('week')
-			return `${startOfWeek.toFormat('MMM d')} - ${endOfWeek.toFormat('MMM d, yyyy')}`
-		}
-		return luxonDate.toFormat('MMMM d, yyyy')
-	}, [currentDate, currentView])
+		const startOfWeek = luxonDate.startOf('week')
+		const endOfWeek = luxonDate.endOf('week')
+		return `${startOfWeek.toFormat('MMM d')} - ${endOfWeek.toFormat('MMM d, yyyy')}`
+	}, [currentDate])
 
 	// Flatten all issues with section headers for virtualized list
 	const flattenedIssues = useMemo(() => {
@@ -709,22 +711,6 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 									Today
 								</Button>
 							</div>
-							<div className='flex items-center gap-1 rounded-lg border border-border bg-white/95 p-1 shadow-sm backdrop-blur'>
-								<Button
-									variant='ghost'
-									className={`h-8 px-3 ${currentView === 'day' ? 'bg-light-sky-blue-500 text-light-sky-blue-100 shadow-sm hover:bg-light-sky-blue-400' : 'text-muted'}`}
-									onClick={() => setCurrentView('day')}
-								>
-									Day
-								</Button>
-								<Button
-									className={`h-8 px-3 ${currentView === 'week' ? 'bg-light-sky-blue-500 text-light-sky-blue-100 shadow-sm hover:bg-light-sky-blue-400' : 'text-muted'}`}
-									variant={currentView === 'week' ? 'default' : 'ghost'}
-									onClick={() => setCurrentView('week')}
-								>
-									Week
-								</Button>
-							</div>
 						</div>
 
 						<div className='flex-1 overflow-hidden'>
@@ -736,14 +722,14 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 									endAccessor='end'
 									date={currentDate}
 									onNavigate={setCurrentDate}
-									view={currentView}
-									onView={setCurrentView}
-									views={['week', 'day']}
+									view='week'
+									views={['week']}
 									defaultView='week'
 									step={60}
 									timeslots={1}
 									min={new Date(2024, 0, 1, 9, 0)}
 									max={new Date(2024, 0, 1, 18, 0)}
+									formats={formats}
 									onEventDrop={handleEventDrop}
 									onEventResize={handleEventResize}
 									draggableAccessor={(event: CalendarEvent) => event.isDraggable}
