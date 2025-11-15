@@ -251,16 +251,16 @@ function getDuration(start: string, end: string): number {
 	return endHours - startHours + (endMinutes - startMinutes) / 60
 }
 
-// Color gradient mappings - Professional muted palette
-const colorGradients = {
-	indigo: 'from-indigo-50 to-indigo-100 border-indigo-200 text-indigo-900',
-	slate: 'from-slate-50 to-slate-100 border-slate-200 text-slate-900',
-	emerald: 'from-emerald-50 to-emerald-100 border-emerald-200 text-emerald-900',
-	amber: 'from-amber-50 to-amber-100 border-amber-200 text-amber-900',
-	rose: 'from-rose-50 to-rose-100 border-rose-200 text-rose-900'
+// Solid color mappings - Pastel palette accents
+const eventColorTokens = {
+	indigo: 'border-light-sky-blue-500 bg-light-sky-blue-800 text-light-sky-blue-100',
+	slate: 'border-thistle-500 bg-thistle-800 text-thistle-100',
+	emerald: 'border-uranian-blue-500 bg-uranian-blue-800 text-uranian-blue-100',
+	amber: 'border-fairy-tale-500 bg-fairy-tale-800 text-fairy-tale-100',
+	rose: 'border-carnation-pink-500 bg-carnation-pink-800 text-carnation-pink-100'
 }
 
-type ColorKey = keyof typeof colorGradients
+type ColorKey = keyof typeof eventColorTokens
 
 // Mock users data
 const mockUsers = [
@@ -315,13 +315,13 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 			<>
 				<Button
 					variant='outline'
-					className='h-9 border-slate-300 px-4 hover:bg-slate-50'
+					className='h-9 border-border px-4 text-foreground hover:bg-surface-muted'
 				>
-					<Download className='mr-2 size-4' />
+					<Download className='size-4' />
 					Export
 				</Button>
-				<Button className='h-9 bg-indigo-600 px-4 text-white shadow-sm hover:bg-indigo-500'>
-					<Zap className='mr-2 size-4' />
+				<Button className='h-9 bg-light-sky-blue-500 px-4 text-light-sky-blue-100 shadow-sm hover:bg-light-sky-blue-400'>
+					<Zap className='size-4' />
 					Auto Reconcile
 				</Button>
 			</>
@@ -344,7 +344,7 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 		<div className='flex h-full flex-1 overflow-hidden'>
 			{/* Left Filters Panel */}
 			<div
-				className='flex flex-col border-r border-slate-200 bg-white/95 shadow-sm backdrop-blur'
+				className='flex flex-col border-r border-border bg-white/95 shadow-sm backdrop-blur'
 				style={{ width: `${leftPanelWidth}px`, flexShrink: 0 }}
 			>
 				{/* Scrollable Filters */}
@@ -352,7 +352,7 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 					<div className='space-y-6 p-4'>
 						{/* Date Range */}
 						<div className='space-y-2'>
-							<Label className='text-sm font-medium text-slate-700'>Date Range</Label>
+							<Label className='text-sm font-medium text-muted'>Date Range</Label>
 							<DateRangePicker
 								dateRange={dateRange}
 								onDateRangeChange={setDateRange}
@@ -361,8 +361,8 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 
 						{/* Projects */}
 						<div className='space-y-2'>
-							<Label className='text-sm font-medium text-slate-700'>
-								Projects <span className='text-xs text-slate-500'>(affects Users)</span>
+							<Label className='text-sm font-medium text-muted'>
+								Projects <span className='text-xs text-muted'>(affects Users)</span>
 							</Label>
 							<ProjectsCommand
 								value={selectedProject}
@@ -372,7 +372,7 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 
 						{/* Users */}
 						<div className='space-y-3'>
-							<Label className='text-sm font-medium text-slate-700'>Users</Label>
+							<Label className='text-sm font-medium text-muted'>Users</Label>
 							<div className='space-y-3'>
 								{mockUsers.map(user => (
 									<div
@@ -382,15 +382,15 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 										<Checkbox
 											id={`user-${user.id}`}
 											defaultChecked={user.checked}
-											className='border-slate-300'
+											className='border-border'
 										/>
 										<div className='flex items-center gap-2'>
-											<div className='flex size-8 items-center justify-center rounded-full bg-indigo-600 text-xs font-semibold text-white'>
+											<div className='flex size-8 items-center justify-center rounded-full bg-light-sky-blue-500 text-xs font-semibold text-light-sky-blue-100'>
 												{user.avatar}
 											</div>
 											<label
 												htmlFor={`user-${user.id}`}
-												className='text-sm text-slate-700'
+												className='text-sm text-muted'
 											>
 												{user.name}
 											</label>
@@ -403,7 +403,7 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 				</ScrollArea>
 
 				{/* Fixed Unsaved Changes at Bottom */}
-				<div className='shrink-0 border-t border-slate-200 p-4'>
+				<div className='shrink-0 border-t border-border p-4'>
 					<Collapsible
 						open={unsavedChangesOpen}
 						onOpenChange={setUnsavedChangesOpen}
@@ -414,24 +414,24 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 								className='w-full justify-between p-0 hover:bg-transparent'
 							>
 								<div className='flex items-center gap-2'>
-									<Clock className='size-4 text-indigo-600' />
-									<span className='text-sm font-semibold text-slate-900'>Unsaved Changes</span>
-									<div className='rounded-md bg-slate-100 px-2 py-1'>
-										<span className='text-xs font-semibold text-slate-900'>12</span>
+									<Clock className='size-4 text-light-sky-blue-400' />
+									<span className='text-sm font-semibold text-foreground'>Unsaved Changes</span>
+									<div className='rounded-md bg-surface-muted px-2 py-1'>
+										<span className='text-xs font-semibold text-foreground'>12</span>
 									</div>
 								</div>
 								<ChevronDown
-									className={`size-4 text-slate-500 transition-transform ${unsavedChangesOpen ? 'rotate-180' : ''}`}
+									className={`size-4 text-muted transition-transform ${unsavedChangesOpen ? 'rotate-180' : ''}`}
 								/>
 							</Button>
 						</CollapsibleTrigger>
 						<CollapsibleContent className='mt-3'>
-							<div className='space-y-3 rounded-lg border border-slate-300 bg-white p-4 shadow-sm'>
+							<div className='space-y-3 rounded-lg border border-border bg-white p-4 shadow-sm'>
 								{/* Header */}
-								<div className='flex items-center justify-between border-b border-slate-200 pb-3'>
+								<div className='flex items-center justify-between border-b border-border pb-3'>
 									<div className='space-y-0.5'>
-										<h3 className='text-sm font-semibold text-slate-900'>Changes Summary</h3>
-										<p className='text-xs text-slate-500'>Last sync: 5m ago</p>
+										<h3 className='text-sm font-semibold text-foreground'>Changes Summary</h3>
+										<p className='text-xs text-muted'>Last sync: 5m ago</p>
 									</div>
 								</div>
 
@@ -439,40 +439,40 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 								<div className='space-y-2 text-xs'>
 									<div className='flex items-center justify-between'>
 										<div className='flex items-center gap-2'>
-											<Plus className='size-3.5 text-slate-400' />
-											<span className='text-slate-700'>New</span>
+											<Plus className='size-3.5 text-muted' />
+											<span className='text-muted'>New</span>
 										</div>
-										<span className='font-semibold text-slate-900'>3</span>
+										<span className='font-semibold text-foreground'>3</span>
 									</div>
 
 									<div className='flex items-center justify-between'>
 										<div className='flex items-center gap-2'>
-											<Pencil className='size-3.5 text-slate-400' />
-											<span className='text-slate-700'>Modified</span>
+											<Pencil className='size-3.5 text-muted' />
+											<span className='text-muted'>Modified</span>
 										</div>
-										<span className='font-semibold text-slate-900'>7</span>
+										<span className='font-semibold text-foreground'>7</span>
 									</div>
 
 									<div className='flex items-center justify-between'>
 										<div className='flex items-center gap-2'>
-											<Trash2 className='size-3.5 text-slate-400' />
-											<span className='text-slate-700'>Deleted</span>
+											<Trash2 className='size-3.5 text-muted' />
+											<span className='text-muted'>Deleted</span>
 										</div>
-										<span className='font-semibold text-slate-900'>2</span>
+										<span className='font-semibold text-foreground'>2</span>
 									</div>
 								</div>
 
 								{/* Actions */}
-								<div className='space-y-2 border-t border-slate-200 pt-3'>
-									<Button className='h-9 w-full bg-indigo-600 text-white hover:bg-indigo-500'>
-										<RefreshCw className='mr-2 size-4' />
+								<div className='space-y-2 border-t border-border pt-3'>
+									<Button className='h-9 w-full bg-light-sky-blue-500 text-light-sky-blue-100 hover:bg-light-sky-blue-400'>
+										<RefreshCw className='size-4' />
 										Sync to Jira
 									</Button>
 									<Button
 										variant='ghost'
-										className='h-9 w-full text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+										className='h-9 w-full text-muted hover:bg-surface-muted hover:text-foreground'
 									>
-										<X className='mr-2 size-4' />
+										<X className='size-4' />
 										Discard All
 									</Button>
 								</div>
@@ -495,33 +495,33 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 								<Button
 									variant='outline'
 									size='icon'
-									className='size-9 border-slate-300 hover:bg-slate-50'
+									className='size-9 border-border hover:bg-surface-muted'
 								>
 									<ChevronLeft className='size-4' />
 								</Button>
-								<span className='text-sm font-medium text-slate-900'>Jan 1 - Jan 7, 2024</span>
+								<span className='text-sm font-medium text-foreground'>Jan 1 - Jan 7, 2024</span>
 								<Button
 									variant='outline'
 									size='icon'
-									className='size-9 border-slate-300 hover:bg-slate-50'
+									className='size-9 border-border hover:bg-surface-muted'
 								>
 									<ChevronRight className='size-4' />
 								</Button>
 								<Button
 									variant='outline'
-									className='ml-2 h-9 border-slate-300 px-4 hover:bg-slate-50'
+									className='ml-2 h-9 border-border px-4 hover:bg-surface-muted'
 								>
 									Today
 								</Button>
 							</div>
-							<div className='flex items-center gap-1 rounded-lg border border-slate-200 bg-white/95 p-1 shadow-sm backdrop-blur'>
+							<div className='flex items-center gap-1 rounded-lg border border-border bg-white/95 p-1 shadow-sm backdrop-blur'>
 								<Button
 									variant='ghost'
-									className='h-8 px-3 text-slate-700'
+									className='h-8 px-3 text-muted'
 								>
 									Month
 								</Button>
-								<Button className='h-8 bg-indigo-600 px-3 text-white shadow-sm hover:bg-indigo-500'>
+								<Button className='h-8 bg-light-sky-blue-500 px-3 text-light-sky-blue-100 shadow-sm hover:bg-light-sky-blue-400'>
 									Week
 								</Button>
 							</div>
@@ -538,18 +538,18 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 
 			{/* Right Issues Sidebar */}
 			<div
-				className='flex flex-col border-l border-slate-200 bg-slate-50/95 shadow-sm backdrop-blur'
+				className='flex flex-col border-l border-border bg-surface-muted/95 shadow-sm backdrop-blur'
 				style={{ width: `${rightPanelWidth}px`, flexShrink: 0 }}
 			>
 				{/* Search */}
-				<div className='shrink-0 border-b border-slate-200 p-4'>
+				<div className='shrink-0 border-b border-border p-4'>
 					<div className='mb-3 flex items-center justify-between'>
-						<h3 className='text-sm font-semibold text-slate-900'>Search Issues</h3>
+						<h3 className='text-sm font-semibold text-foreground'>Search Issues</h3>
 					</div>
 					<div className='relative'>
-						<Search className='absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400' />
+						<Search className='absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted' />
 						<Input
-							className='border-slate-300 pl-9 focus-visible:ring-indigo-500'
+							className='border-border pl-9 focus-visible:ring-light-sky-blue-400'
 							placeholder='Find issues to log time...'
 						/>
 					</div>
@@ -564,7 +564,7 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 							if (item.type === 'header') {
 								return (
 									<div className='px-4 pb-3 pt-4'>
-										<h4 className='text-xs font-medium uppercase tracking-wide text-slate-500'>
+										<h4 className='text-xs font-medium uppercase tracking-wide text-muted'>
 											{item.section}
 										</h4>
 									</div>
@@ -593,7 +593,7 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 				</div>
 
 				{/* Quick Insights */}
-				<div className='shrink-0 border-t border-slate-200 p-4'>
+				<div className='shrink-0 border-t border-border p-4'>
 					<Collapsible
 						open={insightsOpen}
 						onOpenChange={setInsightsOpen}
@@ -605,7 +605,7 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 							>
 								<div className='flex items-center gap-2'>
 									<svg
-										className='size-4 text-indigo-600'
+										className='size-4 text-light-sky-blue-400'
 										fill='currentColor'
 										viewBox='0 0 24 24'
 										role='img'
@@ -613,15 +613,15 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 									>
 										<path d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z' />
 									</svg>
-									<span className='text-sm font-semibold text-slate-900'>Quick Insights</span>
+									<span className='text-sm font-semibold text-foreground'>Quick Insights</span>
 								</div>
 								<ChevronDown
-									className={`size-4 text-slate-500 transition-transform ${insightsOpen ? 'rotate-180' : ''}`}
+									className={`size-4 text-muted transition-transform ${insightsOpen ? 'rotate-180' : ''}`}
 								/>
 							</Button>
 						</CollapsibleTrigger>
 						<CollapsibleContent className='mt-3'>
-							<div className='space-y-2 rounded-lg border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur'>
+							<div className='space-y-2 rounded-lg border border-border bg-white/95 p-3 shadow-sm backdrop-blur'>
 								<InsightRow
 									label='Total hours (Week)'
 									value='38h'
@@ -650,18 +650,20 @@ function CalendarGrid({ events }: { events: typeof mockEvents }) {
 	const hours = [9, 10, 11, 12, 13, 14, 15, 16, 17]
 
 	return (
-		<div className='overflow-hidden rounded-xl border border-slate-200 bg-white/95 shadow-sm backdrop-blur'>
+		<div className='overflow-hidden rounded-xl border border-border bg-white/95 shadow-sm backdrop-blur'>
 			{/* Day Headers */}
-			<div className='grid grid-cols-[50px_repeat(7,1fr)] border-b border-slate-200 bg-slate-50/50'>
-				<div className='border-r border-slate-200' />
+			<div className='grid grid-cols-[50px_repeat(7,1fr)] border-b border-border bg-surface-muted/50'>
+				<div className='border-r border-border' />
 				{days.map((day, idx) => (
 					<div
 						key={day}
-						className='border-r border-slate-200 p-2 text-center last:border-r-0'
+						className='border-r border-border p-2 text-center last:border-r-0'
 					>
-						<div className='text-xs font-medium uppercase tracking-wide text-slate-500'>{day}</div>
-						<div className='mt-1 text-xl font-semibold text-slate-900'>{dates[idx]}</div>
-						{idx === 4 && <div className='mt-1 text-xs font-medium text-indigo-600'>Today</div>}
+						<div className='text-xs font-medium uppercase tracking-wide text-muted'>{day}</div>
+						<div className='mt-1 text-xl font-semibold text-foreground'>{dates[idx]}</div>
+						{idx === 4 && (
+							<div className='mt-1 text-xs font-medium text-light-sky-blue-400'>Today</div>
+						)}
 					</div>
 				))}
 			</div>
@@ -674,8 +676,8 @@ function CalendarGrid({ events }: { events: typeof mockEvents }) {
 						className='grid grid-cols-[50px_repeat(7,1fr)]'
 					>
 						{/* Time Label */}
-						<div className='flex h-16 items-start justify-end border-b border-r border-slate-200 bg-slate-50/30 pr-2 pt-1'>
-							<span className='text-xs font-medium text-slate-500'>
+						<div className='flex h-16 items-start justify-end border-b border-r border-border bg-surface-muted/30 pr-2 pt-1'>
+							<span className='text-xs font-medium text-muted'>
 								{hour > 12 ? hour - 12 : hour}:00 {hour >= 12 ? 'PM' : 'AM'}
 							</span>
 						</div>
@@ -684,7 +686,7 @@ function CalendarGrid({ events }: { events: typeof mockEvents }) {
 						{dates.map(date => (
 							<div
 								key={`${hour}-${date}`}
-								className='relative h-16 border-b border-r border-slate-200 bg-white last:border-r-0'
+								className='relative h-16 border-b border-r border-border bg-white last:border-r-0'
 							>
 								{/* Render events for this time slot */}
 								{events
@@ -726,11 +728,11 @@ function EventBlock({
 	event: (typeof mockEvents)[0]
 	style: React.CSSProperties
 }) {
-	const gradientClass = colorGradients[event.color as ColorKey]
+	const eventClass = eventColorTokens[event.color as ColorKey]
 
 	return (
 		<div
-			className={`group cursor-pointer rounded-lg border bg-gradient-to-b p-3 shadow-sm transition-all hover:shadow-md ${gradientClass}`}
+			className={`group cursor-pointer rounded-lg border p-3 shadow-sm transition-all hover:shadow-md ${eventClass}`}
 			style={style}
 		>
 			<div className='flex items-start justify-between'>
@@ -792,34 +794,34 @@ function IssueCard({
 	}
 
 	const priorityColors = {
-		Critical: 'text-rose-700 bg-rose-50 border-rose-200',
-		High: 'text-amber-700 bg-amber-50 border-amber-200',
-		Medium: 'text-blue-700 bg-blue-50 border-blue-200',
-		Low: 'text-slate-600 bg-slate-50 border-slate-200'
+		Critical: 'text-carnation-pink-200 bg-carnation-pink-700 border-carnation-pink-500',
+		High: 'text-fairy-tale-200 bg-fairy-tale-700 border-fairy-tale-500',
+		Medium: 'text-light-sky-blue-200 bg-light-sky-blue-700 border-light-sky-blue-500',
+		Low: 'text-thistle-200 bg-thistle-800 border-thistle-600'
 	}
 
 	const statusColors = {
-		'To Do': 'text-slate-700 bg-slate-100',
-		'In Progress': 'text-indigo-700 bg-indigo-100',
-		'In Review': 'text-amber-700 bg-amber-100',
-		Done: 'text-emerald-700 bg-emerald-100'
+		'To Do': 'text-thistle-200 bg-thistle-800',
+		'In Progress': 'text-light-sky-blue-200 bg-light-sky-blue-700',
+		'In Review': 'text-fairy-tale-200 bg-fairy-tale-700',
+		Done: 'text-uranian-blue-200 bg-uranian-blue-700'
 	}
 
 	return (
-		<div className='group cursor-grab rounded-lg border border-slate-300 bg-white p-3 shadow-sm transition-all hover:border-indigo-400 hover:shadow-md active:cursor-grabbing'>
+		<div className='group cursor-grab rounded-lg border border-border bg-white p-3 shadow-sm transition-all hover:border-light-sky-blue-400 hover:shadow-md active:cursor-grabbing'>
 			{/* Header Row */}
 			<div className='mb-2 flex items-start gap-2'>
-				<GripVertical className='mt-0.5 size-4 flex-shrink-0 text-slate-400 transition-opacity group-hover:text-slate-600' />
+				<GripVertical className='mt-0.5 size-4 flex-shrink-0 text-muted transition-opacity group-hover:text-muted' />
 
 				<div className='flex flex-1 items-start justify-between gap-2'>
 					<div className='flex items-center gap-2'>
 						<span
-							className='flex size-6 items-center justify-center rounded bg-slate-100 text-slate-600'
+							className='flex size-6 items-center justify-center rounded bg-thistle-800 text-thistle-200'
 							title={sourceLabels[source]}
 						>
 							{sourceIcons[source]}
 						</span>
-						<span className='text-xs font-bold text-slate-900'>{id}</span>
+						<span className='text-xs font-bold text-foreground'>{id}</span>
 					</div>
 
 					<span
@@ -831,7 +833,7 @@ function IssueCard({
 			</div>
 
 			{/* Title */}
-			<p className='mb-2 line-clamp-2 text-sm font-medium leading-snug text-slate-900'>{title}</p>
+			<p className='mb-2 line-clamp-2 text-sm font-medium leading-snug text-foreground'>{title}</p>
 
 			{/* Status & Labels */}
 			<div className='mb-2 flex flex-wrap items-center gap-1.5'>
@@ -843,7 +845,7 @@ function IssueCard({
 				{labels.slice(0, 2).map(label => (
 					<span
 						key={label}
-						className='rounded-md bg-slate-100 px-2 py-0.5 text-xs text-slate-700'
+						className='rounded-md bg-thistle-800 px-2 py-0.5 text-xs text-thistle-200'
 					>
 						{label}
 					</span>
@@ -851,15 +853,15 @@ function IssueCard({
 			</div>
 
 			{/* Assignee & Time */}
-			<div className='flex items-center justify-between border-t border-slate-200 pt-2'>
+			<div className='flex items-center justify-between border-t border-border pt-2'>
 				<div className='flex items-center gap-2'>
-					<div className='flex size-6 items-center justify-center rounded-full bg-indigo-600 text-xs font-semibold text-white'>
+					<div className='flex size-6 items-center justify-center rounded-full bg-light-sky-blue-500 text-xs font-semibold text-light-sky-blue-100'>
 						{assigneeAvatar}
 					</div>
-					<span className='text-xs text-slate-600'>{assignee.split(' ')[0]}</span>
+					<span className='text-xs text-muted'>{assignee.split(' ')[0]}</span>
 				</div>
 
-				<div className='flex items-center gap-3 text-xs text-slate-500'>
+				<div className='flex items-center gap-3 text-xs text-muted'>
 					<div className='flex items-center gap-1'>
 						<Timer className='size-4' />
 						<span>
@@ -880,8 +882,8 @@ function IssueCard({
 function InsightRow({ label, value }: { label: string; value: string }) {
 	return (
 		<div className='flex items-center justify-between py-1'>
-			<span className='text-xs text-slate-600'>{label}</span>
-			<span className='text-sm font-semibold text-slate-900'>{value}</span>
+			<span className='text-xs text-muted'>{label}</span>
+			<span className='text-sm font-semibold text-foreground'>{value}</span>
 		</div>
 	)
 }

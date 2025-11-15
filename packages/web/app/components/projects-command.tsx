@@ -115,10 +115,7 @@ export function ProjectsCommand({ value, onValueChange }: ProjectsCommandProps) 
 								onSelect={() => handleSelect('all')}
 							>
 								<Check
-									className={cn(
-										'mr-2 size-4',
-										selectedValue === 'all' ? 'opacity-100' : 'opacity-0'
-									)}
+									className={cn('size-4', selectedValue === 'all' ? 'opacity-100' : 'opacity-0')}
 								/>
 								All Projects
 							</CommandItem>
@@ -143,7 +140,7 @@ export function ProjectsCommand({ value, onValueChange }: ProjectsCommandProps) 
 									>
 										<Check
 											className={cn(
-												'mr-2 size-4',
+												'size-4',
 												selectedValue === project.id ? 'opacity-100' : 'opacity-0'
 											)}
 										/>

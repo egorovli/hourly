@@ -47,7 +47,9 @@ export function NavUser({ user }: NavUserProps) {
 									src={user.avatar}
 									alt={user.name}
 								/>
-								<AvatarFallback className='rounded-lg'>CN</AvatarFallback>
+								<AvatarFallback className='rounded-lg bg-light-sky-blue-700 text-light-sky-blue-100'>
+									CN
+								</AvatarFallback>
 							</Avatar>
 							<div className='grid flex-1 text-left text-sm leading-tight'>
 								<span className='truncate font-medium'>{user.name}</span>
@@ -69,7 +71,9 @@ export function NavUser({ user }: NavUserProps) {
 										src={user.avatar}
 										alt={user.name}
 									/>
-									<AvatarFallback className='rounded-lg'>CN</AvatarFallback>
+									<AvatarFallback className='rounded-lg bg-light-sky-blue-700 text-light-sky-blue-100'>
+										CN
+									</AvatarFallback>
 								</Avatar>
 								<div className='grid flex-1 text-left text-sm leading-tight'>
 									<span className='truncate font-medium'>{user.name}</span>

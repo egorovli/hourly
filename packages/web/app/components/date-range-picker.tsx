@@ -45,7 +45,7 @@ export function DateRangePicker({ dateRange, onDateRangeChange }: DateRangePicke
 					variant='outline'
 					className='h-10 w-full justify-start border-slate-300 bg-white text-left font-normal hover:bg-slate-50'
 				>
-					<CalendarIcon className='mr-2 size-4 text-slate-400' />
+					<CalendarIcon className='size-4 text-slate-400' />
 					{range?.from ? (
 						range.to ? (
 							<>
