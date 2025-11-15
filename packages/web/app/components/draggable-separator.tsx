@@ -2,6 +2,8 @@ import { useCallback, useRef } from 'react'
 
 import { GripVertical } from 'lucide-react'
 
+import { useDrag } from '~/contexts/drag-context.tsx'
+
 interface DraggableSeparatorProps {
 	onDrag: (offsetX: number) => void
 	orientation?: 'vertical' | 'horizontal'
@@ -16,6 +18,7 @@ export function DraggableSeparator({
 	const isDraggingRef = useRef(false)
 	const startXRef = useRef(0)
 	const currentXRef = useRef(0)
+	const { setIsDragging } = useDrag()
 
 	const handlePointerDown = useCallback(
 		(event: React.PointerEvent<HTMLDivElement>) => {
@@ -26,6 +29,7 @@ export function DraggableSeparator({
 			isDraggingRef.current = true
 			startXRef.current = event.clientX
 			currentXRef.current = event.clientX
+			setIsDragging(true)
 
 			const handlePointerMove = (e: PointerEvent) => {
 				if (!isDraggingRef.current) {
@@ -39,6 +43,7 @@ export function DraggableSeparator({
 
 			const handlePointerUp = () => {
 				isDraggingRef.current = false
+				setIsDragging(false)
 				document.removeEventListener('pointermove', handlePointerMove)
 				document.removeEventListener('pointerup', handlePointerUp)
 			}
@@ -46,7 +51,7 @@ export function DraggableSeparator({
 			document.addEventListener('pointermove', handlePointerMove)
 			document.addEventListener('pointerup', handlePointerUp)
 		},
-		[orientation, onDrag]
+		[orientation, onDrag, setIsDragging]
 	)
 
 	if (orientation === 'horizontal') {

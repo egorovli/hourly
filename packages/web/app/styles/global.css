@@ -104,4 +104,12 @@
 			font-optical-sizing: auto;
 		}
 	}
+
+	/* Prevent text selection during drag operations */
+	body.is-dragging,
+	body.is-dragging * {
+		user-select: none;
+		-webkit-user-select: none;
+		cursor: col-resize;
+	}
 }

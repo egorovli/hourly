@@ -17,6 +17,7 @@ import {
 
 import * as cookies from '~/lib/cookies/index.ts'
 import { cn } from '~/lib/util/index.ts'
+import { DragProvider } from '~/contexts/drag-context.tsx'
 
 import 'temporal-polyfill/global'
 // import 'react-big-calendar/lib/css/react-big-calendar.css'
@@ -97,9 +98,11 @@ export function Layout({ children }: LayoutProps): React.ReactNode {
 
 export default function App({ loaderData }: Route.ComponentProps): React.ReactNode {
 	return (
-		<div className='flex h-screen flex-col overflow-hidden'>
-			<Outlet />
-		</div>
+		<DragProvider>
+			<div className='flex h-screen flex-col overflow-hidden'>
+				<Outlet />
+			</div>
+		</DragProvider>
 	)
 }
 

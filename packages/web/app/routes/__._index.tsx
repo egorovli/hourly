@@ -32,7 +32,6 @@ import { Checkbox } from '~/components/shadcn/ui/checkbox.tsx'
 import { Input } from '~/components/shadcn/ui/input.tsx'
 import { Label } from '~/components/shadcn/ui/label.tsx'
 import { ScrollArea } from '~/components/shadcn/ui/scroll-area.tsx'
-import { Separator } from '~/components/shadcn/ui/separator.tsx'
 import { useHeaderActions } from '~/hooks/use-header-actions.tsx'
 
 import {
@@ -272,6 +271,7 @@ const mockUsers = [
 
 export default function POCRoute({ loaderData }: Route.ComponentProps) {
 	const [insightsOpen, setInsightsOpen] = useState(true)
+	const [unsavedChangesOpen, setUnsavedChangesOpen] = useState(true)
 	const [dateRange, setDateRange] = useState<DateRange | undefined>({
 		from: new Date(2024, 0, 1),
 		to: new Date(2024, 0, 7)
@@ -351,7 +351,8 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 				className='flex flex-col bg-white/95 backdrop-blur'
 				style={{ width: `${leftPanelWidth}px`, flexShrink: 0 }}
 			>
-				<ScrollArea className='h-full'>
+				{/* Scrollable Filters */}
+				<ScrollArea className='flex-1'>
 					<div className='space-y-6 p-4'>
 						{/* Date Range */}
 						<div className='space-y-2'>
@@ -402,96 +403,91 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 								))}
 							</div>
 						</div>
-
-						<Separator className='bg-slate-200' />
-
-						{/* Contributors */}
-						<div className='space-y-3'>
-							<Label className='text-sm font-medium text-slate-700'>
-								Contributors <span className='text-xs text-slate-500'>(from Projects + Date)</span>
-							</Label>
-							<div className='relative'>
-								<Search className='absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-slate-400' />
-								<Input
-									placeholder='Search contributors...'
-									className='h-9 border-slate-300 pl-9 text-sm'
-								/>
-							</div>
-							<div className='space-y-2'>
-								<div className='flex items-center justify-between rounded-lg p-2 text-sm hover:bg-slate-50'>
-									<span className='text-slate-700'>Alex Rivera</span>
-									<span className='text-xs text-slate-500'>24h</span>
-								</div>
-								<div className='flex items-center justify-between rounded-lg p-2 text-sm hover:bg-slate-50'>
-									<span className='text-slate-700'>Emma Thompson</span>
-									<span className='text-xs text-slate-500'>18h</span>
-								</div>
-							</div>
-						</div>
-
-						<Separator className='bg-slate-200' />
-
-						{/* Unsaved Changes */}
-						<div className='space-y-3 rounded-lg border border-slate-300 bg-white p-4 shadow-sm'>
-							{/* Header */}
-							<div className='flex items-center justify-between border-b border-slate-200 pb-3'>
-								<div className='space-y-0.5'>
-									<h3 className='text-sm font-semibold text-slate-900'>Unsaved Changes</h3>
-									<p className='text-xs text-slate-500'>Last sync: 5m ago</p>
-								</div>
-								<div className='rounded-md bg-slate-100 px-2 py-1'>
-									<span className='text-xs font-semibold text-slate-900'>12</span>
-								</div>
-							</div>
-
-							{/* Change Summary */}
-							<div className='space-y-2 text-xs'>
-								<div className='flex items-center justify-between'>
-									<div className='flex items-center gap-2'>
-										<Plus className='size-3.5 text-slate-400' />
-										<span className='text-slate-700'>New</span>
-									</div>
-									<span className='font-semibold text-slate-900'>3</span>
-								</div>
-
-								<div className='flex items-center justify-between'>
-									<div className='flex items-center gap-2'>
-										<Pencil className='size-3.5 text-slate-400' />
-										<span className='text-slate-700'>Modified</span>
-									</div>
-									<span className='font-semibold text-slate-900'>7</span>
-								</div>
-
-								<div className='flex items-center justify-between'>
-									<div className='flex items-center gap-2'>
-										<Trash2 className='size-3.5 text-slate-400' />
-										<span className='text-slate-700'>Deleted</span>
-									</div>
-									<span className='font-semibold text-slate-900'>2</span>
-								</div>
-							</div>
-
-							{/* Actions */}
-							<div className='space-y-2 border-t border-slate-200 pt-3'>
-								<Button
-									size='sm'
-									className='w-full bg-indigo-600 text-white hover:bg-indigo-500'
-								>
-									<RefreshCw className='mr-2 size-3.5' />
-									Sync to Jira
-								</Button>
-								<Button
-									variant='ghost'
-									size='sm'
-									className='w-full text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-								>
-									<X className='mr-2 size-3.5' />
-									Discard All
-								</Button>
-							</div>
-						</div>
 					</div>
 				</ScrollArea>
+
+				{/* Fixed Unsaved Changes at Bottom */}
+				<div className='shrink-0 border-t border-slate-200 p-4'>
+					<Collapsible
+						open={unsavedChangesOpen}
+						onOpenChange={setUnsavedChangesOpen}
+					>
+						<CollapsibleTrigger asChild>
+							<Button
+								variant='ghost'
+								className='w-full justify-between p-0 hover:bg-transparent'
+							>
+								<div className='flex items-center gap-2'>
+									<Clock className='size-4 text-indigo-600' />
+									<span className='text-sm font-semibold text-slate-900'>Unsaved Changes</span>
+									<div className='rounded-md bg-slate-100 px-2 py-1'>
+										<span className='text-xs font-semibold text-slate-900'>12</span>
+									</div>
+								</div>
+								<ChevronDown
+									className={`size-4 text-slate-500 transition-transform ${unsavedChangesOpen ? 'rotate-180' : ''}`}
+								/>
+							</Button>
+						</CollapsibleTrigger>
+						<CollapsibleContent className='mt-3'>
+							<div className='space-y-3 rounded-lg border border-slate-300 bg-white p-4 shadow-sm'>
+								{/* Header */}
+								<div className='flex items-center justify-between border-b border-slate-200 pb-3'>
+									<div className='space-y-0.5'>
+										<h3 className='text-sm font-semibold text-slate-900'>Changes Summary</h3>
+										<p className='text-xs text-slate-500'>Last sync: 5m ago</p>
+									</div>
+								</div>
+
+								{/* Change Summary */}
+								<div className='space-y-2 text-xs'>
+									<div className='flex items-center justify-between'>
+										<div className='flex items-center gap-2'>
+											<Plus className='size-3.5 text-slate-400' />
+											<span className='text-slate-700'>New</span>
+										</div>
+										<span className='font-semibold text-slate-900'>3</span>
+									</div>
+
+									<div className='flex items-center justify-between'>
+										<div className='flex items-center gap-2'>
+											<Pencil className='size-3.5 text-slate-400' />
+											<span className='text-slate-700'>Modified</span>
+										</div>
+										<span className='font-semibold text-slate-900'>7</span>
+									</div>
+
+									<div className='flex items-center justify-between'>
+										<div className='flex items-center gap-2'>
+											<Trash2 className='size-3.5 text-slate-400' />
+											<span className='text-slate-700'>Deleted</span>
+										</div>
+										<span className='font-semibold text-slate-900'>2</span>
+									</div>
+								</div>
+
+								{/* Actions */}
+								<div className='space-y-2 border-t border-slate-200 pt-3'>
+									<Button
+										size='sm'
+										className='w-full bg-indigo-600 text-white hover:bg-indigo-500'
+									>
+										<RefreshCw className='mr-2 size-3.5' />
+										Sync to Jira
+									</Button>
+									<Button
+										variant='ghost'
+										size='sm'
+										className='w-full text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+									>
+										<X className='mr-2 size-3.5' />
+										Discard All
+									</Button>
+								</div>
+							</div>
+						</CollapsibleContent>
+					</Collapsible>
+				</div>
 			</div>
 
 			{/* Left Separator */}
