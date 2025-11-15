@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 
 import { DateRangePicker } from '~/components/date-range-picker.tsx'
+import { DraggableSeparator } from '~/components/draggable-separator.tsx'
 import { ProjectsCommand } from '~/components/projects-command.tsx'
 import { Button } from '~/components/shadcn/ui/button.tsx'
 import { Checkbox } from '~/components/shadcn/ui/checkbox.tsx'
@@ -276,6 +277,8 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 		to: new Date(2024, 0, 7)
 	})
 	const [selectedProject, setSelectedProject] = useState('all')
+	const [leftPanelWidth, setLeftPanelWidth] = useState(240)
+	const [rightPanelWidth, setRightPanelWidth] = useState(260)
 	const { setActions } = useHeaderActions()
 
 	// Flatten all issues with section headers for virtualized list
@@ -333,10 +336,21 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 		}
 	}, [setActions])
 
+	const handleLeftSeparatorDrag = (deltaX: number) => {
+		setLeftPanelWidth(prev => Math.max(180, Math.min(400, prev + deltaX)))
+	}
+
+	const handleRightSeparatorDrag = (deltaX: number) => {
+		setRightPanelWidth(prev => Math.max(200, Math.min(500, prev - deltaX)))
+	}
+
 	return (
 		<div className='flex h-full flex-1 gap-0 overflow-hidden'>
 			{/* Left Filters Panel */}
-			<div className='flex flex-[0_1_240px] flex-col border-r border-slate-200 bg-white/95 backdrop-blur'>
+			<div
+				className='flex flex-col bg-white/95 backdrop-blur'
+				style={{ width: `${leftPanelWidth}px`, flexShrink: 0 }}
+			>
 				<ScrollArea className='h-full'>
 					<div className='space-y-6 p-4'>
 						{/* Date Range */}
@@ -480,8 +494,11 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 				</ScrollArea>
 			</div>
 
+			{/* Left Separator */}
+			<DraggableSeparator onDrag={handleLeftSeparatorDrag} />
+
 			{/* Center Calendar Area */}
-			<div className='flex flex-[1_1_0] flex-col overflow-hidden'>
+			<div className='flex flex-1 flex-col overflow-hidden'>
 				<div className='flex-1 overflow-auto'>
 					<div className='p-4'>
 						{/* Week Navigation */}
@@ -533,8 +550,14 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 				</div>
 			</div>
 
+			{/* Right Separator */}
+			<DraggableSeparator onDrag={handleRightSeparatorDrag} />
+
 			{/* Right Issues Sidebar */}
-			<div className='flex flex-[0_1_260px] flex-col border-l border-slate-200 bg-slate-50/80 backdrop-blur'>
+			<div
+				className='flex flex-col bg-slate-50/80 backdrop-blur'
+				style={{ width: `${rightPanelWidth}px`, flexShrink: 0 }}
+			>
 				{/* Search */}
 				<div className='shrink-0 border-b border-slate-200 p-4'>
 					<div className='mb-3 flex items-center justify-between'>
