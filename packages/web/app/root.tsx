@@ -17,13 +17,10 @@ import {
 
 import * as cookies from '~/lib/cookies/index.ts'
 import { cn } from '~/lib/util/index.ts'
-import { DragProvider } from '~/contexts/drag-context.tsx'
+import { DragProvider, useDrag } from '~/contexts/drag-context.tsx'
 
 import 'temporal-polyfill/global'
-// import 'react-big-calendar/lib/css/react-big-calendar.css'
-// import 'react-big-calendar/lib/addons/dragAndDrop/styles.css'
 import '~/styles/global.css'
-// import '~/styles/fonts/inter.css'
 
 export const links: Route.LinksFunction = () => []
 export const meta: Route.MetaFunction = () => []
@@ -96,13 +93,34 @@ export function Layout({ children }: LayoutProps): React.ReactNode {
 	)
 }
 
+interface AppProvidersProps {
+	children: React.ReactNode
+}
+
+function AppProviders({ children }: AppProvidersProps): React.ReactNode {
+	return <DragProvider>{children}</DragProvider>
+}
+
+function InnerApp(): React.ReactNode {
+	const { isDragging } = useDrag()
+
+	return (
+		<div
+			className={cn(
+				'flex h-screen flex-col overflow-hidden',
+				isDragging && 'select-none cursor-resize'
+			)}
+		>
+			<Outlet />
+		</div>
+	)
+}
+
 export default function App({ loaderData }: Route.ComponentProps): React.ReactNode {
 	return (
-		<DragProvider>
-			<div className='flex h-screen flex-col overflow-hidden'>
-				<Outlet />
-			</div>
-		</DragProvider>
+		<AppProviders>
+			<InnerApp />
+		</AppProviders>
 	)
 }
 

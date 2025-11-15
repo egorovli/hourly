@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useMemo, useState } from 'react'
 
 interface DragContextValue {
 	isDragging: boolean
@@ -12,22 +12,9 @@ const DragContext = createContext<DragContextValue | undefined>(undefined)
 export function DragProvider({ children }: { children: ReactNode }) {
 	const [isDragging, setIsDragging] = useState(false)
 
-	// Add/remove class to body to prevent text selection
-	useEffect(() => {
-		if (isDragging) {
-			document.body.classList.add('is-dragging')
-		} else {
-			document.body.classList.remove('is-dragging')
-		}
+	const value = useMemo<DragContextValue>(() => ({ isDragging, setIsDragging }), [isDragging])
 
-		return () => {
-			document.body.classList.remove('is-dragging')
-		}
-	}, [isDragging])
-
-	return (
-		<DragContext.Provider value={{ isDragging, setIsDragging }}>{children}</DragContext.Provider>
-	)
+	return <DragContext.Provider value={value}>{children}</DragContext.Provider>
 }
 
 export function useDrag() {

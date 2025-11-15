@@ -315,16 +315,12 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 			<>
 				<Button
 					variant='outline'
-					size='sm'
-					className='border-slate-300 hover:bg-slate-50'
+					className='h-9 border-slate-300 px-4 hover:bg-slate-50'
 				>
 					<Download className='mr-2 size-4' />
 					Export
 				</Button>
-				<Button
-					size='sm'
-					className='bg-indigo-600 text-white shadow-sm hover:bg-indigo-500'
-				>
+				<Button className='h-9 bg-indigo-600 px-4 text-white shadow-sm hover:bg-indigo-500'>
 					<Zap className='mr-2 size-4' />
 					Auto Reconcile
 				</Button>
@@ -345,10 +341,10 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 	}
 
 	return (
-		<div className='flex h-full flex-1 gap-0 overflow-hidden'>
+		<div className='flex h-full flex-1 overflow-hidden'>
 			{/* Left Filters Panel */}
 			<div
-				className='flex flex-col bg-white/95 backdrop-blur'
+				className='flex flex-col border-r border-slate-200 bg-white/95 shadow-sm backdrop-blur'
 				style={{ width: `${leftPanelWidth}px`, flexShrink: 0 }}
 			>
 				{/* Scrollable Filters */}
@@ -468,19 +464,15 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 
 								{/* Actions */}
 								<div className='space-y-2 border-t border-slate-200 pt-3'>
-									<Button
-										size='sm'
-										className='w-full bg-indigo-600 text-white hover:bg-indigo-500'
-									>
-										<RefreshCw className='mr-2 size-3.5' />
+									<Button className='h-9 w-full bg-indigo-600 text-white hover:bg-indigo-500'>
+										<RefreshCw className='mr-2 size-4' />
 										Sync to Jira
 									</Button>
 									<Button
 										variant='ghost'
-										size='sm'
-										className='w-full text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+										className='h-9 w-full text-slate-600 hover:bg-slate-100 hover:text-slate-900'
 									>
-										<X className='mr-2 size-3.5' />
+										<X className='mr-2 size-4' />
 										Discard All
 									</Button>
 								</div>
@@ -503,7 +495,7 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 								<Button
 									variant='outline'
 									size='icon'
-									className='size-8 border-slate-300 hover:bg-slate-50'
+									className='size-9 border-slate-300 hover:bg-slate-50'
 								>
 									<ChevronLeft className='size-4' />
 								</Button>
@@ -511,30 +503,25 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 								<Button
 									variant='outline'
 									size='icon'
-									className='size-8 border-slate-300 hover:bg-slate-50'
+									className='size-9 border-slate-300 hover:bg-slate-50'
 								>
 									<ChevronRight className='size-4' />
 								</Button>
 								<Button
 									variant='outline'
-									size='sm'
-									className='ml-2 border-slate-300 hover:bg-slate-50'
+									className='ml-2 h-9 border-slate-300 px-4 hover:bg-slate-50'
 								>
 									Today
 								</Button>
 							</div>
-							<div className='flex items-center gap-1 rounded-xl border border-slate-200 bg-white/80 p-1 shadow-sm backdrop-blur'>
+							<div className='flex items-center gap-1 rounded-lg border border-slate-200 bg-white/95 p-1 shadow-sm backdrop-blur'>
 								<Button
 									variant='ghost'
-									size='sm'
-									className='h-7 text-slate-700'
+									className='h-8 px-3 text-slate-700'
 								>
 									Month
 								</Button>
-								<Button
-									size='sm'
-									className='h-7 bg-indigo-600 text-white shadow-sm hover:bg-indigo-500'
-								>
+								<Button className='h-8 bg-indigo-600 px-3 text-white shadow-sm hover:bg-indigo-500'>
 									Week
 								</Button>
 							</div>
@@ -551,7 +538,7 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 
 			{/* Right Issues Sidebar */}
 			<div
-				className='flex flex-col bg-slate-50/80 backdrop-blur'
+				className='flex flex-col border-l border-slate-200 bg-slate-50/95 shadow-sm backdrop-blur'
 				style={{ width: `${rightPanelWidth}px`, flexShrink: 0 }}
 			>
 				{/* Search */}
@@ -585,7 +572,7 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 							}
 
 							return (
-								<div className='px-4 pb-2'>
+								<div className='px-4 pb-3'>
 									<IssueCard
 										id={item.id}
 										title={item.title}
@@ -634,7 +621,7 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 							</Button>
 						</CollapsibleTrigger>
 						<CollapsibleContent className='mt-3'>
-							<div className='space-y-2 rounded-xl border border-slate-200 bg-white/80 p-3 shadow-sm backdrop-blur'>
+							<div className='space-y-2 rounded-lg border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur'>
 								<InsightRow
 									label='Total hours (Week)'
 									value='38h'
@@ -757,9 +744,9 @@ function EventBlock({
 				<Button
 					variant='ghost'
 					size='icon'
-					className='size-5 opacity-0 transition-opacity group-hover:opacity-100'
+					className='size-6 opacity-0 transition-opacity group-hover:opacity-100'
 				>
-					<MoreVertical className='size-3' />
+					<MoreVertical className='size-4' />
 				</Button>
 			</div>
 		</div>
@@ -793,9 +780,9 @@ function IssueCard({
 	labels: string[]
 }) {
 	const sourceIcons = {
-		calendar: <CalendarDays className='size-3' />,
-		commit: <GitCommit className='size-3' />,
-		jira: <RefreshCw className='size-3' />
+		calendar: <CalendarDays className='size-4' />,
+		commit: <GitCommit className='size-4' />,
+		jira: <RefreshCw className='size-4' />
 	}
 
 	const sourceLabels = {
@@ -827,7 +814,7 @@ function IssueCard({
 				<div className='flex flex-1 items-start justify-between gap-2'>
 					<div className='flex items-center gap-2'>
 						<span
-							className='flex size-5 items-center justify-center rounded bg-slate-100 text-slate-600'
+							className='flex size-6 items-center justify-center rounded bg-slate-100 text-slate-600'
 							title={sourceLabels[source]}
 						>
 							{sourceIcons[source]}
@@ -866,7 +853,7 @@ function IssueCard({
 			{/* Assignee & Time */}
 			<div className='flex items-center justify-between border-t border-slate-200 pt-2'>
 				<div className='flex items-center gap-2'>
-					<div className='flex size-5 items-center justify-center rounded-full bg-indigo-600 text-xs font-semibold text-white'>
+					<div className='flex size-6 items-center justify-center rounded-full bg-indigo-600 text-xs font-semibold text-white'>
 						{assigneeAvatar}
 					</div>
 					<span className='text-xs text-slate-600'>{assignee.split(' ')[0]}</span>
@@ -874,13 +861,13 @@ function IssueCard({
 
 				<div className='flex items-center gap-3 text-xs text-slate-500'>
 					<div className='flex items-center gap-1'>
-						<Timer className='size-3' />
+						<Timer className='size-4' />
 						<span>
 							{logged}/{estimated}
 						</span>
 					</div>
 					<div className='flex items-center gap-1'>
-						<Clock className='size-3' />
+						<Clock className='size-4' />
 						<span>{updated}</span>
 					</div>
 				</div>
