@@ -450,16 +450,39 @@ const mockUserOptions: NestedFilterOption[] = [
 const defaultProjectSelection = ['PROJ-142', 'PROJ-138']
 const defaultUserSelection = ['john-anderson', 'sarah-mitchell']
 
-// Solid color mappings - Pastel palette accents
-const eventColorTokens = {
-	indigo: 'border-light-sky-blue-500 bg-light-sky-blue-800 text-light-sky-blue-100',
-	slate: 'border-thistle-500 bg-thistle-800 text-thistle-100',
-	emerald: 'border-uranian-blue-500 bg-uranian-blue-800 text-uranian-blue-100',
-	amber: 'border-fairy-tale-500 bg-fairy-tale-800 text-fairy-tale-100',
-	rose: 'border-carnation-pink-500 bg-carnation-pink-800 text-carnation-pink-100'
+// Soft pastel color mappings - Using CSS variables directly (they're hex values)
+const eventColorStyles: Record<
+	string,
+	{ backgroundColor: string; borderColor: string; color: string }
+> = {
+	indigo: {
+		backgroundColor: 'var(--color-light-sky-blue-700)',
+		borderColor: 'var(--color-light-sky-blue-400)',
+		color: 'var(--color-light-sky-blue-100)'
+	},
+	slate: {
+		backgroundColor: 'var(--color-thistle-700)',
+		borderColor: 'var(--color-thistle-400)',
+		color: 'var(--color-thistle-100)'
+	},
+	emerald: {
+		backgroundColor: 'var(--color-uranian-blue-700)',
+		borderColor: 'var(--color-uranian-blue-400)',
+		color: 'var(--color-uranian-blue-100)'
+	},
+	amber: {
+		backgroundColor: 'var(--color-fairy-tale-700)',
+		borderColor: 'var(--color-fairy-tale-400)',
+		color: 'var(--color-fairy-tale-100)'
+	},
+	rose: {
+		backgroundColor: 'var(--color-carnation-pink-700)',
+		borderColor: 'var(--color-carnation-pink-400)',
+		color: 'var(--color-carnation-pink-100)'
+	}
 }
 
-type ColorKey = keyof typeof eventColorTokens
+type ColorKey = keyof typeof eventColorStyles
 
 // Mock users data
 export default function CalendarPage({ loaderData }: Route.ComponentProps) {
@@ -513,9 +536,22 @@ export default function CalendarPage({ loaderData }: Route.ComponentProps) {
 
 	// Custom event style getter
 	const eventStyleGetter = useCallback((event: CalendarEvent) => {
-		const colorClass = eventColorTokens[event.color as ColorKey]
+		const colorKey = event.color as ColorKey
+		const colorStyle = eventColorStyles[colorKey] ??
+			eventColorStyles['indigo'] ?? {
+				backgroundColor: '#c8e4ff',
+				borderColor: '#50aaff',
+				color: '#002b54'
+			}
 		return {
-			className: `worklog-calendar__event ${colorClass}`
+			className: 'worklog-calendar__event',
+			style: {
+				backgroundColor: colorStyle.backgroundColor,
+				borderColor: colorStyle.borderColor,
+				color: colorStyle.color,
+				borderWidth: '1px',
+				borderStyle: 'solid'
+			}
 		}
 	}, [])
 

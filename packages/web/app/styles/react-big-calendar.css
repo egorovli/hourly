@@ -301,19 +301,22 @@ button.rbc-input::-moz-focus-inner {
 .worklog-calendar__event.rbc-event {
 	border-radius: 0.75rem;
 	box-shadow:
-		0 10px 25px -15px hsl(var(--foreground) / 0.45),
-		0 8px 16px -12px hsl(var(--foreground) / 0.35);
+		0 10px 25px -15px hsl(var(--foreground) / 0.35),
+		0 8px 16px -12px hsl(var(--foreground) / 0.25);
 	padding: 0.5rem 0.65rem;
 	transition:
 		box-shadow 0.2s ease,
 		transform 0.2s ease;
+	/* Soft pastel appearance - ensure colors blend smoothly */
+	opacity: 0.95;
 }
 
 .worklog-calendar__event.rbc-event:hover {
 	box-shadow:
-		0 15px 30px -15px hsl(var(--foreground) / 0.55),
-		0 12px 20px -12px hsl(var(--foreground) / 0.4);
+		0 15px 30px -15px hsl(var(--foreground) / 0.4),
+		0 12px 20px -12px hsl(var(--foreground) / 0.3);
 	transform: translateY(-1px);
+	opacity: 1;
 }
 
 .worklog-calendar__event.rbc-event .rbc-event-content {
@@ -641,6 +644,29 @@ button.rbc-input::-moz-focus-inner {
 	box-shadow: inset 1px 0 0 hsl(var(--border) / 0.35);
 }
 
+/* Subtle grid lines - vertical between day columns */
+.worklog-calendar .rbc-time-content > .rbc-day-slot {
+	border-right: 1px solid hsl(var(--border) / 0.5);
+}
+
+.worklog-calendar .rbc-time-content > .rbc-day-slot:last-child {
+	border-right: none;
+}
+
+/* Subtle grid lines - horizontal between time slots */
+.worklog-calendar .rbc-day-slot .rbc-time-slot {
+	border-top: 1px solid hsl(var(--border) / 0.4);
+}
+
+.worklog-calendar .rbc-day-slot .rbc-time-slot:first-child {
+	border-top: none;
+}
+
+/* Ensure grid lines are visible in time header */
+.worklog-calendar .rbc-time-header-content .rbc-header + .rbc-header {
+	border-left: 1px solid hsl(var(--border) / 0.5);
+}
+
 /* ============================================
    Time Slots
    ============================================ */
@@ -656,7 +682,7 @@ button.rbc-input::-moz-focus-inner {
 
 /* biome-ignore lint/style/noDescendingSpecificity: Intentional override order following upstream styles */
 .rbc-timeslot-group {
-	border-bottom: 1px solid hsl(var(--border) / 0.18);
+	border-bottom: 1px solid hsl(var(--border) / 0.25);
 	min-height: 40px;
 	display: flex;
 	font-size: 14px;
@@ -669,8 +695,9 @@ button.rbc-input::-moz-focus-inner {
 	padding-left: 4px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Intentional override order following upstream styles */
 .worklog-calendar .rbc-time-slot {
-	border-top: 1px solid hsl(var(--border) / 0.3);
+	border-top: 1px solid hsl(var(--border) / 0.2);
 }
 
 .rbc-time-slot,
@@ -680,7 +707,7 @@ button.rbc-input::-moz-focus-inner {
 }
 
 .worklog-calendar .rbc-timeslot-group {
-	border-bottom: 1px solid hsl(var(--border) / 0.35);
+	border-bottom: 1px solid hsl(var(--border) / 0.25);
 }
 
 .worklog-calendar .rbc-time-gutter .rbc-time-slot {
