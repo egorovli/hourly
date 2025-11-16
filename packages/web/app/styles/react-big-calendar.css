@@ -304,19 +304,29 @@ button.rbc-input::-moz-focus-inner {
 		0 10px 25px -15px hsl(var(--foreground) / 0.35),
 		0 8px 16px -12px hsl(var(--foreground) / 0.25);
 	padding: 0.5rem 0.65rem;
-	transition:
-		box-shadow 0.2s ease,
-		transform 0.2s ease;
+	/* Motion handles transform transitions, but keep box-shadow transition */
+	transition: box-shadow 0.2s ease;
 	/* Soft pastel appearance - ensure colors blend smoothly */
 	opacity: 0.95;
+	/* Optimize for animations */
+	will-change: transform;
 }
 
+/* Motion handles hover animations via whileHover prop */
 .worklog-calendar__event.rbc-event:hover {
+	/* Motion's whileHover handles transform and scale */
+}
+
+/* Enhanced drag state styling - react-big-calendar adds classes during drag */
+.worklog-calendar__event.rbc-event.rbc-selected,
+.worklog-calendar__event.rbc-event:active {
+	z-index: 10;
 	box-shadow:
-		0 15px 30px -15px hsl(var(--foreground) / 0.4),
-		0 12px 20px -12px hsl(var(--foreground) / 0.3);
-	transform: translateY(-1px);
-	opacity: 1;
+		0 15px 30px -10px hsl(var(--foreground) / 0.5),
+		0 12px 20px -8px hsl(var(--foreground) / 0.4);
+	transition:
+		box-shadow 0.15s ease,
+		transform 0.15s ease;
 }
 
 .worklog-calendar__event.rbc-event .rbc-event-content {

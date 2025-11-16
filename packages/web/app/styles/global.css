@@ -4,7 +4,7 @@
 
 @import "./shadcn.css";
 @import "./react-big-calendar.css";
-@import "./fonts/inter.css";
+@import "./inter.css";
 
 @plugin "@tailwindcss/forms" {
 	strategy: "class";

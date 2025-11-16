@@ -1,4 +1,4 @@
-import type { Event } from 'react-big-calendar'
+import type { Event, EventProps } from 'react-big-calendar'
 import type { DateRange } from 'react-day-picker'
 import type { NestedFilterOption } from '~/components/filter-multi-select.tsx'
 import type { Route } from './+types/__._index.ts'
@@ -36,7 +36,6 @@ import { Button } from '~/components/shadcn/ui/button.tsx'
 import { Input } from '~/components/shadcn/ui/input.tsx'
 import { Label } from '~/components/shadcn/ui/label.tsx'
 import { useHeaderActions } from '~/hooks/use-header-actions.tsx'
-// import { DragAndDropCalendar } from '~/lib/calendar/drag-and-drop-calendar.client.tsx'
 
 import {
 	Collapsible,
@@ -484,6 +483,16 @@ const eventColorStyles: Record<
 
 type ColorKey = keyof typeof eventColorStyles
 
+// Custom event component - renders the content inside the event rectangle
+function EventComponent({ event }: EventProps<CalendarEvent>) {
+	return (
+		<div className='flex flex-col h-full'>
+			<div className='text-xs font-semibold leading-tight truncate'>{event.title}</div>
+			<div className='text-xs font-bold leading-tight truncate'>{event.project}</div>
+		</div>
+	)
+}
+
 // Mock users data
 export default function CalendarPage({ loaderData }: Route.ComponentProps) {
 	const [insightsOpen, setInsightsOpen] = useState(true)
@@ -553,16 +562,6 @@ export default function CalendarPage({ loaderData }: Route.ComponentProps) {
 				borderStyle: 'solid'
 			}
 		}
-	}, [])
-
-	// Custom event component
-	const EventComponent = useCallback(({ event }: { event: CalendarEvent }) => {
-		return (
-			<div className='flex flex-col h-full'>
-				<div className='text-xs font-semibold leading-tight truncate'>{event.title}</div>
-				<div className='text-xs font-bold leading-tight truncate'>{event.project}</div>
-			</div>
-		)
 	}, [])
 
 	// Navigation handlers
@@ -762,7 +761,7 @@ export default function CalendarPage({ loaderData }: Route.ComponentProps) {
 						<div className='flex-1 overflow-hidden'>
 							<div className='worklog-calendar h-full'>
 								{renderCalendar && (
-									<Suspense fallback={<div>Loading component...</div>}>
+									<Suspense fallback={null}>
 										<DragAndDropCalendar
 											localizer={localizer}
 											events={events}
