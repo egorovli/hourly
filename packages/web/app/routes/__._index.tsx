@@ -1,9 +1,9 @@
+import type { Event } from 'react-big-calendar'
 import type { DateRange } from 'react-day-picker'
 import type { NestedFilterOption } from '~/components/filter-multi-select.tsx'
 import type { Route } from './+types/__._index.ts'
-import type { Event } from 'react-big-calendar'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { luxonLocalizer } from 'react-big-calendar'
 
 import { DateTime } from 'luxon'
@@ -36,7 +36,7 @@ import { Button } from '~/components/shadcn/ui/button.tsx'
 import { Input } from '~/components/shadcn/ui/input.tsx'
 import { Label } from '~/components/shadcn/ui/label.tsx'
 import { useHeaderActions } from '~/hooks/use-header-actions.tsx'
-import { DragAndDropCalendar } from '~/lib/calendar/drag-and-drop-calendar.client.tsx'
+// import { DragAndDropCalendar } from '~/lib/calendar/drag-and-drop-calendar.client.tsx'
 
 import {
 	Collapsible,
@@ -44,14 +44,11 @@ import {
 	CollapsibleTrigger
 } from '~/components/shadcn/ui/collapsible.tsx'
 
-// Define event interface
-interface CalendarEvent extends Event {
-	id: number
-	title: string
-	project: string
-	color: string
-	isDraggable: boolean
-}
+const DragAndDropCalendar = lazy(() =>
+	import('~/lib/calendar/drag-and-drop-calendar.client.tsx').then(m => ({
+		default: m.DragAndDropCalendar<CalendarEvent>
+	}))
+)
 
 // Setup react-big-calendar with Luxon localizer
 const localizer = luxonLocalizer(DateTime, { firstDayOfWeek: 1 })
@@ -71,6 +68,14 @@ const formats = {
 const createEventDate = (day: number, hour: number, minute = 0): Date => {
 	// Using January 2024 as base (0-indexed month)
 	return new Date(2024, 0, day, hour, minute)
+}
+
+interface CalendarEvent extends Event {
+	id: number
+	title: string
+	project: string
+	color: string
+	isDraggable: boolean
 }
 
 // Mock data with proper Date objects for react-big-calendar
@@ -457,7 +462,7 @@ const eventColorTokens = {
 type ColorKey = keyof typeof eventColorTokens
 
 // Mock users data
-export default function POCRoute({ loaderData }: Route.ComponentProps) {
+export default function CalendarPage({ loaderData }: Route.ComponentProps) {
 	const [insightsOpen, setInsightsOpen] = useState(true)
 	const [filtersOpen, setFiltersOpen] = useState(true)
 	const [unsavedChangesOpen, setUnsavedChangesOpen] = useState(false)
@@ -475,8 +480,13 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 	const { setActions } = useHeaderActions()
 
 	// Calendar state
+	const [renderCalendar, setRenderCalendar] = useState(false)
 	const [events, setEvents] = useState<CalendarEvent[]>(mockEvents)
 	const [currentDate, setCurrentDate] = useState(new Date(2024, 0, 1))
+
+	useEffect(() => {
+		setRenderCalendar(true)
+	}, [])
 
 	// Drag and drop handlers
 	const handleEventDrop = useCallback(
@@ -715,32 +725,36 @@ export default function POCRoute({ loaderData }: Route.ComponentProps) {
 
 						<div className='flex-1 overflow-hidden'>
 							<div className='worklog-calendar h-full'>
-								<DragAndDropCalendar
-									localizer={localizer}
-									events={events}
-									startAccessor='start'
-									endAccessor='end'
-									date={currentDate}
-									onNavigate={setCurrentDate}
-									view='week'
-									views={['week']}
-									defaultView='week'
-									step={60}
-									timeslots={1}
-									min={new Date(2024, 0, 1, 9, 0)}
-									max={new Date(2024, 0, 1, 18, 0)}
-									formats={formats}
-									onEventDrop={handleEventDrop}
-									onEventResize={handleEventResize}
-									draggableAccessor={(event: CalendarEvent) => event.isDraggable}
-									resizable
-									eventPropGetter={eventStyleGetter}
-									components={{
-										event: EventComponent
-									}}
-									toolbar={false}
-									style={{ height: '100%' }}
-								/>
+								{renderCalendar && (
+									<Suspense fallback={<div>Loading component...</div>}>
+										<DragAndDropCalendar
+											localizer={localizer}
+											events={events}
+											startAccessor='start'
+											endAccessor='end'
+											date={currentDate}
+											onNavigate={setCurrentDate}
+											view='week'
+											views={['week']}
+											defaultView='week'
+											step={60}
+											timeslots={1}
+											min={new Date(2024, 0, 1, 9, 0)}
+											max={new Date(2024, 0, 1, 18, 0)}
+											formats={formats}
+											onEventDrop={handleEventDrop}
+											onEventResize={handleEventResize}
+											draggableAccessor={(event: CalendarEvent) => event.isDraggable}
+											resizable
+											eventPropGetter={eventStyleGetter}
+											components={{
+												event: EventComponent
+											}}
+											toolbar={false}
+											style={{ height: '100%' }}
+										/>
+									</Suspense>
+								)}
 							</div>
 						</div>
 					</div>
