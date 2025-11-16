@@ -188,6 +188,15 @@ button.rbc-input::-moz-focus-inner {
 	transition: all 0.15s ease;
 }
 
+/* Ensure day separators are visible in week view header */
+.worklog-calendar .rbc-time-header .rbc-header {
+	border-right: 1px solid hsl(var(--border) / 0.6);
+}
+
+.worklog-calendar .rbc-time-header .rbc-header:last-child {
+	border-right: none;
+}
+
 .rbc-header:hover {
 	background: hsl(var(--muted) / 0.05);
 	color: hsl(var(--muted-foreground));
@@ -327,6 +336,29 @@ button.rbc-input::-moz-focus-inner {
 	transition:
 		box-shadow 0.15s ease,
 		transform 0.15s ease;
+}
+
+/* Hide only the original event being resized/dragged to prevent duplicate overlap */
+/* We add .worklog-calendar__event--resizing class via JavaScript when resize starts */
+.worklog-calendar .worklog-calendar__event--resizing {
+	opacity: 0;
+	pointer-events: none;
+	visibility: hidden;
+}
+
+/* Also handle react-big-calendar's built-in classes if they exist */
+.worklog-calendar .rbc-addons-dnd-dragged-event,
+.worklog-calendar .rbc-addons-dnd-dragging-event {
+	opacity: 0;
+	pointer-events: none;
+	visibility: hidden;
+}
+
+/* Ensure drag preview is visible during resize/drag */
+.worklog-calendar .rbc-addons-dnd-drag-preview.rbc-event {
+	opacity: 1;
+	z-index: 20;
+	pointer-events: none;
 }
 
 .worklog-calendar__event.rbc-event .rbc-event-content {
@@ -609,6 +641,11 @@ button.rbc-input::-moz-focus-inner {
 	border-left: 1px solid hsl(var(--border) / 0.2);
 }
 
+/* Override for worklog calendar - use border-right for day separators */
+.worklog-calendar .rbc-time-header-cell + .rbc-time-header-cell {
+	border-left: none;
+}
+
 .rbc-time-content {
 	display: flex;
 	flex: 1 0 0%;
@@ -641,8 +678,13 @@ button.rbc-input::-moz-focus-inner {
 	flex: none;
 }
 
+/* Disable default border-left for worklog calendar - we use border-right instead */
 .rbc-time-content > * + * > * {
 	border-left: 1px solid hsl(var(--border) / 0.2);
+}
+
+.worklog-calendar .rbc-time-content > * + * > * {
+	border-left: none;
 }
 
 .rbc-time-content > .rbc-day-slot {
@@ -650,31 +692,35 @@ button.rbc-input::-moz-focus-inner {
 	user-select: none;
 }
 
-.worklog-calendar .rbc-time-content > .rbc-day-slot + .rbc-day-slot {
-	box-shadow: inset 1px 0 0 hsl(var(--border) / 0.35);
-}
-
-/* Subtle grid lines - vertical between day columns */
+/* ============================================
+   Grid Lines - Day Separators (Vertical)
+   ============================================ */
+/* Vertical grid lines between day columns in week view */
 .worklog-calendar .rbc-time-content > .rbc-day-slot {
-	border-right: 1px solid hsl(var(--border) / 0.5);
+	border-right: 1px solid hsl(var(--border) / 0.6);
+	position: relative;
 }
 
 .worklog-calendar .rbc-time-content > .rbc-day-slot:last-child {
 	border-right: none;
 }
 
-/* Subtle grid lines - horizontal between time slots */
-.worklog-calendar .rbc-day-slot .rbc-time-slot {
-	border-top: 1px solid hsl(var(--border) / 0.4);
+/* Also add borders to day slots within time column */
+.worklog-calendar .rbc-time-column > .rbc-day-slot {
+	border-right: 1px solid hsl(var(--border) / 0.6);
 }
 
-.worklog-calendar .rbc-day-slot .rbc-time-slot:first-child {
-	border-top: none;
+.worklog-calendar .rbc-time-column > .rbc-day-slot:last-child {
+	border-right: none;
 }
 
 /* Ensure grid lines are visible in time header */
-.worklog-calendar .rbc-time-header-content .rbc-header + .rbc-header {
-	border-left: 1px solid hsl(var(--border) / 0.5);
+.worklog-calendar .rbc-time-header-content .rbc-header {
+	border-right: 1px solid hsl(var(--border) / 0.6);
+}
+
+.worklog-calendar .rbc-time-header-content .rbc-header:last-child {
+	border-right: none;
 }
 
 /* ============================================
@@ -705,23 +751,36 @@ button.rbc-input::-moz-focus-inner {
 	padding-left: 4px;
 }
 
-/* biome-ignore lint/style/noDescendingSpecificity: Intentional override order following upstream styles */
-.worklog-calendar .rbc-time-slot {
-	border-top: 1px solid hsl(var(--border) / 0.2);
+/* ============================================
+   Grid Lines - Time Separators (Horizontal)
+   ============================================ */
+/* Horizontal grid lines between time slots */
+.worklog-calendar .rbc-day-slot .rbc-time-slot {
+	border-top: 1px solid hsl(var(--border) / 0.5);
+}
+
+.worklog-calendar .rbc-day-slot .rbc-time-slot:first-child {
+	border-top: none;
+}
+
+/* Also style timeslot groups for consistent horizontal lines */
+.worklog-calendar .rbc-timeslot-group {
+	border-bottom: 1px solid hsl(var(--border) / 0.5);
+}
+
+/* Ensure time gutter also has horizontal lines */
+.worklog-calendar .rbc-time-gutter .rbc-time-slot {
+	border-top: 1px solid hsl(var(--border) / 0.5);
+}
+
+.worklog-calendar .rbc-time-gutter .rbc-time-slot:first-child {
+	border-top: none;
 }
 
 .rbc-time-slot,
 /* biome-ignore lint/style/noDescendingSpecificity: Intentional override order following upstream styles */
 	.rbc-timeslot-group {
 	border-color: hsl(var(--border) / 0.3);
-}
-
-.worklog-calendar .rbc-timeslot-group {
-	border-bottom: 1px solid hsl(var(--border) / 0.25);
-}
-
-.worklog-calendar .rbc-time-gutter .rbc-time-slot {
-	border-color: hsl(var(--border) / 0.18);
 }
 
 .worklog-calendar .rbc-day-slot .rbc-time-slot:nth-of-type(2n) {

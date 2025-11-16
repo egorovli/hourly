@@ -3,11 +3,13 @@ import type { DateRange } from 'react-day-picker'
 import type { NestedFilterOption } from '~/components/filter-multi-select.tsx'
 import type { Route } from './+types/__._index.ts'
 
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { luxonLocalizer } from 'react-big-calendar'
 
 import { DateTime } from 'luxon'
 import { Virtuoso } from 'react-virtuoso'
+import { nanoid } from 'nanoid'
+import { Temporal } from 'temporal-polyfill'
 
 import {
 	CalendarDays,
@@ -35,6 +37,7 @@ import { FilterMultiSelect } from '~/components/filter-multi-select.tsx'
 import { Button } from '~/components/shadcn/ui/button.tsx'
 import { Input } from '~/components/shadcn/ui/input.tsx'
 import { Label } from '~/components/shadcn/ui/label.tsx'
+import { useDrag } from '~/contexts/drag-context.tsx'
 import { useHeaderActions } from '~/hooks/use-header-actions.tsx'
 
 import {
@@ -42,6 +45,7 @@ import {
 	CollapsibleContent,
 	CollapsibleTrigger
 } from '~/components/shadcn/ui/collapsible.tsx'
+import { cn } from '~/lib/util/cn.ts'
 
 const DragAndDropCalendar = lazy(() =>
 	import('~/lib/calendar/drag-and-drop-calendar.client.tsx').then(m => ({
@@ -70,7 +74,7 @@ const createEventDate = (day: number, hour: number, minute = 0): Date => {
 }
 
 interface CalendarEvent extends Event {
-	id: number
+	id: string
 	title: string
 	project: string
 	color: string
@@ -80,7 +84,7 @@ interface CalendarEvent extends Event {
 // Mock data with proper Date objects for react-big-calendar
 const mockEvents: CalendarEvent[] = [
 	{
-		id: 1,
+		id: '1',
 		title: 'API Development',
 		project: 'PROJ-142',
 		start: createEventDate(1, 9, 0),
@@ -89,7 +93,7 @@ const mockEvents: CalendarEvent[] = [
 		isDraggable: true
 	},
 	{
-		id: 2,
+		id: '2',
 		title: 'UI Design',
 		project: 'PROJ-138',
 		start: createEventDate(2, 9, 0),
@@ -98,7 +102,7 @@ const mockEvents: CalendarEvent[] = [
 		isDraggable: true
 	},
 	{
-		id: 3,
+		id: '3',
 		title: 'API Development',
 		project: 'PROJ-142',
 		start: createEventDate(1, 10, 0),
@@ -107,7 +111,7 @@ const mockEvents: CalendarEvent[] = [
 		isDraggable: true
 	},
 	{
-		id: 4,
+		id: '4',
 		title: 'API Development',
 		project: 'PROJ-142',
 		start: createEventDate(3, 10, 0),
@@ -116,7 +120,7 @@ const mockEvents: CalendarEvent[] = [
 		isDraggable: true
 	},
 	{
-		id: 5,
+		id: '5',
 		title: 'Testing',
 		project: 'PROJ-156',
 		start: createEventDate(4, 10, 0),
@@ -125,7 +129,7 @@ const mockEvents: CalendarEvent[] = [
 		isDraggable: true
 	},
 	{
-		id: 6,
+		id: '6',
 		title: 'Code Review',
 		project: 'PROJ-149',
 		start: createEventDate(1, 11, 0),
@@ -134,7 +138,7 @@ const mockEvents: CalendarEvent[] = [
 		isDraggable: true
 	},
 	{
-		id: 7,
+		id: '7',
 		title: 'Code Review',
 		project: 'PROJ-149',
 		start: createEventDate(2, 11, 0),
@@ -143,7 +147,7 @@ const mockEvents: CalendarEvent[] = [
 		isDraggable: true
 	},
 	{
-		id: 8,
+		id: '8',
 		title: 'API Development',
 		project: 'PROJ-142',
 		start: createEventDate(1, 13, 0),
@@ -152,7 +156,7 @@ const mockEvents: CalendarEvent[] = [
 		isDraggable: true
 	},
 	{
-		id: 9,
+		id: '9',
 		title: 'API Development',
 		project: 'PROJ-142',
 		start: createEventDate(2, 13, 0),
@@ -161,7 +165,7 @@ const mockEvents: CalendarEvent[] = [
 		isDraggable: true
 	},
 	{
-		id: 10,
+		id: '10',
 		title: 'UI Design',
 		project: 'PROJ-138',
 		start: createEventDate(3, 13, 0),
@@ -170,7 +174,7 @@ const mockEvents: CalendarEvent[] = [
 		isDraggable: true
 	},
 	{
-		id: 11,
+		id: '11',
 		title: 'Testing',
 		project: 'PROJ-156',
 		start: createEventDate(4, 13, 0),
@@ -179,7 +183,7 @@ const mockEvents: CalendarEvent[] = [
 		isDraggable: true
 	},
 	{
-		id: 12,
+		id: '12',
 		title: 'Meetings',
 		project: 'PROJ-151',
 		start: createEventDate(3, 14, 0),
@@ -188,7 +192,7 @@ const mockEvents: CalendarEvent[] = [
 		isDraggable: true
 	},
 	{
-		id: 13,
+		id: '13',
 		title: 'UI Design',
 		project: 'PROJ-138',
 		start: createEventDate(1, 15, 0),
@@ -483,6 +487,22 @@ const eventColorStyles: Record<
 
 type ColorKey = keyof typeof eventColorStyles
 
+// Map issue priority to event color
+function getIssueColor(priority: string): ColorKey {
+	switch (priority) {
+		case 'Critical':
+			return 'rose'
+		case 'High':
+			return 'amber'
+		case 'Medium':
+			return 'indigo'
+		case 'Low':
+			return 'slate'
+		default:
+			return 'indigo'
+	}
+}
+
 // Custom event component - renders the content inside the event rectangle
 function EventComponent({ event }: EventProps<CalendarEvent>) {
 	return (
@@ -510,11 +530,20 @@ export default function CalendarPage({ loaderData }: Route.ComponentProps) {
 		selectedUserIds.length === 0 ? 'All users' : `${selectedUserIds.length} users selected`
 	const [rightPanelWidth, setRightPanelWidth] = useState(260)
 	const { setActions } = useHeaderActions()
+	const { setIsDragging } = useDrag()
 
 	// Calendar state
 	const [renderCalendar, setRenderCalendar] = useState(false)
 	const [events, setEvents] = useState<CalendarEvent[]>(mockEvents)
 	const [currentDate, setCurrentDate] = useState(new Date(2024, 0, 1))
+	const [resizingEventId, setResizingEventId] = useState<string | null>(null)
+	const [draggedIssue, setDraggedIssue] = useState<{
+		id: string
+		title: string
+		project: string
+		color: string
+	} | null>(null)
+	const tempDragIdRef = useRef<string | null>(null)
 
 	useEffect(() => {
 		setRenderCalendar(true)
@@ -528,6 +557,7 @@ export default function CalendarPage({ loaderData }: Route.ComponentProps) {
 			setEvents(prev =>
 				prev.map(ev => (ev.id === event.id ? { ...ev, start: startDate, end: endDate } : ev))
 			)
+			setResizingEventId(null)
 		},
 		[]
 	)
@@ -539,30 +569,130 @@ export default function CalendarPage({ loaderData }: Route.ComponentProps) {
 			setEvents(prev =>
 				prev.map(ev => (ev.id === event.id ? { ...ev, start: startDate, end: endDate } : ev))
 			)
+			setResizingEventId(null)
 		},
 		[]
 	)
 
-	// Custom event style getter
-	const eventStyleGetter = useCallback((event: CalendarEvent) => {
-		const colorKey = event.color as ColorKey
-		const colorStyle = eventColorStyles[colorKey] ??
-			eventColorStyles['indigo'] ?? {
-				backgroundColor: '#c8e4ff',
-				borderColor: '#50aaff',
-				color: '#002b54'
-			}
-		return {
-			className: 'worklog-calendar__event',
-			style: {
-				backgroundColor: colorStyle.backgroundColor,
-				borderColor: colorStyle.borderColor,
-				color: colorStyle.color,
-				borderWidth: '1px',
-				borderStyle: 'solid'
-			}
-		}
+	const handleDragStart = useCallback(({ event }: { event: CalendarEvent }) => {
+		setResizingEventId(event.id)
 	}, [])
+
+	// Handle dropping issues from outside onto calendar
+	const handleDropFromOutside = useCallback(
+		({ start, end, allDay }: { start: string | Date; end: string | Date; allDay: boolean }) => {
+			if (!draggedIssue) {
+				return
+			}
+
+			const startDate = typeof start === 'string' ? new Date(start) : start
+
+			// Use Temporal API to calculate end time with 2-hour default duration
+			const startPlainDateTime = Temporal.PlainDateTime.from({
+				year: startDate.getFullYear(),
+				month: startDate.getMonth() + 1, // Temporal uses 1-based months
+				day: startDate.getDate(),
+				hour: startDate.getHours(),
+				minute: startDate.getMinutes(),
+				second: startDate.getSeconds(),
+				millisecond: startDate.getMilliseconds()
+			})
+
+			const defaultDuration = Temporal.Duration.from({ hours: 2 })
+			const endPlainDateTime = startPlainDateTime.add(defaultDuration)
+
+			// Convert back to Date object for react-big-calendar compatibility
+			const endDate = new Date(
+				endPlainDateTime.year,
+				endPlainDateTime.month - 1, // Date uses 0-based months
+				endPlainDateTime.day,
+				endPlainDateTime.hour,
+				endPlainDateTime.minute,
+				endPlainDateTime.second,
+				endPlainDateTime.millisecond
+			)
+
+			const newEvent: CalendarEvent = {
+				id: nanoid(),
+				title: draggedIssue.title,
+				project: draggedIssue.project,
+				start: startDate,
+				end: endDate,
+				color: draggedIssue.color,
+				isDraggable: true,
+				resource: undefined
+			}
+
+			setEvents(prev => [...prev, newEvent])
+			setDraggedIssue(null)
+			setIsDragging(false)
+			// Clear temp ID after drop
+			tempDragIdRef.current = null
+		},
+		[draggedIssue, setIsDragging]
+	)
+
+	// Handle drag over calendar to allow drop
+	const handleDragOver = useCallback((event: React.DragEvent) => {
+		event.preventDefault()
+	}, [])
+
+	useEffect(() => {
+		console.log(events)
+	}, [events])
+
+	// Generate drag preview event for react-big-calendar
+	const dragFromOutsideItem = useCallback((): CalendarEvent => {
+		if (!draggedIssue || !tempDragIdRef.current) {
+			// Return a dummy event if nothing is being dragged
+			return {
+				id: '',
+				title: '',
+				project: '',
+				start: new Date(),
+				end: new Date(),
+				color: 'indigo',
+				isDraggable: false,
+				resource: undefined
+			} as CalendarEvent
+		}
+
+		return {
+			id: tempDragIdRef.current,
+			title: draggedIssue.title,
+			project: draggedIssue.project,
+			start: new Date(),
+			end: new Date(),
+			color: draggedIssue.color,
+			isDraggable: true,
+			resource: undefined
+		} as CalendarEvent
+	}, [draggedIssue])
+
+	// Custom event style getter
+	const eventStyleGetter = useCallback(
+		(event: CalendarEvent) => {
+			const colorKey = event.color as ColorKey
+			const colorStyle = eventColorStyles[colorKey] ??
+				eventColorStyles['indigo'] ?? {
+					backgroundColor: '#c8e4ff',
+					borderColor: '#50aaff',
+					color: '#002b54'
+				}
+			const isResizing = resizingEventId === event.id
+			return {
+				className: `worklog-calendar__event ${isResizing ? 'worklog-calendar__event--resizing' : ''}`,
+				style: {
+					backgroundColor: colorStyle.backgroundColor,
+					borderColor: colorStyle.borderColor,
+					color: colorStyle.color,
+					borderWidth: '1px',
+					borderStyle: 'solid'
+				}
+			}
+		},
+		[resizingEventId]
+	)
 
 	// Navigation handlers
 	const handleNavigate = useCallback(
@@ -657,7 +787,7 @@ export default function CalendarPage({ loaderData }: Route.ComponentProps) {
 						open={filtersOpen}
 						onOpenChange={setFiltersOpen}
 					>
-						<div className='rounded-xl border border-border bg-white/95 p-4 shadow-sm backdrop-blur'>
+						<div className='rounded-xl border border-border bg-white/95 p-4 shadow-xs backdrop-blur'>
 							<CollapsibleTrigger asChild>
 								<Button
 									variant='ghost'
@@ -729,7 +859,7 @@ export default function CalendarPage({ loaderData }: Route.ComponentProps) {
 					{/* Calendar Stack */}
 					<div className='flex flex-1 flex-col gap-4 overflow-hidden'>
 						{/* Week Navigation */}
-						<div className='flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-white/95 px-4 py-3 shadow-sm backdrop-blur'>
+						<div className='flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-white/95 px-4 py-3 shadow-xs backdrop-blur'>
 							<div className='flex flex-wrap items-center gap-2'>
 								<Button
 									variant='outline'
@@ -758,7 +888,7 @@ export default function CalendarPage({ loaderData }: Route.ComponentProps) {
 							</div>
 						</div>
 
-						<div className='flex-1 overflow-hidden'>
+						<div className='flex-1 //overflow-hidden'>
 							<div className='worklog-calendar h-full'>
 								{renderCalendar && (
 									<Suspense fallback={null}>
@@ -779,6 +909,10 @@ export default function CalendarPage({ loaderData }: Route.ComponentProps) {
 											formats={formats}
 											onEventDrop={handleEventDrop}
 											onEventResize={handleEventResize}
+											onDragStart={handleDragStart}
+											onDropFromOutside={handleDropFromOutside}
+											onDragOver={handleDragOver}
+											dragFromOutsideItem={dragFromOutsideItem}
 											draggableAccessor={(event: CalendarEvent) => event.isDraggable}
 											resizable
 											eventPropGetter={eventStyleGetter}
@@ -837,7 +971,7 @@ export default function CalendarPage({ loaderData }: Route.ComponentProps) {
 							</CollapsibleTrigger>
 							<CollapsibleContent className='mt-4 border-t border-border pt-4'>
 								<div className='grid gap-4 md:grid-cols-[2fr_1fr]'>
-									<div className='space-y-3 rounded-lg border border-border bg-white/95 p-4 shadow-sm'>
+									<div className='space-y-3 rounded-lg border border-border bg-white/95 p-4 shadow-xs'>
 										<div className='flex items-center justify-between border-b border-border pb-3'>
 											<div>
 												<h3 className='text-sm font-semibold text-foreground'>Changes Summary</h3>
@@ -941,6 +1075,26 @@ export default function CalendarPage({ loaderData }: Route.ComponentProps) {
 										updated={item.updated}
 										source={item.source}
 										labels={item.labels}
+										onDragStart={() => {
+											// Generate temp ID for this drag operation
+											tempDragIdRef.current = nanoid()
+											setDraggedIssue({
+												id: item.id,
+												title: item.title,
+												project: item.id,
+												color: getIssueColor(item.priority)
+											})
+										}}
+										onDragEnd={() => {
+											// Reset if not dropped on calendar
+											setTimeout(() => {
+												if (draggedIssue?.id === item.id) {
+													setDraggedIssue(null)
+													setIsDragging(false)
+													tempDragIdRef.current = null
+												}
+											}, 100)
+										}}
 									/>
 								</div>
 							)
@@ -977,7 +1131,7 @@ export default function CalendarPage({ loaderData }: Route.ComponentProps) {
 							</Button>
 						</CollapsibleTrigger>
 						<CollapsibleContent className='mt-3'>
-							<div className='space-y-2 rounded-lg border border-border bg-white/95 p-3 shadow-sm backdrop-blur'>
+							<div className='space-y-2 rounded-lg border border-border bg-white/95 p-3 shadow-xs backdrop-blur'>
 								<InsightRow
 									label='Total hours (Week)'
 									value='38h'
@@ -1011,7 +1165,9 @@ function IssueCard({
 	logged,
 	updated,
 	source,
-	labels
+	labels,
+	onDragStart,
+	onDragEnd
 }: {
 	id: string
 	title: string
@@ -1024,7 +1180,29 @@ function IssueCard({
 	updated: string
 	source: 'calendar' | 'commit' | 'jira'
 	labels: string[]
+	onDragStart: () => void
+	onDragEnd: () => void
 }) {
+	const { setIsDragging } = useDrag()
+	const [isDraggingLocal, setIsDraggingLocal] = useState(false)
+
+	const handleHTML5DragStart = useCallback(
+		(e: React.DragEvent) => {
+			setIsDragging(true)
+			setIsDraggingLocal(true)
+			onDragStart()
+			e.dataTransfer.effectAllowed = 'move'
+			e.dataTransfer.setData('text/plain', id)
+		},
+		[id, onDragStart, setIsDragging]
+	)
+
+	const handleHTML5DragEnd = useCallback(() => {
+		setIsDragging(false)
+		setIsDraggingLocal(false)
+		onDragEnd()
+	}, [onDragEnd, setIsDragging])
+
 	const sourceIcons = {
 		calendar: <CalendarDays className='size-4' />,
 		commit: <GitCommit className='size-4' />,
@@ -1048,11 +1226,20 @@ function IssueCard({
 		'To Do': 'text-thistle-200 bg-thistle-800',
 		'In Progress': 'text-light-sky-blue-200 bg-light-sky-blue-700',
 		'In Review': 'text-fairy-tale-200 bg-fairy-tale-700',
-		Done: 'text-uranian-blue-200 bg-uranian-blue-700'
+		'Done': 'text-uranian-blue-200 bg-uranian-blue-700'
 	}
 
 	return (
-		<div className='group cursor-grab rounded-lg border border-border bg-white p-3 shadow-sm transition-all hover:border-light-sky-blue-400 hover:shadow-md active:cursor-grabbing'>
+		// biome-ignore lint/a11y/noStaticElementInteractions: Draggable div for HTML5 drag and drop
+		<div
+			draggable
+			onDragStart={handleHTML5DragStart}
+			onDragEnd={handleHTML5DragEnd}
+			className={cn(
+				'group cursor-grab rounded-lg border border-border bg-white p-3 shadow-xs duration-200 transition-all hover:border-light-sky-blue-400 hover:shadow-md //active:cursor-grabbing',
+				isDraggingLocal && 'scale-102 z-50 cursor-grabbing shadow-sm opacity-25'
+			)}
+		>
 			{/* Header Row */}
 			<div className='mb-2 flex items-start gap-2'>
 				<GripVertical className='mt-0.5 size-4 shrink-0 text-muted transition-opacity group-hover:text-muted' />
@@ -1065,7 +1252,7 @@ function IssueCard({
 						>
 							{sourceIcons[source]}
 						</span>
-						<span className='text-xs font-bold text-foreground'>{id}</span>
+						<span className='text-xs font-medium text-foreground'>{id}</span>
 					</div>
 
 					<span
@@ -1077,7 +1264,7 @@ function IssueCard({
 			</div>
 
 			{/* Title */}
-			<p className='mb-2 line-clamp-2 text-sm font-medium leading-snug text-foreground'>{title}</p>
+			<p className='mb-2 line-clamp-2 text-sm leading-snug text-foreground'>{title}</p>
 
 			{/* Status & Labels */}
 			<div className='mb-2 flex flex-wrap items-center gap-1.5'>
@@ -1099,7 +1286,7 @@ function IssueCard({
 			{/* Assignee & Time */}
 			<div className='flex items-center justify-between border-t border-border pt-2'>
 				<div className='flex items-center gap-2'>
-					<div className='flex size-6 items-center justify-center rounded-full bg-light-sky-blue-500 text-xs font-semibold text-light-sky-blue-100'>
+					<div className='flex size-6 items-center justify-center rounded-full bg-light-sky-blue-500 text-xs font-medium text-light-sky-blue-100'>
 						{assigneeAvatar}
 					</div>
 					<span className='text-xs text-muted'>{assignee.split(' ')[0]}</span>
@@ -1127,7 +1314,7 @@ function InsightRow({ label, value }: { label: string; value: string }) {
 	return (
 		<div className='flex items-center justify-between py-1'>
 			<span className='text-xs text-muted'>{label}</span>
-			<span className='text-sm font-semibold text-foreground'>{value}</span>
+			<span className='text-sm font-medium text-foreground'>{value}</span>
 		</div>
 	)
 }
