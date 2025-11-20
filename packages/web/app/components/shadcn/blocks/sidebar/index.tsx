@@ -1,8 +1,32 @@
 import type { LucideIcon } from 'lucide-react'
 import type { SessionUser } from '~/lib/session/storage.ts'
 
-import { BarChart3, CalendarIcon, Clock, FolderKanban, TimerIcon } from 'lucide-react'
+import {
+	BadgeCheck,
+	BarChart3,
+	Bell,
+	CalendarIcon,
+	ChevronsUpDown,
+	Clock,
+	CreditCard,
+	FolderKanban,
+	LogOut,
+	Sparkles,
+	TimerIcon
+} from 'lucide-react'
 import { Link, NavLink, useMatch, useResolvedPath } from 'react-router'
+
+import { Avatar, AvatarFallback, AvatarImage } from '~/components/shadcn/ui/avatar.tsx'
+
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuGroup,
+	DropdownMenuItem,
+	DropdownMenuLabel,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger
+} from '~/components/shadcn/ui/dropdown-menu.tsx'
 
 import {
 	Sidebar,
@@ -11,10 +35,9 @@ import {
 	SidebarHeader,
 	SidebarMenu,
 	SidebarMenuButton,
-	SidebarMenuItem
+	SidebarMenuItem,
+	useSidebar
 } from '~/components/shadcn/ui/sidebar.tsx'
-
-import { NavUser } from './user.tsx'
 
 type SidebarNavItem = {
 	to: string
@@ -95,10 +118,7 @@ export function AppSidebar({ sessionUser, ...props }: AppSidebarProps) {
 				</SidebarMenu>
 			</SidebarContent>
 			<SidebarFooter>
-				<NavUser
-					sessionUser={sessionUser}
-					user={user}
-				/>
+				<NavUser user={user} />
 			</SidebarFooter>
 		</Sidebar>
 	)
@@ -106,24 +126,113 @@ export function AppSidebar({ sessionUser, ...props }: AppSidebarProps) {
 
 function SidebarNavLink({ icon: Icon, label, to, end }: SidebarNavItem) {
 	const resolvedPath = useResolvedPath(to)
-	const shouldMatchExact = end ?? false
-	const match = useMatch({ path: resolvedPath.pathname, end: shouldMatchExact })
-	const isActive = Boolean(match)
+	const match = useMatch({ path: resolvedPath.pathname, end: end ?? false })
 
 	return (
 		<SidebarMenuItem>
 			<SidebarMenuButton
 				asChild
-				isActive={isActive}
+				isActive={Boolean(match)}
 			>
 				<NavLink
 					to={to}
-					end={shouldMatchExact}
+					end={end ?? false}
 				>
 					<Icon />
 					<span>{label}</span>
 				</NavLink>
 			</SidebarMenuButton>
 		</SidebarMenuItem>
+	)
+}
+
+function NavUser({ user }: { user: { name: string; email: string; avatar: string } }) {
+	const { isMobile } = useSidebar()
+	const initials = user.name
+		.split(' ')
+		.map(n => n[0])
+		.join('')
+		.toUpperCase()
+		.slice(0, 2)
+
+	return (
+		<SidebarMenu>
+			<SidebarMenuItem>
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<SidebarMenuButton
+							size='lg'
+							className='data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground'
+						>
+							<Avatar className='h-8 w-8 rounded-lg'>
+								<AvatarImage
+									src={user.avatar}
+									alt={user.name}
+								/>
+								<AvatarFallback className='rounded-lg bg-light-sky-blue-700 text-light-sky-blue-100'>
+									{initials}
+								</AvatarFallback>
+							</Avatar>
+							<div className='grid flex-1 text-left text-sm leading-tight'>
+								<span className='truncate font-medium'>{user.name}</span>
+								<span className='truncate text-xs'>{user.email}</span>
+							</div>
+							<ChevronsUpDown className='ml-auto size-4' />
+						</SidebarMenuButton>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent
+						className='w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg'
+						side={isMobile ? 'bottom' : 'right'}
+						align='end'
+						sideOffset={4}
+					>
+						<DropdownMenuLabel className='p-0 font-normal'>
+							<div className='flex items-center gap-2 px-1 py-1.5 text-left text-sm'>
+								<Avatar className='h-8 w-8 rounded-lg'>
+									<AvatarImage
+										src={user.avatar}
+										alt={user.name}
+									/>
+									<AvatarFallback className='rounded-lg bg-light-sky-blue-700 text-light-sky-blue-100'>
+										{initials}
+									</AvatarFallback>
+								</Avatar>
+								<div className='grid flex-1 text-left text-sm leading-tight'>
+									<span className='truncate font-medium'>{user.name}</span>
+									<span className='truncate text-xs'>{user.email}</span>
+								</div>
+							</div>
+						</DropdownMenuLabel>
+						<DropdownMenuSeparator />
+						<DropdownMenuGroup>
+							<DropdownMenuItem>
+								<Sparkles />
+								Upgrade to Pro
+							</DropdownMenuItem>
+						</DropdownMenuGroup>
+						<DropdownMenuSeparator />
+						<DropdownMenuGroup>
+							<DropdownMenuItem>
+								<BadgeCheck />
+								Account
+							</DropdownMenuItem>
+							<DropdownMenuItem>
+								<CreditCard />
+								Billing
+							</DropdownMenuItem>
+							<DropdownMenuItem>
+								<Bell />
+								Notifications
+							</DropdownMenuItem>
+						</DropdownMenuGroup>
+						<DropdownMenuSeparator />
+						<DropdownMenuItem>
+							<LogOut />
+							Log out
+						</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
+			</SidebarMenuItem>
+		</SidebarMenu>
 	)
 }
