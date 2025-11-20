@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { RiCalendarLine, RiDeleteBinLine } from '@remixicon/react'
 import { format, isBefore } from 'date-fns'
 
@@ -56,13 +56,13 @@ export function EventDialog({ event, isOpen, onClose, onSave, onDelete }: EventD
 	const [startDateOpen, setStartDateOpen] = useState(false)
 	const [endDateOpen, setEndDateOpen] = useState(false)
 
-	const formatTimeForInput = (date: Date): string => {
+	const formatTimeForInput = useCallback((date: Date): string => {
 		const hours = date.getHours().toString().padStart(2, '0')
 		const minutes = Math.floor(date.getMinutes() / 15) * 15
 		return `${hours}:${minutes.toString().padStart(2, '0')}`
-	}
+	}, [])
 
-	const resetForm = () => {
+	const resetForm = useCallback(() => {
 		setTitle('')
 		setDescription('')
 		setStartDate(new Date())
@@ -73,7 +73,7 @@ export function EventDialog({ event, isOpen, onClose, onSave, onDelete }: EventD
 		setLocation('')
 		setColor('sky')
 		setError(undefined)
-	}
+	}, [])
 
 	useEffect(() => {
 		if (event) {
@@ -94,13 +94,11 @@ export function EventDialog({ event, isOpen, onClose, onSave, onDelete }: EventD
 		} else {
 			resetForm()
 		}
-		// formatTimeForInput and resetForm are stable functions, no need to include in deps
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [event])
+	}, [event, formatTimeForInput, resetForm])
 
 	// Memoize time options so they're only calculated once
 	const timeOptions = useMemo(() => {
-		const options = []
+		const options: Array<{ value: string; label: string }> = []
 		for (let hour = StartHour; hour <= EndHour; hour++) {
 			for (let minute = 0; minute < 60; minute += 15) {
 				const formattedHour = hour.toString().padStart(2, '0')

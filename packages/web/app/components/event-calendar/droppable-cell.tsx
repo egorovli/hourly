@@ -38,10 +38,24 @@ export function DroppableCell({
 					.padStart(2, '0')}`
 			: null
 
+	const handleKeyDown = onClick
+		? (event: React.KeyboardEvent) => {
+				if (event.key === 'Enter' || event.key === ' ') {
+					event.preventDefault()
+					onClick()
+				}
+			}
+		: undefined
+
 	return (
 		<div
 			ref={setNodeRef}
-			onClick={onClick}
+			{...(onClick && {
+				onClick,
+				onKeyDown: handleKeyDown,
+				role: 'button',
+				tabIndex: 0
+			})}
 			className={cn(
 				'flex h-full flex-col overflow-hidden px-0.5 py-1 data-dragging:bg-accent sm:px-1',
 				className

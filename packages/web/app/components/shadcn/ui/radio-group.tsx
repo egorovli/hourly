@@ -36,7 +36,9 @@ function RadioGroupItem({
 					viewBox='0 0 6 6'
 					fill='currentcolor'
 					xmlns='http://www.w3.org/2000/svg'
+					aria-hidden='true'
 				>
+					<title>Selected</title>
 					<circle
 						cx='3'
 						cy='3'

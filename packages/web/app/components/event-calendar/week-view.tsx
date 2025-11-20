@@ -313,8 +313,8 @@ export function WeekView({ currentDate, events, onEventSelect, onEventCreate }: 
 					>
 						{/* Positioned events */}
 						{(processedDayEvents[dayIndex] ?? []).map(positionedEvent => (
-							// biome-ignore lint/a11y/noStaticElementInteractions: <explanation>
-							// biome-ignore lint/a11y/useKeyWithClickEvents: <explanation>
+							// biome-ignore lint/a11y/noStaticElementInteractions: drag and drop handled by dnd-kit
+							// biome-ignore lint/a11y/useKeyWithClickEvents: drag and drop handled by dnd-kit
 							<div
 								key={positionedEvent.event.id}
 								className='absolute z-10 px-0.5'

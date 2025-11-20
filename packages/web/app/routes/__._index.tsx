@@ -1,6 +1,6 @@
 import type { Route } from './+types/__._index.ts'
 
-import Component from '~/components/comp-542.tsx'
+import { Component } from '~/components/comp-542.tsx'
 
 export default function CalendarPage({ loaderData }: Route.ComponentProps) {
 	return (

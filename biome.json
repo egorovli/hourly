@@ -21,6 +21,7 @@
 			"!docs/**/*",
 			"!packages/web/.react-router/**/*",
 			"!packages/web/.old/**/*",
+			"!packages/web/.old2/**/*",
 			"!packages/web/build/**/*",
 			"!packages/web/app/.old/**/*",
 			"!packages/api/.old.src/**/*"

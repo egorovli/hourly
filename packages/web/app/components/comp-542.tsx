@@ -129,7 +129,7 @@ const sampleEvents: CalendarEvent[] = [
 	}
 ]
 
-export default function Component() {
+export function Component() {
 	const [events, setEvents] = useState<CalendarEvent[]>(sampleEvents)
 
 	const handleEventAdd = (event: CalendarEvent) => {

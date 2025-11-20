@@ -66,8 +66,6 @@
 }
 
 /* Semantic colors that reference theme variables */
-@theme inline {
-}
 
 @layer base {
 	* {

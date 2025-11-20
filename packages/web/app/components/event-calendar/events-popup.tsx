@@ -50,6 +50,13 @@ export function EventsPopup({ date, events, position, onClose, onEventSelect }: 
 		onClose()
 	}
 
+	const handleEventKeyDown = (event: React.KeyboardEvent, calendarEvent: CalendarEvent) => {
+		if (event.key === 'Enter' || event.key === ' ') {
+			event.preventDefault()
+			handleEventClick(calendarEvent)
+		}
+	}
+
 	// Adjust position to ensure popup stays within viewport
 	const adjustedPosition = useMemo(() => {
 		const positionCopy = { ...position }
@@ -86,6 +93,7 @@ export function EventsPopup({ date, events, position, onClose, onEventSelect }: 
 			<div className='sticky top-0 flex items-center justify-between border-b bg-background p-3'>
 				<h3 className='font-medium'>{format(date, 'd MMMM yyyy')}</h3>
 				<button
+					type='button'
 					onClick={onClose}
 					className='rounded-full p-1 hover:bg-muted'
 					aria-label='Close'
@@ -105,10 +113,12 @@ export function EventsPopup({ date, events, position, onClose, onEventSelect }: 
 						const isLastDay = isSameDay(date, eventEnd)
 
 						return (
-							<div
+							<button
 								key={event.id}
-								className='cursor-pointer'
+								type='button'
+								className='w-full cursor-pointer text-left'
 								onClick={() => handleEventClick(event)}
+								onKeyDown={e => handleEventKeyDown(e, event)}
 							>
 								<EventItem
 									event={event}
@@ -116,7 +126,7 @@ export function EventsPopup({ date, events, position, onClose, onEventSelect }: 
 									isFirstDay={isFirstDay}
 									isLastDay={isLastDay}
 								/>
-							</div>
+							</button>
 						)
 					})
 				)}
