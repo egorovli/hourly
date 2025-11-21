@@ -18,8 +18,6 @@ import {
 	startOfWeek
 } from 'date-fns'
 
-import { DraggableEvent } from './draggable-event.tsx'
-import { DroppableCell } from './droppable-cell.tsx'
 import { EventItem } from './event-item.tsx'
 import { useCurrentTimeIndicator } from './hooks/use-current-time-indicator.ts'
 import { EndHour, StartHour, WeekCellsHeight } from './constants.ts'
@@ -28,8 +26,6 @@ import { cn, isMultiDayEvent } from './utils.ts'
 interface WeekViewProps {
 	currentDate: Date
 	events: CalendarEvent[]
-	onEventSelect: (event: CalendarEvent) => void
-	onEventCreate: (startTime: Date) => void
 }
 
 interface PositionedEvent {
@@ -41,7 +37,7 @@ interface PositionedEvent {
 	zIndex: number
 }
 
-export function WeekView({ currentDate, events, onEventSelect, onEventCreate }: WeekViewProps) {
+export function WeekView({ currentDate, events }: WeekViewProps) {
 	const days = useMemo(() => {
 		const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 })
 		const weekEnd = endOfWeek(currentDate, { weekStartsOn: 0 })
@@ -194,11 +190,6 @@ export function WeekView({ currentDate, events, onEventSelect, onEventCreate }: 
 		return result
 	}, [days, events])
 
-	const handleEventClick = (event: CalendarEvent, e: React.MouseEvent) => {
-		e.stopPropagation()
-		onEventSelect(event)
-	}
-
 	const showAllDaySection = allDayEvents.length > 0
 	const { currentTimePosition, currentTimeVisible } = useCurrentTimeIndicator(currentDate, 'week')
 
@@ -266,9 +257,8 @@ export function WeekView({ currentDate, events, onEventSelect, onEventCreate }: 
 										return (
 											<EventItem
 												key={`spanning-${event.id}`}
-												onClick={e => handleEventClick(event, e)}
 												event={event}
-												view='month'
+												view='week'
 												isFirstDay={isFirstDay}
 												isLastDay={isLastDay}
 											>
@@ -313,8 +303,6 @@ export function WeekView({ currentDate, events, onEventSelect, onEventCreate }: 
 					>
 						{/* Positioned events */}
 						{(processedDayEvents[dayIndex] ?? []).map(positionedEvent => (
-							// biome-ignore lint/a11y/noStaticElementInteractions: drag and drop handled by dnd-kit
-							// biome-ignore lint/a11y/useKeyWithClickEvents: drag and drop handled by dnd-kit
 							<div
 								key={positionedEvent.event.id}
 								className='absolute z-10 px-0.5'
@@ -325,15 +313,12 @@ export function WeekView({ currentDate, events, onEventSelect, onEventCreate }: 
 									width: `${positionedEvent.width * 100}%`,
 									zIndex: positionedEvent.zIndex
 								}}
-								onClick={e => e.stopPropagation()}
 							>
 								<div className='size-full'>
-									<DraggableEvent
+									<EventItem
 										event={positionedEvent.event}
 										view='week'
-										onClick={e => handleEventClick(positionedEvent.event, e)}
 										showTime
-										height={positionedEvent.height}
 									/>
 								</div>
 							</div>
@@ -351,41 +336,12 @@ export function WeekView({ currentDate, events, onEventSelect, onEventCreate }: 
 								</div>
 							</div>
 						)}
-						{hours.map(hour => {
-							const hourValue = getHours(hour)
-							return (
-								<div
-									key={hour.toString()}
-									className='relative min-h-[var(--week-cells-height)] border-b border-border/70 last:border-b-0'
-								>
-									{/* Quarter-hour intervals */}
-									{[0, 1, 2, 3].map(quarter => {
-										const quarterHourTime = hourValue + quarter * 0.25
-										return (
-											<DroppableCell
-												key={`${hour.toString()}-${quarter}`}
-												id={`week-cell-${day.toISOString()}-${quarterHourTime}`}
-												date={day}
-												time={quarterHourTime}
-												className={cn(
-													'absolute h-[calc(var(--week-cells-height)/4)] w-full',
-													quarter === 0 && 'top-0',
-													quarter === 1 && 'top-[calc(var(--week-cells-height)/4)]',
-													quarter === 2 && 'top-[calc(var(--week-cells-height)/4*2)]',
-													quarter === 3 && 'top-[calc(var(--week-cells-height)/4*3)]'
-												)}
-												onClick={() => {
-													const startTime = new Date(day)
-													startTime.setHours(hourValue)
-													startTime.setMinutes(quarter * 15)
-													onEventCreate(startTime)
-												}}
-											/>
-										)
-									})}
-								</div>
-							)
-						})}
+						{hours.map(hour => (
+							<div
+								key={hour.toString()}
+								className='relative min-h-[var(--week-cells-height)] border-b border-border/70 last:border-b-0'
+							/>
+						))}
 					</div>
 				))}
 			</div>
