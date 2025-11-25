@@ -1,12 +1,13 @@
 import type { Route } from './+types/__._index.ts'
 import type { Route as ParentRoute } from './+types/__.ts'
+import type { JiraProject } from '~/lib/atlassian/client.ts'
+import type { ProjectOption, ProjectOptionGroup } from '~/components/project-multi-select.tsx'
 
 import { useEffect, useState, lazy, Suspense, useMemo } from 'react'
 import { useRouteLoaderData } from 'react-router'
 
 import { DebugPanel } from '~/components/debug-panel.tsx'
-import { ProjectMultiSelect, type ProjectOption } from '~/components/project-multi-select.tsx'
-import type { JiraProject } from '~/lib/atlassian/client.ts'
+import { ProjectMultiSelect } from '~/components/project-multi-select.tsx'
 
 const Calendar = lazy(() =>
 	import('~/components/calendar/index.tsx').then(m => ({ default: m.Calendar }))
@@ -48,6 +49,22 @@ function groupProjectsByCategory(projects: JiraProject[]): {
 		}
 	}
 
+	// Sort archived projects to the end within each category
+	for (const [categoryId, categoryProjects] of projectsByCategory.entries()) {
+		categoryProjects.sort((a, b) => {
+			const aArchived = a.archived === true ? 1 : 0
+			const bArchived = b.archived === true ? 1 : 0
+			return aArchived - bArchived
+		})
+	}
+
+	// Sort uncategorized projects: archived at the end
+	uncategorizedProjects.sort((a, b) => {
+		const aArchived = a.archived === true ? 1 : 0
+		const bArchived = b.archived === true ? 1 : 0
+		return aArchived - bArchived
+	})
+
 	return { categorized: projectsByCategory, uncategorized: uncategorizedProjects }
 }
 
@@ -56,7 +73,7 @@ function buildResourceOption(
 	resourceName: string,
 	resourceAvatarUrl: string | undefined,
 	projects: JiraProject[]
-): ProjectOption | undefined {
+): ProjectOptionGroup | undefined {
 	if (projects.length === 0) {
 		return undefined
 	}
@@ -71,13 +88,16 @@ function buildResourceOption(
 			continue
 		}
 
-		const categoryOption: ProjectOption = {
-			value: `category:${categoryId}:${resourceId}`,
+		const categoryOption: ProjectOptionGroup = {
+			id: `category:${categoryId}:${resourceId}`,
 			label: firstProject.projectCategory.name,
 			children: categoryProjects.map(project => ({
+				id: `project:${project.id}:${resourceId}`,
 				value: `project:${project.id}:${resourceId}`,
 				label: project.name,
-				avatarUrl: getProjectAvatarUrl(project)
+				key: project.key,
+				avatarUrl: getProjectAvatarUrl(project),
+				archived: project.archived
 			}))
 		}
 
@@ -87,9 +107,12 @@ function buildResourceOption(
 	// Add uncategorized projects directly under resource
 	for (const project of uncategorized) {
 		children.push({
+			id: `project:${project.id}:${resourceId}`,
 			value: `project:${project.id}:${resourceId}`,
 			label: project.name,
-			avatarUrl: getProjectAvatarUrl(project)
+			key: project.key,
+			avatarUrl: getProjectAvatarUrl(project),
+			archived: project.archived
 		})
 	}
 
@@ -98,7 +121,7 @@ function buildResourceOption(
 	}
 
 	return {
-		value: `resource:${resourceId}`,
+		id: `resource:${resourceId}`,
 		label: resourceName,
 		avatarUrl: resourceAvatarUrl,
 		children

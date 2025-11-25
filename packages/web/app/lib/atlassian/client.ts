@@ -44,6 +44,7 @@ export interface JiraProject {
 	id: string
 	key: string
 	name: string
+	archived?: boolean
 	avatarUrls?: {
 		'48x48'?: string
 		'32x32'?: string
