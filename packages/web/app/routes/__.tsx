@@ -61,7 +61,7 @@ export let loader = withRequestContext(async function loader({ request }: Route.
 
 	// Check if session exists
 	if (!cookieSession || !cookieSession.id) {
-		// redirectToSignIn()
+		redirectToSignIn()
 	}
 
 	// Check if session has worklog target profile connection
@@ -71,7 +71,7 @@ export let loader = withRequestContext(async function loader({ request }: Route.
 	})
 
 	if (!worklogTargetConnection) {
-		// redirectToSignIn()
+		redirectToSignIn()
 	}
 
 	return {

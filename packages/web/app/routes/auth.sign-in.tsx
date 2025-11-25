@@ -110,10 +110,10 @@ export default function SignInPage(): ReactNode {
 			: undefined
 
 	return (
-		<main className='relative isolate min-h-dvh overflow-hidden bg-gradient-to-br from-slate-50 via-white to-slate-100'>
+		<main className='relative isolate min-h-dvh overflow-hidden bg-linear-to-br from-slate-50 via-white to-slate-100'>
 			<div className='pointer-events-none absolute inset-0 overflow-hidden'>
 				<div className='absolute -left-32 top-16 h-96 w-96 rounded-full bg-indigo-100 blur-3xl' />
-				<div className='absolute -bottom-24 right-0 h-[28rem] w-[28rem] rounded-full bg-slate-200/60 blur-3xl' />
+				<div className='absolute -bottom-24 right-0 h-112 w-md rounded-full bg-slate-200/60 blur-3xl' />
 			</div>
 
 			<div className='relative mx-auto flex min-h-dvh w-full max-w-7xl flex-col gap-16 px-6 py-16 lg:flex-row lg:items-center lg:justify-between lg:py-24'>
@@ -186,7 +186,7 @@ export default function SignInPage(): ReactNode {
 										<button
 											id='provider-select'
 											type='button'
-											className='group flex w-full items-center justify-between gap-3 rounded-xl border border-slate-300 bg-white px-4 py-3 text-left shadow-sm transition-all duration-150 hover:border-slate-400 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500'
+											className='group flex w-full items-center justify-between gap-3 rounded-xl border border-slate-300 bg-white px-4 py-3 text-left shadow-sm transition-all duration-150 hover:border-slate-400 hover:bg-slate-50 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-indigo-500'
 										>
 											<div className='flex items-center gap-3'>
 												{selectedProvider ? (
@@ -209,7 +209,7 @@ export default function SignInPage(): ReactNode {
 													</>
 												) : null}
 											</div>
-											<ChevronDown className='h-4 w-4 flex-shrink-0 text-slate-400 transition-transform duration-150 group-data-[state=open]:rotate-180' />
+											<ChevronDown className='h-4 w-4 shrink-0 text-slate-400 transition-transform duration-150 group-data-[state=open]:rotate-180' />
 										</button>
 									</PopoverTrigger>
 									<PopoverContent className='w-[--radix-popover-trigger-width] border-slate-200 p-1.5 shadow-lg'>
@@ -247,7 +247,7 @@ export default function SignInPage(): ReactNode {
 															</div>
 														</div>
 														{isSelected ? (
-															<Check className='h-4 w-4 flex-shrink-0 text-indigo-600' />
+															<Check className='h-4 w-4 shrink-0 text-indigo-600' />
 														) : null}
 													</button>
 												)
