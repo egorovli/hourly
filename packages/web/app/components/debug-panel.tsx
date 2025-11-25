@@ -2,10 +2,10 @@ import type * as React from 'react'
 
 import { ChevronDownIcon } from 'lucide-react'
 import { useState } from 'react'
-
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 
 import { cn } from '~/lib/util/index.ts'
+
 import {
 	Collapsible,
 	CollapsibleContent,
