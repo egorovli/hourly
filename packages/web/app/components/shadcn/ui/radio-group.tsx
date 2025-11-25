@@ -1,7 +1,7 @@
 import type * as React from 'react'
 import { RadioGroup as RadioGroupPrimitive } from 'radix-ui'
 
-import { cn } from '~/components/event-calendar/utils.ts'
+import { cn } from '~/lib/util/index.ts'
 
 function RadioGroup({
 	className,
