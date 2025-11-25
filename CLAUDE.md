@@ -1,4 +1,8 @@
-# CLAUDE.md (Concise)
+---
+description: When running package management commands (install, add, remove), executing scripts (dev, build, test), running build tools, or working with Node.js runtime commands. Apply when suggesting commands, setting up development environment, configuring build processes, or troubleshooting execution issues. Critical for ensuring compatibility with the Bun-based project setup.
+alwaysApply: false
+---
+
 
 Guidance for Claude Code when working in this repo.
 
