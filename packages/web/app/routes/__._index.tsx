@@ -2,6 +2,7 @@ import type { Route } from './+types/__._index.ts'
 import type { Route as ParentRoute } from './+types/__.ts'
 import type { JiraProject } from '~/lib/atlassian/client.ts'
 import type { ProjectOption, ProjectOptionGroup } from '~/components/project-multi-select.tsx'
+import type { MetaDescriptor } from 'react-router'
 
 import { useEffect, useState, lazy, Suspense, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -269,4 +270,31 @@ export default function CalendarPage({ loaderData }: Route.ComponentProps) {
 
 export async function loader({ request }: Route.LoaderArgs) {
 	return {}
+}
+
+export function meta(args: Route.MetaArgs): MetaDescriptor[] {
+	const title = 'Calendar • Hourly'
+
+	const description =
+		'View and manage your worklog entries on an interactive calendar. Filter by projects, drag and drop to edit time entries, and sync changes back to Jira.'
+
+	const keywords =
+		'worklog calendar, time tracking calendar, Jira worklog, time entries, calendar view, worklog management, time allocation calendar'
+
+	return [
+		{ title },
+		{ name: 'description', content: description },
+		{ name: 'keywords', content: keywords },
+
+		// Open Graph tags
+		{ property: 'og:type', content: 'website' },
+		{ property: 'og:title', content: title },
+		{ property: 'og:description', content: description },
+		// { property: 'og:url', content: `${baseUrl}${pathname}` },
+
+		// Twitter Card tags
+		{ name: 'twitter:card', content: 'summary' },
+		{ name: 'twitter:title', content: title },
+		{ name: 'twitter:description', content: description }
+	]
 }
