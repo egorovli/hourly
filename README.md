@@ -25,7 +25,7 @@ Reconcile GitLab commits with Jira worklogs to automate monthly time allocation.
 **State:** TanStack Query v5, SQLite, MikroORM 6
 **Auth:** Remix Auth (OAuth2 for Atlassian/GitLab)
 **Validation:** Zod 4, Conform
-**Testing:** Jest, Testing Library, Playwright
+**Testing:** Jest, Testing Library
 **Tooling:** Biome, TypeScript strict, dbmate
 
 ## Prerequisites
@@ -45,8 +45,8 @@ bun install
 
 # Configure environment
 cd packages/web
-cp .env.example .env
-# Edit .env with OAuth credentials and SESSION_SECRET
+# Create .env file with OAuth credentials and SESSION_SECRET
+# See Configuration section below for required variables
 
 # Database setup
 bun run db:migrate
@@ -104,28 +104,37 @@ bunx --bun shadcn@latest add <component-name>
 hourly/
 ├── packages/web/
 │   ├── app/
-│   │   ├── routes/              # React Router v7 routes
-│   │   ├── shared/              # FSD shared layer (ui, lib, config)
-│   │   ├── widgets/             # Composite UI blocks
-│   │   ├── features/            # Business features
-│   │   ├── entities/            # Domain models
-│   │   ├── lib/                 # API clients, ORM, auth
-│   │   ├── domain/              # Business logic & types
-│   │   └── styles/              # Global CSS
-│   └── db/migrations/           # Database migrations
+│   │   ├── routes/              # React Router v7 file-based routes
+│   │   ├── components/         # React components (calendar, UI, shadcn)
+│   │   ├── lib/                 # API clients, ORM, auth, utilities
+│   │   ├── domain/              # Domain types, enums, preferences
+│   │   ├── hooks/               # Custom React hooks
+│   │   ├── contexts/            # React contexts (drag, etc.)
+│   │   ├── styles/              # Global CSS files
+│   │   ├── assets/              # Static assets (fonts, etc.)
+│   │   ├── entry.client.tsx     # Client entry point
+│   │   ├── entry.server.tsx     # Server entry point
+│   │   └── root.tsx             # Root layout component
+│   ├── db/
+│   │   └── migrations/          # Database migrations (dbmate)
+│   ├── data/                    # SQLite database file (gitignored)
+│   └── public/                  # Public static assets
+├── .github/                     # GitHub Actions workflows
+├── docs/                        # Documentation
+├── AGENTS.md                    # Agent development guidelines
 ├── CLAUDE.md                    # Development guidelines
 └── README.md
 ```
 
 ## Architecture
 
-Uses [Feature-Sliced Design](https://feature-sliced.design/) with strict layer hierarchy:
+The application follows a modular structure with clear separation of concerns:
 
-```
-app/ → pages/ → widgets/ → features/ → entities/ → shared/
-```
-
-Import rules enforced: layers only import from layers below.
+- **Routes**: React Router v7 file-based routing with loaders and actions
+- **Components**: Reusable UI components organized by feature/domain
+- **Lib**: Infrastructure layer (API clients, ORM, auth strategies, utilities)
+- **Domain**: Business logic types, enums, and domain models
+- **Hooks & Contexts**: Shared React state and behavior
 
 ### Auth Flow
 
@@ -138,10 +147,9 @@ Import rules enforced: layers only import from layers below.
 ### Data Loading
 
 - Resource routes return JSON for TanStack Query
-- Custom `useAutoLoadInfiniteQuery` hook for background pagination
+- TanStack Query v5 for data fetching and caching
 - Handles: worklog entries, Jira issues, GitLab commits, commit-issue mapping
-- Progress tracked with `AutoLoadProgress` component
-- Infinite queries automatically load next pages in background
+- Pagination supported via query parameters
 
 ### Worklog Synchronization
 
@@ -157,20 +165,30 @@ This ensures calendar state always matches Jira state after save, while handling
 
 ### Environment Variables
 
+Create a `.env` file in `packages/web/` with the following variables:
+
 ```bash
 # Atlassian OAuth2
-ATLASSIAN_CLIENT_ID=<client-id>
-ATLASSIAN_CLIENT_SECRET=<secret>
-ATLASSIAN_CALLBACK_URL=http://localhost:3000/auth/atlassian/callback
+OAUTH_ATLASSIAN_CLIENT_ID=<client-id>
+OAUTH_ATLASSIAN_CLIENT_SECRET=<secret>
+OAUTH_ATLASSIAN_CALLBACK_URL=http://localhost:3000/auth/atlassian/callback
+# Optional: OAUTH_ATLASSIAN_BASE_URL=https://api.atlassian.com
 
 # GitLab OAuth2
-GITLAB_APPLICATION_ID=<app-id>
-GITLAB_APPLICATION_SECRET=<secret>
-GITLAB_CALLBACK_URL=http://localhost:3000/auth/gitlab/callback
-GITLAB_BASE_URL=https://gitlab.com
+OAUTH_GITLAB_CLIENT_ID=<app-id>
+OAUTH_GITLAB_CLIENT_SECRET=<secret>
+OAUTH_GITLAB_CALLBACK_URL=http://localhost:3000/auth/gitlab/callback
+# Optional: OAUTH_GITLAB_BASE_URL=https://gitlab.com
 
 # Session
 SESSION_SECRET=<random-secret>
+# Optional: SESSION_SECURE=true (for HTTPS in production)
+
+# Database (optional, defaults to SQLite)
+# DATABASE_URL=file:./data/database.sqlite3
+
+# Version (optional, for user agent)
+# VERSION=0.0.1
 ```
 
 ### User Preferences
@@ -231,8 +249,8 @@ bun run --filter @hourly/web start
 
 **Database locked:**
 ```bash
-# Stop all processes, remove db/data.db-journal if exists
-bun run db:migrate
+# Stop all processes, remove data/database.sqlite3-journal if exists
+cd packages/web && bun run db:migrate
 ```
 
 **OAuth errors:** Verify callback URLs match provider settings exactly.
@@ -255,7 +273,7 @@ bun run db:migrate
 - Jira API: Projects, users, issues, worklog entries
 - GitLab API: Projects, contributors, commits
 - Issue key extraction from commit messages
-- Infinite query pagination with auto-load
+- TanStack Query for data fetching and caching
 
 **UI & Interaction**
 - Calendar widget with drag-and-drop editing (react-big-calendar)
@@ -263,7 +281,6 @@ bun run db:migrate
 - Filter panel (projects, users, date ranges)
 - Settings & preferences (theme, timezone, locale, working hours)
 - Local worklog editor with change tracking
-- Auto-load progress indicators for infinite queries
 
 **Reconciliation Engine**
 - ✅ Bidirectional sync: Calendar edits persist to Jira API (idempotent sync)
