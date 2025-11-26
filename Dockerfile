@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # Build arguments
-ARG BUN_VERSION=1.2.23
+ARG BUN_VERSION=1.3.3
 ARG NODE_ENV=production
 ARG VERSION=dev
 
@@ -60,6 +60,12 @@ WORKDIR /app
 COPY . .
 
 # Build the web application
+RUN ls -lah
+RUN ls -lah node_modules
+RUN ls -lah packages/web
+RUN ls -lah packages/web/node_modules
+RUN ls -lah packages/web/node_modules/@mikro-orm
+
 RUN bun run --filter "@hourly/web" build
 
 # ============================================================================
