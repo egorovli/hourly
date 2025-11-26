@@ -2,6 +2,8 @@
 
 Reconcile GitLab commits with Jira worklogs to automate monthly time allocation.
 
+🌐 **[Live Demo](https://hourly.egorov.io)** | 📖 **[Documentation](#)**
+
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Bun](https://img.shields.io/badge/bun-latest-black)
 ![React](https://img.shields.io/badge/react-19-blue)
@@ -37,7 +39,7 @@ Reconcile GitLab commits with Jira worklogs to automate monthly time allocation.
 
 ```bash
 # Clone and install
-git clone <repository-url>
+git clone https://github.com/egorovli/hourly.git
 cd hourly
 bun install
 
@@ -56,6 +58,8 @@ bun run --filter @hourly/web dev
 ```
 
 Visit http://localhost:3000
+
+**Production:** [https://hourly.egorov.io](https://hourly.egorov.io)
 
 ## OAuth Configuration
 
