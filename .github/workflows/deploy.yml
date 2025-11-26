@@ -250,44 +250,15 @@ jobs:
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-      - name: Execute deployment stub
+      - name: Deploy via SSH
         if: steps.image-check.outputs.image_exists == 'true'
-        env:
-          FULL_IMAGE: ${{ steps.resolve-tag.outputs.full_image }}
-          IMAGE_TAG: ${{ steps.resolve-tag.outputs.resolved_tag }}
-          RESOLVED_SHA: ${{ steps.resolve-tag.outputs.resolved_sha }}
-          RESOLVED_SHA_SHORT: ${{ steps.resolve-tag.outputs.resolved_sha_short }}
-          ENVIRONMENT: ${{ env.ENVIRONMENT }}
-        run: |
-          set -euo pipefail
-
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "🚀 DEPLOYMENT STUB - WEB"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo ""
-          echo "Current implementation is a stub."
-          echo "Replace this step with actual deployment logic:"
-          echo ""
-          echo "Available environment variables:"
-          echo "  FULL_IMAGE=${FULL_IMAGE}"
-          echo "  IMAGE_TAG=${IMAGE_TAG}"
-          echo "  RESOLVED_SHA=${RESOLVED_SHA}"
-          echo "  RESOLVED_SHA_SHORT=${RESOLVED_SHA_SHORT}"
-          echo "  ENVIRONMENT=${ENVIRONMENT}"
-          echo ""
-          echo "Environment-specific secrets are available via:"
-          echo "  \${{ secrets.* }}"
-          echo ""
-          echo "  # Example SSH + Docker:"
-          echo "  ssh deploy@target 'docker pull ${FULL_IMAGE} && docker-compose up -d web'"
-          echo ""
-          echo "  # Example Kubernetes:"
-          echo "  kubectl set image deployment/web web=${FULL_IMAGE} -n ${ENVIRONMENT}"
-          echo ""
-          echo "  # Example Helm:"
-          echo "  helm upgrade web ./chart --set image.tag=${IMAGE_TAG} -n ${ENVIRONMENT}"
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "✅ Deployment stub completed"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            cd /srv
+            docker compose pull web
+            docker compose up -d web
