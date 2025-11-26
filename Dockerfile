@@ -15,7 +15,6 @@ WORKDIR /app
 # Copy package files for dependency resolution
 COPY package.json bun.lock ./
 COPY packages/web/package.json ./packages/web/
-COPY packages/api/package.json ./packages/api/
 
 # ============================================================================
 # Dependencies stage: Install production dependencies
@@ -90,7 +89,6 @@ WORKDIR /app
 COPY --from=deps-production --chown=bun:bun /app/package.json ./package.json
 COPY --from=deps-production --chown=bun:bun /app/node_modules ./node_modules
 COPY --from=deps-production --chown=bun:bun /app/packages/web/package.json ./packages/web/package.json
-COPY --from=deps-production --chown=bun:bun /app/packages/api/package.json ./packages/api/package.json
 
 # Copy built application
 COPY --from=builder --chown=bun:bun /app/packages/web/build ./packages/web/build
@@ -119,63 +117,6 @@ EXPOSE 3000
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 	CMD bun run --bun --cwd /app/packages/web -e "fetch('http://localhost:3000').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
-
-# Use entrypoint script that runs migrations before starting the app
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-CMD []
-
-# ============================================================================
-# API Runtime stage: Final production image for API
-# ============================================================================
-FROM oven/bun:${BUN_VERSION}-slim AS api
-
-# Set production environment and version
-ARG NODE_ENV=production
-ARG VERSION=dev
-ENV NODE_ENV=${NODE_ENV}
-ENV HOST=0.0.0.0
-ENV PORT=3000
-ENV VERSION=${VERSION}
-
-# Set labels for image metadata
-LABEL maintainer="Anton Egorov <anton@egorov.io>"
-LABEL org.opencontainers.image.title="Hourly API"
-LABEL org.opencontainers.image.description="REST API for GitLab commits ↔ Jira issues → monthly hours reconciliation"
-LABEL org.opencontainers.image.vendor="Hourly"
-LABEL org.opencontainers.image.authors="Anton Egorov <anton@egorov.io>"
-LABEL org.opencontainers.image.version="${VERSION}"
-
-WORKDIR /app
-
-# Copy production dependencies
-COPY --from=deps-production --chown=bun:bun /app/package.json ./package.json
-COPY --from=deps-production --chown=bun:bun /app/node_modules ./node_modules
-COPY --from=deps-production --chown=bun:bun /app/packages/api/package.json ./packages/api/package.json
-
-# Copy API source code (no build step needed for Bun runtime)
-COPY --from=builder --chown=bun:bun /app/packages/api/src ./packages/api/src
-
-# Copy necessary config files for runtime
-COPY --from=builder --chown=bun:bun \
-	/app/packages/api/tsconfig.json \
-	./packages/api/
-
-# Copy database migrations (needed for dbmate)
-COPY --from=builder --chown=bun:bun /app/packages/api/db ./packages/api/db
-
-# Copy and set up entrypoint script
-COPY --from=builder --chown=bun:bun /app/packages/api/docker/entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-
-# Security: Run as non-root user (bun user is already created in base image)
-USER bun
-
-# Expose API port
-EXPOSE 3000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-	CMD bun run --bun --cwd /app/packages/api -e "fetch('http://localhost:3000').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
 
 # Use entrypoint script that runs migrations before starting the app
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

@@ -23,8 +23,7 @@
 			"!packages/web/.old/**/*",
 			"!packages/web/.old2/**/*",
 			"!packages/web/build/**/*",
-			"!packages/web/app/.old/**/*",
-			"!packages/api/.old.src/**/*"
+			"!packages/web/app/.old/**/*"
 		]
 	},
 	"formatter": {
@@ -205,12 +204,6 @@
 						"noDefaultExport": "off"
 					}
 				}
-			}
-		},
-		{
-			"includes": ["packages/api/src/**/*"],
-			"javascript": {
-				"globals": ["Bun"]
 			}
 		},
 		{
