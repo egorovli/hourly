@@ -235,17 +235,16 @@ export function ProjectMultiSelect({
 					}
 				}}
 				disabled={option.disabled || isArchived}
-				className={cn(
-					'items-start gap-3 py-1.5',
-					isArchived && 'opacity-50 cursor-not-allowed'
-				)}
+				className={cn('items-start gap-3 py-1.5', isArchived && 'opacity-50 cursor-not-allowed')}
 				style={{ paddingLeft: level > 0 ? `${level * 10 + 12}px` : undefined }}
 			>
 				<div className='flex min-w-0 flex-1 items-center gap-2'>
-					<Avatar className={cn(
-						'size-6 shrink-0 rounded border border-border/60 bg-background text-[11px] font-semibold uppercase text-muted-foreground',
-						isArchived && 'opacity-50'
-					)}>
+					<Avatar
+						className={cn(
+							'size-6 shrink-0 rounded border border-border/60 bg-background text-[11px] font-semibold uppercase text-muted-foreground',
+							isArchived && 'opacity-50'
+						)}
+					>
 						{option.avatarUrl ? (
 							<AvatarImage
 								src={option.avatarUrl}
@@ -258,10 +257,12 @@ export function ProjectMultiSelect({
 					</Avatar>
 					<div className='flex min-w-0 flex-1 flex-col gap-0.5 text-left'>
 						<div className='flex items-center justify-between gap-2'>
-							<span className={cn(
-								'truncate text-sm font-medium',
-								isArchived ? 'text-muted-foreground' : 'text-foreground'
-							)}>
+							<span
+								className={cn(
+									'truncate text-sm font-medium',
+									isArchived ? 'text-muted-foreground' : 'text-foreground'
+								)}
+							>
 								{option.label}
 							</span>
 
@@ -278,10 +279,12 @@ export function ProjectMultiSelect({
 							) : null}
 						</div>
 						{option.description ? (
-							<span className={cn(
-								'truncate text-xs',
-								isArchived ? 'text-muted-foreground/70' : 'text-muted-foreground'
-							)}>
+							<span
+								className={cn(
+									'truncate text-xs',
+									isArchived ? 'text-muted-foreground/70' : 'text-muted-foreground'
+								)}
+							>
 								{option.description}
 							</span>
 						) : null}

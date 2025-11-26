@@ -12,13 +12,14 @@ import { AtlassianClient } from '~/lib/atlassian/index.ts'
 import { Provider } from '~/lib/auth/strategies/common.ts'
 import { orm, ProfileSessionConnection, Token, withRequestContext } from '~/lib/mikro-orm/index.ts'
 import { createSessionStorage } from '~/lib/session/index.ts'
+import type { SessionUser } from '~/lib/session/storage.ts'
 
-function LayoutContent(): React.ReactNode {
+function LayoutContent({ sessionUser }: { sessionUser?: SessionUser }): React.ReactNode {
 	const { actions } = useHeaderActions()
 
 	return (
 		<SidebarProvider className='//flex h-full flex-1 //flex-col overflow-hidden'>
-			<AppSidebar />
+			<AppSidebar sessionUser={sessionUser} />
 			<SidebarInset className='flex flex-1 flex-col overflow-hidden'>
 				<header className='flex h-16 shrink-0 items-center gap-2 border-b border-slate-200'>
 					<div className='flex items-center gap-2 px-4'>
@@ -41,7 +42,7 @@ function LayoutContent(): React.ReactNode {
 export default function CommonLayout({ loaderData }: Route.ComponentProps): React.ReactNode {
 	return (
 		<HeaderActionsProvider>
-			<LayoutContent />
+			<LayoutContent sessionUser={loaderData.sessionUser} />
 		</HeaderActionsProvider>
 	)
 }
@@ -74,6 +75,50 @@ export let loader = withRequestContext(async function loader({ request }: Route.
 
 	if (!worklogTargetConnection) {
 		redirectToSignIn()
+	}
+
+	// Fetch user session data for sidebar
+	const sessionUser: SessionUser = {}
+	const connections = await orm.em.find(
+		ProfileSessionConnection,
+		{
+			session: { id: cookieSession.id }
+		},
+		{
+			populate: ['profile']
+		}
+	)
+
+	for (const connection of connections) {
+		const profile = connection.profile
+		const token = await orm.em.findOne(Token, {
+			profileId: profile.id,
+			provider: profile.provider
+		})
+
+		const profileData = profile.data as {
+			displayName?: string
+			email?: string
+			avatarUrl?: string
+		}
+
+		if (profile.provider === Provider.Atlassian) {
+			sessionUser.atlassian = {
+				displayName: profileData.displayName ?? 'Unknown',
+				email: profileData.email ?? '',
+				avatarUrl: profileData.avatarUrl ?? '',
+				tokenExpiresAt: token?.expiresAt?.toISOString(),
+				hasRefreshToken: typeof token?.refreshToken === 'string' && token.refreshToken.length > 0
+			}
+		} else if (profile.provider === Provider.GitLab) {
+			sessionUser.gitlab = {
+				displayName: profileData.displayName ?? 'Unknown',
+				email: profileData.email ?? '',
+				avatarUrl: profileData.avatarUrl ?? '',
+				tokenExpiresAt: token?.expiresAt?.toISOString(),
+				hasRefreshToken: typeof token?.refreshToken === 'string' && token.refreshToken.length > 0
+			}
+		}
 	}
 
 	// Fetch accessible resources from Atlassian if available
@@ -177,6 +222,7 @@ export let loader = withRequestContext(async function loader({ request }: Route.
 
 	return {
 		session: cookieSession,
+		sessionUser,
 		accessibleResources,
 		projectsByResource
 	}
