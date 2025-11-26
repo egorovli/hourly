@@ -21,6 +21,9 @@ COPY packages/web/package.json ./packages/web/
 # ============================================================================
 FROM base AS deps-production
 
+ENV NODE_ENV=development
+ENV CI=true
+
 WORKDIR /app
 
 # Install production dependencies with caching
@@ -35,6 +38,9 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 # Dependencies stage: Install all dependencies (for build)
 # ============================================================================
 FROM base AS deps-development
+
+ENV NODE_ENV=development
+ENV CI=true
 
 WORKDIR /app
 
@@ -51,6 +57,7 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 FROM deps-development AS builder
 
 ARG NODE_ENV=production
+
 ENV NODE_ENV=${NODE_ENV}
 ENV CI=true
 
@@ -59,13 +66,13 @@ WORKDIR /app
 # Copy source code
 COPY . .
 
-# Build the web application
-RUN ls -lah
-RUN ls -lah node_modules
-RUN ls -lah packages/web
-RUN ls -lah packages/web/node_modules
-RUN ls -lah packages/web/node_modules/@mikro-orm
+RUN rm -rf ./node_modules
+RUN rm -rf ./packages/web/node_modules
 
+# # Ensure workspace node_modules are properly linked after copying source
+RUN bun install --frozen-lockfile --no-save --ignore-scripts
+
+# Build the web application
 RUN bun run --filter "@hourly/web" build
 
 # ============================================================================
@@ -76,6 +83,7 @@ FROM oven/bun:${BUN_VERSION}-slim AS web
 # Set production environment and version
 ARG NODE_ENV=production
 ARG VERSION=dev
+
 ENV NODE_ENV=${NODE_ENV}
 ENV HOST=0.0.0.0
 ENV PORT=3000
