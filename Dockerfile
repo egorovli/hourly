@@ -57,9 +57,11 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 FROM deps-development AS builder
 
 ARG NODE_ENV=production
+ARG DATABASE_URL=postgresql://postgres:postgres@localhost:5432/hourly
 
 ENV NODE_ENV=${NODE_ENV}
 ENV CI=true
+ENV DATABASE_URL=${DATABASE_URL}
 
 WORKDIR /app
 
