@@ -1,8 +1,12 @@
 /** biome-ignore-all lint/style/noProcessEnv: We pass env from process.env via loader */
 /** biome-ignore-all lint/security/noDangerouslySetInnerHtml: We need to pass env to the client */
 
+import 'temporal-polyfill/global'
+
 import type { Route } from './+types/root.ts'
 import type { Preferences } from '~/domain/preferences.ts'
+
+import { QueryClientProvider } from '@tanstack/react-query'
 
 import {
 	isRouteErrorResponse,
@@ -16,10 +20,10 @@ import {
 } from 'react-router'
 
 import * as cookies from '~/lib/cookies/index.ts'
+import * as query from '~/lib/query/index.ts'
 import { cn } from '~/lib/util/index.ts'
 import { DragProvider, useDrag } from '~/contexts/drag-context.tsx'
 
-import 'temporal-polyfill/global'
 import '~/styles/global.css'
 
 export const links: Route.LinksFunction = () => []
@@ -98,7 +102,11 @@ interface AppProvidersProps {
 }
 
 function AppProviders({ children }: AppProvidersProps): React.ReactNode {
-	return <DragProvider>{children}</DragProvider>
+	return (
+		<QueryClientProvider client={query.client}>
+			<DragProvider>{children}</DragProvider>
+		</QueryClientProvider>
+	)
 }
 
 function InnerApp(): React.ReactNode {

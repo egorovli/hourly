@@ -4,10 +4,12 @@ import type { JiraProject } from '~/lib/atlassian/client.ts'
 import type { ProjectOption, ProjectOptionGroup } from '~/components/project-multi-select.tsx'
 
 import { useEffect, useState, lazy, Suspense, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useRouteLoaderData } from 'react-router'
 
 import { DebugPanel } from '~/components/debug-panel.tsx'
 import { ProjectMultiSelect } from '~/components/project-multi-select.tsx'
+import type { JiraWorklog } from '~/lib/atlassian/client.ts'
 
 const Calendar = lazy(() =>
 	import('~/components/calendar/index.tsx').then(m => ({ default: m.Calendar }))
@@ -146,9 +148,17 @@ function buildProjectHierarchy(projectsByResource: ProjectsByResource[]): Projec
 	return result
 }
 
+interface WorklogEntriesResponse {
+	worklogs: JiraWorklog[]
+	total: number
+	pageSize: number
+	hasMore: boolean
+}
+
 export default function CalendarPage({ loaderData }: Route.ComponentProps) {
 	const [displayCalendar, setDisplayCalendar] = useState(false)
 	const [selectedProjects, setSelectedProjects] = useState<string[]>([])
+	const [dateRange, setDateRange] = useState<{ start: Date; end: Date } | undefined>(undefined)
 
 	const parentLoaderData = useRouteLoaderData<ParentRoute.ComponentProps['loaderData']>('routes/__')
 	const projectsByResource = parentLoaderData?.projectsByResource ?? []
@@ -157,6 +167,44 @@ export default function CalendarPage({ loaderData }: Route.ComponentProps) {
 		() => buildProjectHierarchy(projectsByResource),
 		[projectsByResource]
 	)
+
+	// Build query params for worklog entries
+	const queryParams = useMemo(() => {
+		const params = new URLSearchParams()
+		params.set('page-size', '100')
+
+		// Add date range if available
+		if (dateRange) {
+			params.set('started-after', Math.floor(dateRange.start.getTime()).toString())
+			params.set('started-before', Math.floor(dateRange.end.getTime()).toString())
+		}
+
+		// Add multiple project-id parameters (singular)
+		for (const projectId of selectedProjects) {
+			params.append('project-id', projectId)
+		}
+
+		return params.toString()
+	}, [selectedProjects, dateRange])
+
+	// Fetch worklog entries using TanStack Query
+	const { data: worklogData, isLoading: isLoadingWorklogs } = useQuery<WorklogEntriesResponse>({
+		queryKey: ['worklog-entries', queryParams],
+		queryFn: async ({ signal }) => {
+			const response = await fetch(`/worklog/entries?${queryParams}`, {
+				signal
+			})
+			if (!response.ok) {
+				throw new Error(`Failed to fetch worklogs: ${response.statusText}`)
+			}
+			return response.json() as Promise<WorklogEntriesResponse>
+		},
+		enabled: displayCalendar && dateRange !== undefined && selectedProjects.length > 0
+	})
+
+	const handleDatesSet = (start: Date, end: Date) => {
+		setDateRange({ start, end })
+	}
 
 	useEffect(() => {
 		setDisplayCalendar(true)
@@ -167,6 +215,8 @@ export default function CalendarPage({ loaderData }: Route.ComponentProps) {
 			projectsByResource,
 			projectOptions,
 			selectedProjects,
+			worklogData,
+			isLoadingWorklogs,
 			parentLoaderData: parentLoaderData
 				? {
 						accessibleResources: parentLoaderData.accessibleResources,
@@ -174,7 +224,14 @@ export default function CalendarPage({ loaderData }: Route.ComponentProps) {
 					}
 				: undefined
 		}),
-		[projectsByResource, projectOptions, selectedProjects, parentLoaderData]
+		[
+			projectsByResource,
+			projectOptions,
+			selectedProjects,
+			worklogData,
+			isLoadingWorklogs,
+			parentLoaderData
+		]
 	)
 
 	return (
@@ -193,7 +250,10 @@ export default function CalendarPage({ loaderData }: Route.ComponentProps) {
 			<div className='flex flex-1 flex-col overflow-hidden'>
 				<div className='flex flex-1 overflow-hidden'>
 					<Suspense fallback={<div>Loading...</div>}>
-						<Calendar />
+						<Calendar
+							worklogs={worklogData?.worklogs}
+							onDatesSet={handleDatesSet}
+						/>
 					</Suspense>
 				</div>
 				<div className='shrink-0 p-4'>

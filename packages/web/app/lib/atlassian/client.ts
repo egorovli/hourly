@@ -56,6 +56,17 @@ export interface JiraProject {
 	}
 }
 
+export interface JiraWorklog {
+	id: string
+	issueId: string
+	started: string
+	timeSpentSeconds: number
+	author: {
+		accountId: string
+		displayName: string
+	}
+}
+
 export class AtlassianClient {
 	private readonly baseUrl: string = 'https://api.atlassian.com'
 	private readonly userAgent: string = `egorovli/hourly@${process.env.VERSION ?? 'unknown'}`
@@ -236,5 +247,170 @@ export class AtlassianClient {
 		console.log(`Total projects fetched for resource ${resourceId}:`, allProjects.length)
 
 		return allProjects
+	}
+
+	/** biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Pagination and nested iteration logic requires multiple conditionals */
+	async getWorklogsForAssignedIssues(
+		resourceId: string,
+		options?: AtlassianClientBaseRequestOptions & {
+			startedAfter?: number
+			startedBefore?: number
+			projectIds?: string[]
+		}
+	): Promise<JiraWorklog[]> {
+		const allWorklogs: JiraWorklog[] = []
+		const issueIds: string[] = []
+		let startAt = 0
+		const maxResults = 50
+		let hasMore = true
+
+		// Build JQL query with project filtering if provided
+		// projectIds here are actually project keys (like "LP", "PROJ")
+		// Use worklogAuthor to find issues with worklogs by current user (more direct than assignee)
+		let jql = 'worklogAuthor=currentUser()'
+		if (options?.projectIds && options.projectIds.length > 0) {
+			// JQL uses project key with quotes for each key
+			const projectKeys = options.projectIds.map(key => `"${key}"`).join(',')
+			jql = `worklogAuthor=currentUser() AND project IN (${projectKeys})`
+		}
+
+		// First, fetch all issue IDs assigned to current user (minimal fields)
+		// Use the enhanced search endpoint /rest/api/3/search/jql (the old /rest/api/3/search is deprecated and returns 410)
+		while (hasMore) {
+			const url = new URL(`${this.baseUrl}/ex/jira/${resourceId}/rest/api/3/search/jql`)
+			url.searchParams.set('jql', jql)
+			url.searchParams.set('fields', 'id')
+			url.searchParams.set('startAt', startAt.toString())
+			url.searchParams.set('maxResults', maxResults.toString())
+
+			const response: Response = await fetch(url.toString(), {
+				method: 'GET',
+				signal: options?.signal,
+				headers: {
+					'Accept': 'application/json',
+					'Authorization': `Bearer ${this.accessToken}`,
+					'User-Agent': this.userAgent,
+					...(options?.headers ?? {})
+				}
+			})
+
+			if (!response.ok) {
+				// If request was aborted, stop processing
+				if (options?.signal?.aborted) {
+					return []
+				}
+				const errorText = await response.text().catch(() => response.statusText)
+				if (response.status === 403 || response.status === 404) {
+					return []
+				}
+				throw new Error(
+					`Failed to fetch issues for resource ${resourceId}: ${response.status} ${response.statusText} - ${errorText.substring(0, 200)}`
+				)
+			}
+
+			const data = (await response.json()) as {
+				issues?: Array<{ id: string }>
+				total?: number
+			}
+
+			if (data.issues) {
+				for (const issue of data.issues) {
+					issueIds.push(issue.id)
+				}
+			}
+
+			const total = data.total ?? 0
+			const returned = data.issues?.length ?? 0
+			hasMore = startAt + returned < total && returned === maxResults
+			if (hasMore) {
+				startAt += maxResults
+			}
+		}
+
+		// Then fetch worklogs for each issue
+		for (const issueId of issueIds) {
+			let worklogStartAt = 0
+			const worklogMaxResults = 50
+			let worklogHasMore = true
+
+			while (worklogHasMore) {
+				const url = new URL(
+					`${this.baseUrl}/ex/jira/${resourceId}/rest/api/3/issue/${issueId}/worklog`
+				)
+				url.searchParams.set('startAt', worklogStartAt.toString())
+				url.searchParams.set('maxResults', worklogMaxResults.toString())
+
+				if (options?.startedAfter !== undefined) {
+					url.searchParams.set('startedAfter', options.startedAfter.toString())
+				}
+				if (options?.startedBefore !== undefined) {
+					url.searchParams.set('startedBefore', options.startedBefore.toString())
+				}
+
+				const response: Response = await fetch(url.toString(), {
+					method: 'GET',
+					signal: options?.signal,
+					headers: {
+						'Accept': 'application/json',
+						'Authorization': `Bearer ${this.accessToken}`,
+						'User-Agent': this.userAgent,
+						...(options?.headers ?? {})
+					}
+				})
+
+				if (!response.ok) {
+					// Skip issues that fail (e.g., no worklogs, permissions)
+					if (response.status === 404) {
+						break
+					}
+					// If request was aborted, stop processing
+					if (options?.signal?.aborted) {
+						return []
+					}
+					// Continue to next issue on other errors
+					break
+				}
+
+				const data = (await response.json()) as {
+					worklogs?: Array<{
+						id: string
+						started: string
+						timeSpentSeconds: number
+						author: {
+							accountId: string
+							displayName: string
+						}
+					}>
+					total?: number
+					startAt?: number
+					maxResults?: number
+				}
+
+				if (data.worklogs) {
+					for (const worklog of data.worklogs) {
+						// Jira API doesn't return issueId in worklog response, so we add it manually
+						allWorklogs.push({
+							id: worklog.id,
+							issueId: issueId, // Add issueId from the current loop iteration
+							started: worklog.started,
+							timeSpentSeconds: worklog.timeSpentSeconds,
+							author: {
+								accountId: worklog.author.accountId,
+								displayName: worklog.author.displayName
+							}
+						})
+					}
+				}
+
+				const total = data.total ?? 0
+				const returned = data.worklogs?.length ?? 0
+				worklogHasMore = worklogStartAt + returned < total && returned === worklogMaxResults
+				if (worklogHasMore) {
+					worklogStartAt += worklogMaxResults
+				}
+			}
+		}
+
+		return allWorklogs
 	}
 }
