@@ -72,7 +72,11 @@ RUN rm -rf ./node_modules
 RUN rm -rf ./packages/web/node_modules
 
 # # Ensure workspace node_modules are properly linked after copying source
-RUN bun install --frozen-lockfile --no-save --ignore-scripts
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+	bun install \
+	--frozen-lockfile \
+	--no-save \
+	--ignore-scripts
 
 # Build the web application
 RUN bun run --filter "@hourly/web" build
