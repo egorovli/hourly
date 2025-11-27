@@ -18,6 +18,12 @@ const queryParamsSchema = z.object({
 			val => (Array.isArray(val) ? val : val !== undefined ? [val] : undefined),
 			z.array(z.string())
 		)
+		.optional(),
+	'user-id': z
+		.preprocess(
+			val => (Array.isArray(val) ? val : val !== undefined ? [val] : undefined),
+			z.array(z.string())
+		)
 		.optional()
 })
 
@@ -76,7 +82,8 @@ export const loader = withRequestContext(async function loader({ request }: Rout
 		'started-after': startedAfter,
 		'started-before': startedBefore,
 		'resource-id': resourceId,
-		'project-id': projectIds
+		'project-id': projectIds,
+		'user-id': userIds
 	} = parsedParams.data
 
 	// Get Atlassian connection
@@ -219,8 +226,14 @@ export const loader = withRequestContext(async function loader({ request }: Rout
 		}
 	}
 
-	// No need for additional filtering - project filtering is done in the API call
-	const filteredWorklogs = allWorklogs
+	// Filter by user account IDs if provided
+	let filteredWorklogs = allWorklogs
+	if (userIds && userIds.length > 0) {
+		const userIdSet = new Set(userIds)
+		filteredWorklogs = allWorklogs.filter(worklog =>
+			userIdSet.has(worklog.author.accountId)
+		)
+	}
 
 	// Paginate results
 	const startIndex = 0 // Could add page-number param later

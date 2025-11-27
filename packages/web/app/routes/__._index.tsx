@@ -244,8 +244,13 @@ export default function CalendarPage(): React.ReactNode {
 			params.append('project-id', projectId)
 		}
 
+		// Add multiple user-id parameters (singular)
+		for (const userId of selectedUsers) {
+			params.append('user-id', userId)
+		}
+
 		return params.toString()
-	}, [selectedProjects, dateRange])
+	}, [selectedProjects, selectedUsers, dateRange])
 
 	// Fetch worklog entries using TanStack Query
 	const { data: worklogData, isLoading: isLoadingWorklogs } = useQuery<WorklogEntriesResponse>({
@@ -259,7 +264,10 @@ export default function CalendarPage(): React.ReactNode {
 			}
 			return response.json() as Promise<WorklogEntriesResponse>
 		},
-		enabled: displayCalendar && dateRange !== undefined && selectedProjects.length > 0
+		enabled:
+			displayCalendar &&
+			dateRange !== undefined &&
+			selectedProjects.length > 0
 	})
 
 	const handleDatesSet = (start: Date, end: Date) => {
