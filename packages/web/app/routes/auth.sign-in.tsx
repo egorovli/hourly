@@ -1,5 +1,6 @@
 import type { Route } from './+types/auth.sign-in.ts'
 import type { ComponentType, ReactNode, SVGProps } from 'react'
+import type { MetaDescriptor } from 'react-router'
 
 import { SiAtlassian, SiGithub, SiGitlab, SiRedmine } from '@icons-pack/react-simple-icons'
 import { ArrowRight, Check, CheckCircle2, ChevronDown, Cloud, ShieldCheck } from 'lucide-react'
@@ -326,3 +327,30 @@ export const loader = withRequestContext(async function loader({ request }: Rout
 
 	return {}
 })
+
+export function meta(args: Route.MetaArgs): MetaDescriptor[] {
+	const title = 'Sign In • Hourly'
+
+	const description =
+		'Connect your worklog service and data sources to automatically generate time entries from your activity data. No more manual time tracking. Secure OAuth2 authentication with Atlassian Jira, GitLab, and more.'
+
+	const keywords =
+		'sign in, login, authentication, OAuth, Jira, GitLab, time tracking, worklog, automated time tracking, connect account'
+
+	return [
+		{ title },
+		{ name: 'description', content: description },
+		{ name: 'keywords', content: keywords },
+
+		// Open Graph tags
+		{ property: 'og:type', content: 'website' },
+		{ property: 'og:title', content: title },
+		{ property: 'og:description', content: description },
+		// { property: 'og:url', content: `${baseUrl}${pathname}` },
+
+		// Twitter Card tags
+		{ name: 'twitter:card', content: 'summary_large_image' },
+		{ name: 'twitter:title', content: title },
+		{ name: 'twitter:description', content: description }
+	]
+}
