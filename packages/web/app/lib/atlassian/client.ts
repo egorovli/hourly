@@ -67,6 +67,20 @@ export interface JiraWorklog {
 	}
 }
 
+export interface JiraUser {
+	accountId: string
+	accountType: string
+	displayName: string
+	emailAddress?: string
+	avatarUrls?: {
+		'48x48'?: string
+		'32x32'?: string
+		'24x24'?: string
+		'16x16'?: string
+	}
+	active?: boolean
+}
+
 export class AtlassianClient {
 	private readonly baseUrl: string = 'https://api.atlassian.com'
 	private readonly userAgent: string = `egorovli/hourly@${process.env.VERSION ?? 'unknown'}`
@@ -412,5 +426,181 @@ export class AtlassianClient {
 		}
 
 		return allWorklogs
+	}
+
+	async getUsers(
+		resourceId: string,
+		options?: AtlassianClientBaseRequestOptions & {
+			query?: string
+			maxResults?: number
+		}
+	): Promise<JiraUser[]> {
+		const allUsers: JiraUser[] = []
+		let startAt = 0
+		const maxResults = options?.maxResults ?? 50
+		let hasMore = true
+
+		while (hasMore) {
+			const url = new URL(`${this.baseUrl}/ex/jira/${resourceId}/rest/api/3/user/search`)
+			url.searchParams.set('startAt', startAt.toString())
+			url.searchParams.set('maxResults', maxResults.toString())
+			
+			// Query parameter is required by the API
+			// Use wildcard '*' to get all users, or use provided query to filter
+			const query = options?.query ?? '*'
+			url.searchParams.set('query', query)
+
+			// biome-ignore lint/suspicious/noConsole: Debug logging
+			console.log(`Fetching users for resource ${resourceId} from: ${url.toString()}`)
+
+			const response: Response = await fetch(url.toString(), {
+				method: 'GET',
+				signal: options?.signal,
+				headers: {
+					'Accept': 'application/json',
+					'Authorization': `Bearer ${this.accessToken}`,
+					'User-Agent': this.userAgent,
+					...(options?.headers ?? {})
+				}
+			})
+
+			if (!response.ok) {
+				// If request was aborted, stop processing
+				if (options?.signal?.aborted) {
+					return []
+				}
+				const errorText = await response.text().catch(() => response.statusText)
+				// biome-ignore lint/suspicious/noConsole: Error logging for debugging
+				console.error(`Failed to fetch users for resource ${resourceId}:`, {
+					status: response.status,
+					statusText: response.statusText,
+					url: url.toString(),
+					error: errorText.substring(0, 1000)
+				})
+				if (response.status === 403 || response.status === 404) {
+					return []
+				}
+				throw new Error(
+					`Failed to fetch users for resource ${resourceId}: ${response.status} ${response.statusText} - ${errorText.substring(0, 200)}`
+				)
+			}
+
+			const data = (await response.json()) as
+				| JiraUser[]
+				| {
+						values?: JiraUser[]
+						startAt?: number
+						maxResults?: number
+						total?: number
+						isLast?: boolean
+				  }
+
+			// Handle both array response (legacy) and paginated response (current API)
+			if (Array.isArray(data)) {
+				allUsers.push(...data)
+				hasMore = data.length === maxResults
+				if (hasMore) {
+					startAt += maxResults
+				}
+			} else if (data.values && Array.isArray(data.values)) {
+				allUsers.push(...data.values)
+				const total = data.total ?? 0
+				const returned = data.values.length
+				// biome-ignore lint/suspicious/noConsole: Debug logging
+				console.log(`Fetched ${returned} users for resource ${resourceId} (total: ${total}, startAt: ${startAt})`)
+				hasMore = !data.isLast && startAt + returned < total && returned === maxResults
+				if (hasMore) {
+					startAt += maxResults
+				}
+			} else {
+				// biome-ignore lint/suspicious/noConsole: Debug logging
+				console.warn(`Unexpected response format for users from resource ${resourceId}:`, data)
+				hasMore = false
+			}
+		}
+
+		return allUsers
+	}
+
+	async getUsersByProjects(
+		resourceId: string,
+		projectKeys: string[],
+		options?: AtlassianClientBaseRequestOptions & {
+			maxResults?: number
+		}
+	): Promise<JiraUser[]> {
+		if (projectKeys.length === 0) {
+			return []
+		}
+
+		const allUsers: JiraUser[] = []
+		let startAt = 0
+		const maxResults = options?.maxResults ?? 50
+		let hasMore = true
+
+		while (hasMore) {
+			// Use assignable/multiProjectSearch endpoint which filters by project keys
+			const url = new URL(`${this.baseUrl}/ex/jira/${resourceId}/rest/api/3/user/assignable/multiProjectSearch`)
+			url.searchParams.set('projectKeys', projectKeys.join(','))
+			url.searchParams.set('startAt', startAt.toString())
+			url.searchParams.set('maxResults', maxResults.toString())
+
+			// biome-ignore lint/suspicious/noConsole: Debug logging
+			console.log(`Fetching users for projects ${projectKeys.join(',')} in resource ${resourceId} from: ${url.toString()}`)
+
+			const response: Response = await fetch(url.toString(), {
+				method: 'GET',
+				signal: options?.signal,
+				headers: {
+					'Accept': 'application/json',
+					'Authorization': `Bearer ${this.accessToken}`,
+					'User-Agent': this.userAgent,
+					...(options?.headers ?? {})
+				}
+			})
+
+			if (!response.ok) {
+				// If request was aborted, stop processing
+				if (options?.signal?.aborted) {
+					return []
+				}
+				const errorText = await response.text().catch(() => response.statusText)
+				// biome-ignore lint/suspicious/noConsole: Error logging for debugging
+				console.error(`Failed to fetch users for projects in resource ${resourceId}:`, {
+					status: response.status,
+					statusText: response.statusText,
+					url: url.toString(),
+					error: errorText.substring(0, 1000)
+				})
+				if (response.status === 403 || response.status === 404) {
+					return []
+				}
+				throw new Error(
+					`Failed to fetch users for projects in resource ${resourceId}: ${response.status} ${response.statusText} - ${errorText.substring(0, 200)}`
+				)
+			}
+
+			const data = (await response.json()) as JiraUser[]
+
+			// multiProjectSearch returns a direct array of users
+			if (Array.isArray(data)) {
+				allUsers.push(...data)
+				const returned = data.length
+				// biome-ignore lint/suspicious/noConsole: Debug logging
+				console.log(`Fetched ${returned} users for projects ${projectKeys.join(',')} in resource ${resourceId} (startAt: ${startAt})`)
+				// If we got fewer results than maxResults, we've reached the end
+				// Otherwise, continue pagination
+				hasMore = returned === maxResults
+				if (hasMore) {
+					startAt += maxResults
+				}
+			} else {
+				// biome-ignore lint/suspicious/noConsole: Debug logging
+				console.warn(`Unexpected response format for users from resource ${resourceId}:`, data)
+				hasMore = false
+			}
+		}
+
+		return allUsers
 	}
 }

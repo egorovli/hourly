@@ -1,8 +1,10 @@
 import type { Route } from './+types/__._index.ts'
 import type { Route as ParentRoute } from './+types/__.ts'
-import type { JiraProject } from '~/lib/atlassian/client.ts'
+import type { JiraProject, JiraUser } from '~/lib/atlassian/client.ts'
 import type { ProjectOption, ProjectOptionGroup } from '~/components/project-multi-select.tsx'
+import type { UserOption } from '~/components/user-multi-select.tsx'
 import type { MetaDescriptor } from 'react-router'
+import type { JiraWorklog } from '~/lib/atlassian/client.ts'
 
 import { useEffect, useState, lazy, Suspense, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -10,7 +12,7 @@ import { useRouteLoaderData } from 'react-router'
 
 import { DebugPanel } from '~/components/debug-panel.tsx'
 import { ProjectMultiSelect } from '~/components/project-multi-select.tsx'
-import type { JiraWorklog } from '~/lib/atlassian/client.ts'
+import { UserMultiSelect } from '~/components/user-multi-select.tsx'
 
 const Calendar = lazy(() =>
 	import('~/components/calendar/index.tsx').then(m => ({ default: m.Calendar }))
@@ -156,9 +158,34 @@ interface WorklogEntriesResponse {
 	hasMore: boolean
 }
 
-export default function CalendarPage({ loaderData }: Route.ComponentProps) {
+interface UsersResponse {
+	users: JiraUser[]
+}
+
+function getUserAvatarUrl(user: JiraUser): string | undefined {
+	return (
+		user.avatarUrls?.['48x48'] ??
+		user.avatarUrls?.['32x32'] ??
+		user.avatarUrls?.['24x24'] ??
+		user.avatarUrls?.['16x16']
+	)
+}
+
+function buildUserOptions(users: JiraUser[]): UserOption[] {
+	return users.map(user => ({
+		id: user.accountId,
+		value: user.accountId,
+		label: user.displayName,
+		email: user.emailAddress,
+		avatarUrl: getUserAvatarUrl(user),
+		active: user.active
+	}))
+}
+
+export default function CalendarPage(): React.ReactNode {
 	const [displayCalendar, setDisplayCalendar] = useState(false)
 	const [selectedProjects, setSelectedProjects] = useState<string[]>([])
+	const [selectedUsers, setSelectedUsers] = useState<string[]>([])
 	const [dateRange, setDateRange] = useState<{ start: Date; end: Date } | undefined>(undefined)
 
 	const parentLoaderData = useRouteLoaderData<ParentRoute.ComponentProps['loaderData']>('routes/__')
@@ -168,6 +195,38 @@ export default function CalendarPage({ loaderData }: Route.ComponentProps) {
 		() => buildProjectHierarchy(projectsByResource),
 		[projectsByResource]
 	)
+
+	// Build query params for users - only fetch users for selected projects
+	const usersQueryParams = useMemo(() => {
+		const params = new URLSearchParams()
+
+		// Only fetch users if projects are selected
+		if (selectedProjects.length > 0) {
+			// Add multiple project-id parameters (singular)
+			for (const projectId of selectedProjects) {
+				params.append('project-id', projectId)
+			}
+		}
+
+		return params.toString()
+	}, [selectedProjects])
+
+	// Fetch users using TanStack Query - only when projects are selected
+	const { data: usersData, isLoading: isLoadingUsers } = useQuery<UsersResponse>({
+		queryKey: ['worklog-users', usersQueryParams],
+		queryFn: async ({ signal }) => {
+			const response = await fetch(`/worklog/users?${usersQueryParams}`, {
+				signal
+			})
+			if (!response.ok) {
+				throw new Error(`Failed to fetch users: ${response.statusText}`)
+			}
+			return response.json() as Promise<UsersResponse>
+		},
+		enabled: selectedProjects.length > 0
+	})
+
+	const userOptions = useMemo(() => buildUserOptions(usersData?.users ?? []), [usersData?.users])
 
 	// Build query params for worklog entries
 	const queryParams = useMemo(() => {
@@ -216,6 +275,10 @@ export default function CalendarPage({ loaderData }: Route.ComponentProps) {
 			projectsByResource,
 			projectOptions,
 			selectedProjects,
+			userOptions,
+			selectedUsers,
+			usersData,
+			isLoadingUsers,
 			worklogData,
 			isLoadingWorklogs,
 			parentLoaderData: parentLoaderData
@@ -229,6 +292,10 @@ export default function CalendarPage({ loaderData }: Route.ComponentProps) {
 			projectsByResource,
 			projectOptions,
 			selectedProjects,
+			userOptions,
+			selectedUsers,
+			usersData,
+			isLoadingUsers,
 			worklogData,
 			isLoadingWorklogs,
 			parentLoaderData
@@ -242,10 +309,20 @@ export default function CalendarPage({ loaderData }: Route.ComponentProps) {
 					options={projectOptions}
 					value={selectedProjects}
 					onValueChange={setSelectedProjects}
-					placeholder='Select projects to operate on...'
+					placeholder='Select projects...'
 					searchPlaceholder='Search projects...'
 					emptyText='No projects found.'
 					className='max-w-md'
+				/>
+				<UserMultiSelect
+					options={userOptions}
+					value={selectedUsers}
+					onValueChange={setSelectedUsers}
+					placeholder='Select users...'
+					searchPlaceholder='Search users...'
+					emptyText='No users found.'
+					className='max-w-md'
+					disabled={isLoadingUsers}
 				/>
 			</div>
 			<div className='flex flex-1 flex-col overflow-hidden'>

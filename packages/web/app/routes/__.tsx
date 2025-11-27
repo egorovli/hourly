@@ -1,5 +1,6 @@
 import type React from 'react'
 import type { Route } from './+types/__.ts'
+import type { SessionUser } from '~/lib/session/storage.ts'
 
 import { Outlet, redirect } from 'react-router'
 
@@ -12,7 +13,6 @@ import { AtlassianClient } from '~/lib/atlassian/index.ts'
 import { Provider } from '~/lib/auth/strategies/common.ts'
 import { orm, ProfileSessionConnection, Token, withRequestContext } from '~/lib/mikro-orm/index.ts'
 import { createSessionStorage } from '~/lib/session/index.ts'
-import type { SessionUser } from '~/lib/session/storage.ts'
 
 function LayoutContent({ sessionUser }: { sessionUser?: SessionUser }): React.ReactNode {
 	const { actions } = useHeaderActions()
