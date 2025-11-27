@@ -1,4 +1,4 @@
-import type { JiraWorklog } from '~/lib/atlassian/client.ts'
+import type { WorklogEntity } from '~/domain/entities/worklog-entity.ts'
 
 import FullCalendar from '@fullcalendar/react'
 import type { DatesSetArg, EventInput } from '@fullcalendar/core'
@@ -6,24 +6,25 @@ import timeGridPlugin from '@fullcalendar/timegrid'
 import { useEffect, useState, useMemo } from 'react'
 
 interface CalendarProps {
-	worklogs?: JiraWorklog[]
+	worklogs?: WorklogEntity[]
 	onDatesSet?: (start: Date, end: Date) => void
 }
 
-function convertWorklogToEvent(worklog: JiraWorklog): EventInput {
-	const startDate = new Date(worklog.started)
-	const endDate = new Date(startDate.getTime() + worklog.timeSpentSeconds * 1000)
+function convertWorklogToEvent(worklog: WorklogEntity): EventInput {
+	const durationSeconds = Math.floor(
+		(worklog.finishedAt.getTime() - worklog.startedAt.getTime()) / 1000
+	)
 
 	return {
 		id: worklog.id,
-		title: `${worklog.author.displayName} - ${formatDuration(worklog.timeSpentSeconds)}`,
-		start: startDate.toISOString(),
-		end: endDate.toISOString(),
+		title: `${worklog.author.name} - ${formatDuration(durationSeconds)}`,
+		start: worklog.startedAt.toISOString(),
+		end: worklog.finishedAt.toISOString(),
 		allDay: false,
 		extendedProps: {
-			issueId: worklog.issueId,
-			author: worklog.author.displayName,
-			timeSpentSeconds: worklog.timeSpentSeconds
+			author: worklog.author.name,
+			authorId: worklog.author.id,
+			durationSeconds
 		}
 	}
 }

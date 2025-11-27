@@ -2,8 +2,10 @@ import type { Route } from './+types/worklog.entries.ts'
 
 import { z } from 'zod'
 
+import type { WorklogEntity } from '~/domain/entities/worklog-entity.ts'
+
 import { ProfileConnectionType } from '~/domain/index.ts'
-import { AtlassianClient } from '~/lib/atlassian/index.ts'
+import { AtlassianClient, mapJiraWorklogToWorklogEntity } from '~/lib/atlassian/index.ts'
 import { Provider } from '~/lib/auth/strategies/common.ts'
 import { orm, ProfileSessionConnection, Token, withRequestContext } from '~/lib/mikro-orm/index.ts'
 import { createSessionStorage } from '~/lib/session/index.ts'
@@ -230,9 +232,7 @@ export const loader = withRequestContext(async function loader({ request }: Rout
 	let filteredWorklogs = allWorklogs
 	if (userIds && userIds.length > 0) {
 		const userIdSet = new Set(userIds)
-		filteredWorklogs = allWorklogs.filter(worklog =>
-			userIdSet.has(worklog.author.accountId)
-		)
+		filteredWorklogs = allWorklogs.filter(worklog => userIdSet.has(worklog.author.accountId))
 	}
 
 	// Paginate results
@@ -240,8 +240,11 @@ export const loader = withRequestContext(async function loader({ request }: Rout
 	const endIndex = startIndex + pageSize
 	const paginatedWorklogs = filteredWorklogs.slice(startIndex, endIndex)
 
+	// Map Jira worklogs to domain entities
+	const worklogEntities: WorklogEntity[] = paginatedWorklogs.map(mapJiraWorklogToWorklogEntity)
+
 	return Response.json({
-		worklogs: paginatedWorklogs,
+		worklogs: worklogEntities,
 		total: filteredWorklogs.length,
 		pageSize,
 		hasMore: endIndex < filteredWorklogs.length

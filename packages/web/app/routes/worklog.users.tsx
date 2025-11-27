@@ -2,15 +2,17 @@ import type { Route } from './+types/worklog.users.ts'
 
 import { z } from 'zod'
 
+import type { WorklogAuthor } from '~/modules/worklogs/domain/worklog-author.ts'
+
 import { ProfileConnectionType } from '~/domain/index.ts'
-import { AtlassianClient } from '~/lib/atlassian/index.ts'
+import { AtlassianClient, mapJiraUserToWorklogAuthor } from '~/lib/atlassian/index.ts'
 import { Provider } from '~/lib/auth/strategies/common.ts'
 import { orm, ProfileSessionConnection, Token, withRequestContext } from '~/lib/mikro-orm/index.ts'
 import { createSessionStorage } from '~/lib/session/index.ts'
 
 const queryParamsSchema = z.object({
 	'resource-id': z.string().optional(),
-	query: z.string().optional(),
+	'query': z.string().optional(),
 	'max-results': z.coerce.number().int().min(1).max(1000).optional(),
 	'project-id': z
 		.preprocess(
@@ -164,17 +166,19 @@ export const loader = withRequestContext(async function loader({ request }: Rout
 	let allUsers: Awaited<ReturnType<AtlassianClient['getUsersByProjects']>> = []
 
 	try {
-		const userPromises = Array.from(projectKeysByResource.entries()).map(async ([resourceId, projectKeys]) => {
-			try {
-				return await client.getUsersByProjects(resourceId, projectKeys, {
-					signal: request.signal,
-					maxResults
-				})
-			} catch {
-				// Skip resources that fail
-				return []
+		const userPromises = Array.from(projectKeysByResource.entries()).map(
+			async ([resourceId, projectKeys]) => {
+				try {
+					return await client.getUsersByProjects(resourceId, projectKeys, {
+						signal: request.signal,
+						maxResults
+					})
+				} catch {
+					// Skip resources that fail
+					return []
+				}
 			}
-		})
+		)
 
 		const userArrays = await Promise.all(userPromises)
 		// Deduplicate users by accountId (users can appear in multiple resources/projects)
@@ -196,5 +200,8 @@ export const loader = withRequestContext(async function loader({ request }: Rout
 		return Response.json({ error: `Failed to fetch users: ${errorMessage}` }, { status: 500 })
 	}
 
-	return Response.json({ users: allUsers })
+	// Map Jira users to domain entities
+	const worklogAuthors: WorklogAuthor[] = allUsers.map(mapJiraUserToWorklogAuthor)
+
+	return Response.json({ users: worklogAuthors })
 })

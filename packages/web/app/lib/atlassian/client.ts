@@ -444,7 +444,7 @@ export class AtlassianClient {
 			const url = new URL(`${this.baseUrl}/ex/jira/${resourceId}/rest/api/3/user/search`)
 			url.searchParams.set('startAt', startAt.toString())
 			url.searchParams.set('maxResults', maxResults.toString())
-			
+
 			// Query parameter is required by the API
 			// Use wildcard '*' to get all users, or use provided query to filter
 			const query = options?.query ?? '*'
@@ -507,7 +507,9 @@ export class AtlassianClient {
 				const total = data.total ?? 0
 				const returned = data.values.length
 				// biome-ignore lint/suspicious/noConsole: Debug logging
-				console.log(`Fetched ${returned} users for resource ${resourceId} (total: ${total}, startAt: ${startAt})`)
+				console.log(
+					`Fetched ${returned} users for resource ${resourceId} (total: ${total}, startAt: ${startAt})`
+				)
 				hasMore = !data.isLast && startAt + returned < total && returned === maxResults
 				if (hasMore) {
 					startAt += maxResults
@@ -540,13 +542,17 @@ export class AtlassianClient {
 
 		while (hasMore) {
 			// Use assignable/multiProjectSearch endpoint which filters by project keys
-			const url = new URL(`${this.baseUrl}/ex/jira/${resourceId}/rest/api/3/user/assignable/multiProjectSearch`)
+			const url = new URL(
+				`${this.baseUrl}/ex/jira/${resourceId}/rest/api/3/user/assignable/multiProjectSearch`
+			)
 			url.searchParams.set('projectKeys', projectKeys.join(','))
 			url.searchParams.set('startAt', startAt.toString())
 			url.searchParams.set('maxResults', maxResults.toString())
 
 			// biome-ignore lint/suspicious/noConsole: Debug logging
-			console.log(`Fetching users for projects ${projectKeys.join(',')} in resource ${resourceId} from: ${url.toString()}`)
+			console.log(
+				`Fetching users for projects ${projectKeys.join(',')} in resource ${resourceId} from: ${url.toString()}`
+			)
 
 			const response: Response = await fetch(url.toString(), {
 				method: 'GET',
@@ -587,7 +593,9 @@ export class AtlassianClient {
 				allUsers.push(...data)
 				const returned = data.length
 				// biome-ignore lint/suspicious/noConsole: Debug logging
-				console.log(`Fetched ${returned} users for projects ${projectKeys.join(',')} in resource ${resourceId} (startAt: ${startAt})`)
+				console.log(
+					`Fetched ${returned} users for projects ${projectKeys.join(',')} in resource ${resourceId} (startAt: ${startAt})`
+				)
 				// If we got fewer results than maxResults, we've reached the end
 				// Otherwise, continue pagination
 				hasMore = returned === maxResults

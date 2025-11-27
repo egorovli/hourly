@@ -123,12 +123,6 @@ export let loader = withRequestContext(async function loader({ request }: Route.
 
 	// Fetch accessible resources from Atlassian if available
 	let accessibleResources: Awaited<ReturnType<AtlassianClient['getAccessibleResources']>> = []
-	const projectsByResource: Array<{
-		resourceId: string
-		resourceName: string
-		resourceAvatarUrl?: string
-		projects: Awaited<ReturnType<AtlassianClient['getProjects']>>
-	}> = []
 
 	const atlassianConnection = await orm.em.findOne(
 		ProfileSessionConnection,
@@ -157,61 +151,6 @@ export let loader = withRequestContext(async function loader({ request }: Route.
 				accessibleResources = await client.getAccessibleResources({
 					signal: request.signal
 				})
-
-				// Fetch projects for each resource
-				const projectPromises = accessibleResources.map(async resource => {
-					let errorDetails: { message?: string; status?: number; url?: string } | undefined
-					try {
-						// biome-ignore lint/suspicious/noConsole: Debug logging
-						console.log(
-							`Starting to fetch projects for resource: ${resource.name} (${resource.id})`
-						)
-						const projects = await client.getProjects(resource.id, resource.url, {
-							signal: request.signal
-						})
-						// biome-ignore lint/suspicious/noConsole: Debug logging
-						console.log(
-							`Successfully fetched ${projects.length} projects for resource ${resource.name}`
-						)
-						return {
-							resourceId: resource.id,
-							resourceName: resource.name,
-							resourceAvatarUrl: resource.avatarUrl,
-							projects,
-							error: undefined
-						}
-					} catch (error) {
-						// Log error but don't fail - some resources may not have Jira
-						const errorMessage = error instanceof Error ? error.message : String(error)
-						// biome-ignore lint/suspicious/noConsole: Server-side error logging is acceptable
-						console.error(
-							`Failed to fetch projects for resource ${resource.id} (${resource.name}):`,
-							{
-								error: errorMessage,
-								stack: error instanceof Error ? error.stack : undefined,
-								resourceUrl: resource.url
-							}
-						)
-
-						// Extract status code from error message if available
-						const statusMatch = errorMessage.match(/status (\d+)/)
-						errorDetails = {
-							message: errorMessage,
-							status: statusMatch?.[1] ? Number.parseInt(statusMatch[1], 10) : undefined,
-							url: resource.url
-						}
-
-						return {
-							resourceId: resource.id,
-							resourceName: resource.name,
-							resourceAvatarUrl: resource.avatarUrl,
-							projects: [],
-							error: errorDetails
-						}
-					}
-				})
-
-				projectsByResource.push(...(await Promise.all(projectPromises)))
 			} catch (error) {
 				// Log error but don't fail the loader - resources are optional
 				// biome-ignore lint/suspicious/noConsole: Server-side error logging is acceptable
@@ -223,7 +162,6 @@ export let loader = withRequestContext(async function loader({ request }: Route.
 	return {
 		session: cookieSession,
 		sessionUser,
-		accessibleResources,
-		projectsByResource
+		accessibleResources
 	}
 })

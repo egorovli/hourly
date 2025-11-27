@@ -1,10 +1,11 @@
 import type { Route } from './+types/__._index.ts'
 import type { Route as ParentRoute } from './+types/__.ts'
-import type { JiraProject, JiraUser } from '~/lib/atlassian/client.ts'
 import type { ProjectOption, ProjectOptionGroup } from '~/components/project-multi-select.tsx'
 import type { UserOption } from '~/components/user-multi-select.tsx'
 import type { MetaDescriptor } from 'react-router'
-import type { JiraWorklog } from '~/lib/atlassian/client.ts'
+import type { WorklogAuthor } from '~/domain/entities/worklog-author.ts'
+import type { WorklogEntity } from '~/domain/entities/worklog-entity.ts'
+import type { WorklogProject } from '~/modules/worklogs/domain/worklog-project.ts'
 
 import { useEffect, useState, lazy, Suspense, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -18,34 +19,16 @@ const Calendar = lazy(() =>
 	import('~/components/calendar/index.tsx').then(m => ({ default: m.Calendar }))
 )
 
-interface ProjectsByResource {
-	resourceId: string
-	resourceName: string
-	resourceAvatarUrl?: string
-	projects: JiraProject[]
-	error?: {
-		message?: string
-		status?: number
-		url?: string
-	}
-}
-
-function getProjectAvatarUrl(project: JiraProject): string | undefined {
-	return (
-		project.avatarUrls?.['48x48'] ?? project.avatarUrls?.['32x32'] ?? project.avatarUrls?.['24x24']
-	)
-}
-
-function groupProjectsByCategory(projects: JiraProject[]): {
-	categorized: Map<string, JiraProject[]>
-	uncategorized: JiraProject[]
+function groupProjectsByCategory(projects: WorklogProject[]): {
+	categorized: Map<string, WorklogProject[]>
+	uncategorized: WorklogProject[]
 } {
-	const projectsByCategory = new Map<string, JiraProject[]>()
-	const uncategorizedProjects: JiraProject[] = []
+	const projectsByCategory = new Map<string, WorklogProject[]>()
+	const uncategorizedProjects: WorklogProject[] = []
 
 	for (const project of projects) {
-		if (project.projectCategory) {
-			const categoryId = project.projectCategory.id
+		if (project.categoryId) {
+			const categoryId = project.categoryId.id
 			const categoryProjects = projectsByCategory.get(categoryId) ?? []
 			categoryProjects.push(project)
 			projectsByCategory.set(categoryId, categoryProjects)
@@ -54,55 +37,56 @@ function groupProjectsByCategory(projects: JiraProject[]): {
 		}
 	}
 
-	// Sort archived projects to the end within each category
+	// Sort inactive projects to the end within each category
 	for (const [categoryId, categoryProjects] of projectsByCategory.entries()) {
 		categoryProjects.sort((a, b) => {
-			const aArchived = a.archived === true ? 1 : 0
-			const bArchived = b.archived === true ? 1 : 0
-			return aArchived - bArchived
+			const aInactive = a.isActive === false ? 1 : 0
+			const bInactive = b.isActive === false ? 1 : 0
+			return aInactive - bInactive
 		})
 	}
 
-	// Sort uncategorized projects: archived at the end
+	// Sort uncategorized projects: inactive at the end
 	uncategorizedProjects.sort((a, b) => {
-		const aArchived = a.archived === true ? 1 : 0
-		const bArchived = b.archived === true ? 1 : 0
-		return aArchived - bArchived
+		const aInactive = a.isActive === false ? 1 : 0
+		const bInactive = b.isActive === false ? 1 : 0
+		return aInactive - bInactive
 	})
 
 	return { categorized: projectsByCategory, uncategorized: uncategorizedProjects }
 }
 
 function buildResourceOption(
-	resourceId: string,
-	resourceName: string,
-	resourceAvatarUrl: string | undefined,
-	projects: JiraProject[]
+	resourceProject: WorklogProject,
+	childProjects: WorklogProject[]
 ): ProjectOptionGroup | undefined {
-	if (projects.length === 0) {
+	if (childProjects.length === 0) {
 		return undefined
 	}
 
-	const { categorized, uncategorized } = groupProjectsByCategory(projects)
+	const { categorized, uncategorized } = groupProjectsByCategory(childProjects)
 	const children: ProjectOption[] = []
+
+	// Extract resource ID from resource project ID (format: "resource:xxx")
+	const resourceId = resourceProject.id.replace(/^resource:/, '')
 
 	// Add category groups
 	for (const [categoryId, categoryProjects] of categorized.entries()) {
 		const firstProject = categoryProjects[0]
-		if (!firstProject?.projectCategory) {
+		if (!firstProject?.categoryId) {
 			continue
 		}
 
 		const categoryOption: ProjectOptionGroup = {
 			id: `category:${categoryId}:${resourceId}`,
-			label: firstProject.projectCategory.name,
+			label: firstProject.categoryId.name,
 			children: categoryProjects.map(project => ({
 				id: `project:${project.id}:${resourceId}`,
 				value: `project:${project.id}:${resourceId}`,
 				label: project.name,
 				key: project.key,
-				avatarUrl: getProjectAvatarUrl(project),
-				archived: project.archived
+				avatarUrl: project.avatarUrl,
+				archived: project.isActive === false
 			}))
 		}
 
@@ -116,8 +100,8 @@ function buildResourceOption(
 			value: `project:${project.id}:${resourceId}`,
 			label: project.name,
 			key: project.key,
-			avatarUrl: getProjectAvatarUrl(project),
-			archived: project.archived
+			avatarUrl: project.avatarUrl,
+			archived: project.isActive === false
 		})
 	}
 
@@ -126,23 +110,35 @@ function buildResourceOption(
 	}
 
 	return {
-		id: `resource:${resourceId}`,
-		label: resourceName,
-		avatarUrl: resourceAvatarUrl,
+		id: resourceProject.id,
+		label: resourceProject.name,
+		avatarUrl: resourceProject.avatarUrl,
 		children
 	}
 }
 
-function buildProjectHierarchy(projectsByResource: ProjectsByResource[]): ProjectOption[] {
+function buildProjectHierarchy(projects: WorklogProject[]): ProjectOption[] {
 	const result: ProjectOption[] = []
 
-	for (const { resourceId, resourceName, resourceAvatarUrl, projects } of projectsByResource) {
-		const resourceOption = buildResourceOption(
-			resourceId,
-			resourceName,
-			resourceAvatarUrl,
-			projects
-		)
+	// Separate resource projects (parent projects) from actual projects
+	const resourceProjects = projects.filter(p => p.id.startsWith('resource:'))
+	const actualProjects = projects.filter(p => !p.id.startsWith('resource:'))
+
+	// Group actual projects by their parent project (resource)
+	const projectsByResource = new Map<string, WorklogProject[]>()
+	for (const project of actualProjects) {
+		if (project.parentProjectId) {
+			const resourceId = project.parentProjectId.id
+			const resourceProjects = projectsByResource.get(resourceId) ?? []
+			resourceProjects.push(project)
+			projectsByResource.set(resourceId, resourceProjects)
+		}
+	}
+
+	// Build hierarchy for each resource
+	for (const resourceProject of resourceProjects) {
+		const childProjects = projectsByResource.get(resourceProject.id) ?? []
+		const resourceOption = buildResourceOption(resourceProject, childProjects)
 		if (resourceOption) {
 			result.push(resourceOption)
 		}
@@ -152,33 +148,24 @@ function buildProjectHierarchy(projectsByResource: ProjectsByResource[]): Projec
 }
 
 interface WorklogEntriesResponse {
-	worklogs: JiraWorklog[]
+	worklogs: WorklogEntity[]
 	total: number
 	pageSize: number
 	hasMore: boolean
 }
 
 interface UsersResponse {
-	users: JiraUser[]
+	users: WorklogAuthor[]
 }
 
-function getUserAvatarUrl(user: JiraUser): string | undefined {
-	return (
-		user.avatarUrls?.['48x48'] ??
-		user.avatarUrls?.['32x32'] ??
-		user.avatarUrls?.['24x24'] ??
-		user.avatarUrls?.['16x16']
-	)
-}
-
-function buildUserOptions(users: JiraUser[]): UserOption[] {
+function buildUserOptions(users: WorklogAuthor[]): UserOption[] {
 	return users.map(user => ({
-		id: user.accountId,
-		value: user.accountId,
-		label: user.displayName,
-		email: user.emailAddress,
-		avatarUrl: getUserAvatarUrl(user),
-		active: user.active
+		id: user.id,
+		value: user.id,
+		label: user.name,
+		email: user.email,
+		avatarUrl: user.avatarUrl,
+		active: user.isActive
 	}))
 }
 
@@ -189,12 +176,26 @@ export default function CalendarPage(): React.ReactNode {
 	const [dateRange, setDateRange] = useState<{ start: Date; end: Date } | undefined>(undefined)
 
 	const parentLoaderData = useRouteLoaderData<ParentRoute.ComponentProps['loaderData']>('routes/__')
-	const projectsByResource = parentLoaderData?.projectsByResource ?? []
 
-	const projectOptions = useMemo(
-		() => buildProjectHierarchy(projectsByResource),
-		[projectsByResource]
-	)
+	// Fetch projects using TanStack Query
+	const { data: projectsData, isLoading: isLoadingProjects } = useQuery<{
+		projects: WorklogProject[]
+	}>({
+		queryKey: ['worklog-projects'],
+		queryFn: async ({ signal }) => {
+			const response = await fetch('/worklog/projects', {
+				signal
+			})
+			if (!response.ok) {
+				throw new Error(`Failed to fetch projects: ${response.statusText}`)
+			}
+			return response.json() as Promise<{ projects: WorklogProject[] }>
+		}
+	})
+
+	const projects = projectsData?.projects ?? []
+
+	const projectOptions = useMemo(() => buildProjectHierarchy(projects), [projects])
 
 	// Build query params for users - only fetch users for selected projects
 	const usersQueryParams = useMemo(() => {
@@ -264,10 +265,7 @@ export default function CalendarPage(): React.ReactNode {
 			}
 			return response.json() as Promise<WorklogEntriesResponse>
 		},
-		enabled:
-			displayCalendar &&
-			dateRange !== undefined &&
-			selectedProjects.length > 0
+		enabled: displayCalendar && dateRange !== undefined && selectedProjects.length > 0
 	})
 
 	const handleDatesSet = (start: Date, end: Date) => {
@@ -280,30 +278,31 @@ export default function CalendarPage(): React.ReactNode {
 
 	const debugData = useMemo(
 		() => ({
-			projectsByResource,
+			projects,
 			projectOptions,
 			selectedProjects,
 			userOptions,
 			selectedUsers,
 			usersData,
 			isLoadingUsers,
+			isLoadingProjects,
 			worklogData,
 			isLoadingWorklogs,
 			parentLoaderData: parentLoaderData
 				? {
-						accessibleResources: parentLoaderData.accessibleResources,
-						projectsByResource: parentLoaderData.projectsByResource
+						accessibleResources: parentLoaderData.accessibleResources
 					}
 				: undefined
 		}),
 		[
-			projectsByResource,
+			projects,
 			projectOptions,
 			selectedProjects,
 			userOptions,
 			selectedUsers,
 			usersData,
 			isLoadingUsers,
+			isLoadingProjects,
 			worklogData,
 			isLoadingWorklogs,
 			parentLoaderData
@@ -321,6 +320,7 @@ export default function CalendarPage(): React.ReactNode {
 					searchPlaceholder='Search projects...'
 					emptyText='No projects found.'
 					className='max-w-md'
+					disabled={isLoadingProjects}
 				/>
 				<UserMultiSelect
 					options={userOptions}
