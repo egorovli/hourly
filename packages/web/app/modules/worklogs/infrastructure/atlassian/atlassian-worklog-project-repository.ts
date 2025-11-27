@@ -15,19 +15,17 @@ export class AtlassianWorklogProjectRepository implements WorklogProjectReposito
 	async findAll(options?: FindAllWorklogProjectsOptions): Promise<WorklogProject[]> {
 		const signal = options?.signal ?? AbortSignal.timeout(30_000)
 
-		// Get accessible resources
 		const accessibleResources = await this.client.getAccessibleResources({ signal })
 
-		// Create resource projects (parent projects) and fetch actual projects
-		const allProjects: WorklogProject[] = []
+		const roots: WorklogProject[] = []
 
 		for (const resource of accessibleResources) {
-			// Create a parent project representing the resource
-			const resourceProject: WorklogProject = {
-				id: `resource:${resource.id}`,
+			const workspaceNode: WorklogProject = {
+				id: `workspace:${resource.id}`,
 				name: resource.name,
 				avatarUrl: resource.avatarUrl,
-				isActive: true
+				isActive: true,
+				children: []
 			}
 
 			try {
@@ -36,7 +34,8 @@ export class AtlassianWorklogProjectRepository implements WorklogProjectReposito
 				})
 
 				const mappedProjects: WorklogProject[] = projects.map(project => ({
-					id: project.id,
+					// Encode provider + workspace so IDs are unique without exposing a \"resource\" entity in the domain
+					id: `atlassian:${resource.id}:${project.id}`,
 					name: project.name,
 					key: project.key,
 					avatarUrl: project.avatarUrls?.['48x48'],
@@ -46,17 +45,17 @@ export class AtlassianWorklogProjectRepository implements WorklogProjectReposito
 								id: project.projectCategory.id,
 								name: project.projectCategory.name
 							}
-						: undefined,
-					parentProject: resourceProject
+						: undefined
 				}))
 
-				allProjects.push(resourceProject, ...mappedProjects)
+				workspaceNode.children = mappedProjects
 			} catch {
-				// Still add the resource project even if fetching fails
-				allProjects.push(resourceProject)
+				workspaceNode.children = []
 			}
+
+			roots.push(workspaceNode)
 		}
 
-		return allProjects
+		return roots
 	}
 }

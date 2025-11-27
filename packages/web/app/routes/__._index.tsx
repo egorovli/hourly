@@ -6,6 +6,7 @@ import type { MetaDescriptor } from 'react-router'
 import type { WorklogAuthor } from '~/domain/entities/worklog-author.ts'
 import type { WorklogEntity } from '~/domain/entities/worklog-entity.ts'
 import type { WorklogProject } from '~/modules/worklogs/domain/worklog-project.ts'
+import type { WorklogProjectCategory } from '~/modules/worklogs/domain/worklog-project-category.ts'
 
 import { useEffect, useState, lazy, Suspense, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -20,84 +21,71 @@ const Calendar = lazy(() =>
 )
 
 function groupProjectsByCategory(projects: WorklogProject[]): {
-	categorized: Map<string, WorklogProject[]>
+	categorized: Map<string, { category: WorklogProjectCategory; projects: WorklogProject[] }>
 	uncategorized: WorklogProject[]
 } {
-	const projectsByCategory = new Map<string, WorklogProject[]>()
-	const uncategorizedProjects: WorklogProject[] = []
+	const categorized = new Map<
+		string,
+		{ category: WorklogProjectCategory; projects: WorklogProject[] }
+	>()
+	const uncategorized: WorklogProject[] = []
 
 	for (const project of projects) {
-		if (project.categoryId) {
-			const categoryId = project.categoryId.id
-			const categoryProjects = projectsByCategory.get(categoryId) ?? []
-			categoryProjects.push(project)
-			projectsByCategory.set(categoryId, categoryProjects)
+		if (project.category) {
+			const existing = categorized.get(project.category.id) ?? {
+				category: project.category,
+				projects: []
+			}
+			existing.projects.push(project)
+			categorized.set(project.category.id, existing)
 		} else {
-			uncategorizedProjects.push(project)
+			uncategorized.push(project)
 		}
 	}
 
-	// Sort inactive projects to the end within each category
-	for (const [categoryId, categoryProjects] of projectsByCategory.entries()) {
-		categoryProjects.sort((a, b) => {
-			const aInactive = a.isActive === false ? 1 : 0
-			const bInactive = b.isActive === false ? 1 : 0
-			return aInactive - bInactive
-		})
-	}
-
-	// Sort uncategorized projects: inactive at the end
-	uncategorizedProjects.sort((a, b) => {
+	const sortByActive = (a: WorklogProject, b: WorklogProject) => {
 		const aInactive = a.isActive === false ? 1 : 0
 		const bInactive = b.isActive === false ? 1 : 0
 		return aInactive - bInactive
-	})
+	}
 
-	return { categorized: projectsByCategory, uncategorized: uncategorizedProjects }
+	for (const entry of categorized.values()) {
+		entry.projects.sort(sortByActive)
+	}
+
+	uncategorized.sort(sortByActive)
+
+	return { categorized, uncategorized }
 }
 
-function buildResourceOption(
-	resourceProject: WorklogProject,
-	childProjects: WorklogProject[]
-): ProjectOptionGroup | undefined {
-	if (childProjects.length === 0) {
+function buildWorkspaceOption(workspace: WorklogProject): ProjectOptionGroup | undefined {
+	const projects = workspace.children ?? []
+	if (projects.length === 0) {
 		return undefined
 	}
 
-	const { categorized, uncategorized } = groupProjectsByCategory(childProjects)
+	const { categorized, uncategorized } = groupProjectsByCategory(projects)
 	const children: ProjectOption[] = []
 
-	// Extract resource ID from resource project ID (format: "resource:xxx")
-	const resourceId = resourceProject.id.replace(/^resource:/, '')
-
-	// Add category groups
-	for (const [categoryId, categoryProjects] of categorized.entries()) {
-		const firstProject = categoryProjects[0]
-		if (!firstProject?.categoryId) {
-			continue
-		}
-
-		const categoryOption: ProjectOptionGroup = {
-			id: `category:${categoryId}:${resourceId}`,
-			label: firstProject.categoryId.name,
+	for (const { category, projects: categoryProjects } of categorized.values()) {
+		children.push({
+			id: `category:${category.id}:${workspace.id}`,
+			label: category.name,
 			children: categoryProjects.map(project => ({
-				id: `project:${project.id}:${resourceId}`,
-				value: `project:${project.id}:${resourceId}`,
+				id: `project:${project.id}`,
+				value: `project:${project.id}`,
 				label: project.name,
 				key: project.key,
 				avatarUrl: project.avatarUrl,
 				archived: project.isActive === false
 			}))
-		}
-
-		children.push(categoryOption)
+		})
 	}
 
-	// Add uncategorized projects directly under resource
 	for (const project of uncategorized) {
 		children.push({
-			id: `project:${project.id}:${resourceId}`,
-			value: `project:${project.id}:${resourceId}`,
+			id: `project:${project.id}`,
+			value: `project:${project.id}`,
 			label: project.name,
 			key: project.key,
 			avatarUrl: project.avatarUrl,
@@ -110,41 +98,24 @@ function buildResourceOption(
 	}
 
 	return {
-		id: resourceProject.id,
-		label: resourceProject.name,
-		avatarUrl: resourceProject.avatarUrl,
+		id: workspace.id,
+		label: workspace.name,
+		avatarUrl: workspace.avatarUrl,
 		children
 	}
 }
 
-function buildProjectHierarchy(projects: WorklogProject[]): ProjectOption[] {
-	const result: ProjectOption[] = []
+function buildProjectOptions(workspaces: WorklogProject[]): ProjectOption[] {
+	const options: ProjectOption[] = []
 
-	// Separate resource projects (parent projects) from actual projects
-	const resourceProjects = projects.filter(p => p.id.startsWith('resource:'))
-	const actualProjects = projects.filter(p => !p.id.startsWith('resource:'))
-
-	// Group actual projects by their parent project (resource)
-	const projectsByResource = new Map<string, WorklogProject[]>()
-	for (const project of actualProjects) {
-		if (project.parentProjectId) {
-			const resourceId = project.parentProjectId.id
-			const resourceProjects = projectsByResource.get(resourceId) ?? []
-			resourceProjects.push(project)
-			projectsByResource.set(resourceId, resourceProjects)
+	for (const workspace of workspaces) {
+		const option = buildWorkspaceOption(workspace)
+		if (option) {
+			options.push(option)
 		}
 	}
 
-	// Build hierarchy for each resource
-	for (const resourceProject of resourceProjects) {
-		const childProjects = projectsByResource.get(resourceProject.id) ?? []
-		const resourceOption = buildResourceOption(resourceProject, childProjects)
-		if (resourceOption) {
-			result.push(resourceOption)
-		}
-	}
-
-	return result
+	return options
 }
 
 interface WorklogEntriesResponse {
@@ -195,7 +166,7 @@ export default function CalendarPage(): React.ReactNode {
 
 	const projects = projectsData?.projects ?? []
 
-	const projectOptions = useMemo(() => buildProjectHierarchy(projects), [projects])
+	const projectOptions = useMemo(() => buildProjectOptions(projects), [projects])
 
 	// Build query params for users - only fetch users for selected projects
 	const usersQueryParams = useMemo(() => {

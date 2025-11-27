@@ -1,9 +1,11 @@
+import type { WorklogProjectCategory } from './worklog-project-category.ts'
+
 export interface WorklogProject {
 	id: string
 	name: string
 	key?: string
 	avatarUrl?: string
 	isActive?: boolean
-	categoryId?: string
-	parentProjectId?: string
+	category?: WorklogProjectCategory
+	children?: WorklogProject[]
 }

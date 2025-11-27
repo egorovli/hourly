@@ -118,22 +118,31 @@ export const loader = withRequestContext(async function loader({ request }: Rout
 		refreshToken: token.refreshToken
 	})
 
-	// Extract project IDs and resource IDs from project-ids format if provided
-	// Project IDs come in format: "project:{projectId}:{resourceId}"
-	const projectResourceMap = new Map<string, Map<string, string>>() // resourceId -> projectId -> projectKey
+	const projectResourceMap = new Map<string, Map<string, string>>() // workspaceId -> projectId -> projectKey
+
+	const parseProjectSelection = (value: string) => {
+		const match = value.match(/^project:atlassian:([^:]+):(.+)$/)
+		if (!match) {
+			return null
+		}
+		const [, workspaceId, projectId] = match
+		if (!workspaceId || !projectId) {
+			return null
+		}
+		return { workspaceId, projectId }
+	}
 
 	if (projectIds && projectIds.length > 0) {
 		for (const projectIdStr of projectIds) {
-			const match = projectIdStr.match(/^project:([^:]+):(.+)$/)
-			if (match?.[1] && match[2]) {
-				const projectId = match[1]
-				const resourceIdFromMatch = match[2]
-				if (!projectResourceMap.has(resourceIdFromMatch)) {
-					projectResourceMap.set(resourceIdFromMatch, new Map())
-				}
-				// We'll fetch the project key later
-				projectResourceMap.get(resourceIdFromMatch)?.set(projectId, '')
+			const parsed = parseProjectSelection(projectIdStr)
+			if (!parsed) {
+				continue
 			}
+			const { workspaceId, projectId } = parsed
+			if (!projectResourceMap.has(workspaceId)) {
+				projectResourceMap.set(workspaceId, new Map())
+			}
+			projectResourceMap.get(workspaceId)?.set(projectId, '')
 		}
 	}
 
