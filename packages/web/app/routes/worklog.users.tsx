@@ -1,14 +1,15 @@
 import type { Route } from './+types/worklog.users.ts'
+import type { WorklogAuthor } from '~/modules/worklogs/domain/worklog-author.ts'
 
 import { z } from 'zod'
 
-import type { WorklogAuthor } from '~/modules/worklogs/domain/worklog-author.ts'
-
 import { ProfileConnectionType } from '~/domain/index.ts'
-import { AtlassianClient, mapJiraUserToWorklogAuthor } from '~/lib/atlassian/index.ts'
+import { AtlassianClient } from '~/lib/atlassian/index.ts'
 import { Provider } from '~/lib/auth/strategies/common.ts'
 import { orm, ProfileSessionConnection, Token, withRequestContext } from '~/lib/mikro-orm/index.ts'
 import { createSessionStorage } from '~/lib/session/index.ts'
+import { AtlassianWorklogAuthorRepository } from '~/modules/worklogs/infrastructure/atlassian/atlassian-worklog-author-repository.ts'
+import { FindWorklogAuthorsUseCase } from '~/modules/worklogs/use-cases/find-worklog-authors.use-case.ts'
 
 const queryParamsSchema = z.object({
 	'resource-id': z.string().optional(),
@@ -22,6 +23,7 @@ const queryParamsSchema = z.object({
 		.optional()
 })
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Loader coordinates auth, validation, and provider fetch with fallbacks
 export const loader = withRequestContext(async function loader({ request }: Route.LoaderArgs) {
 	const sessionStorage = createSessionStorage()
 	const cookieSession = await sessionStorage.getSession(request.headers.get('Cookie'))
@@ -113,105 +115,23 @@ export const loader = withRequestContext(async function loader({ request }: Rout
 		return Response.json({ users: [] })
 	}
 
-	const projectResourceMap = new Map<string, Map<string, string>>() // workspaceId -> projectId -> projectKey
-
-	const parseProjectSelection = (value: string) => {
-		const match = value.match(/^project:atlassian:([^:]+):(.+)$/)
-		if (!match) {
-			return null
-		}
-		const [, workspaceId, projectId] = match
-		if (!workspaceId || !projectId) {
-			return null
-		}
-		return { workspaceId, projectId }
-	}
-
-	for (const projectIdStr of projectIds) {
-		const parsed = parseProjectSelection(projectIdStr)
-		if (!parsed) {
-			continue
-		}
-		const { workspaceId, projectId } = parsed
-		if (!projectResourceMap.has(workspaceId)) {
-			projectResourceMap.set(workspaceId, new Map())
-		}
-		projectResourceMap.get(workspaceId)?.set(projectId, '')
-	}
-
-	// Fetch project keys for selected projects
-	// We need project keys (like "LP") for the API, not project IDs
-	const projectKeysByResource = new Map<string, string[]>()
-	const accessibleResources = await client.getAccessibleResources({ signal: request.signal })
-
-	for (const resource of accessibleResources) {
-		// Skip if resourceId is specified and doesn't match
-		if (resourceId && resource.id !== resourceId) {
-			continue
-		}
-
-		const projectIdsForResource = projectResourceMap.get(resource.id)
-		if (projectIdsForResource && projectIdsForResource.size > 0) {
-			try {
-				// Fetch projects to get their keys
-				const projects = await client.getProjects(resource.id, resource.url, {
-					signal: request.signal
-				})
-				const projectKeys: string[] = []
-				for (const project of projects) {
-					if (projectIdsForResource.has(project.id)) {
-						projectKeys.push(project.key)
-					}
-				}
-				if (projectKeys.length > 0) {
-					projectKeysByResource.set(resource.id, projectKeys)
-				}
-			} catch {
-				// Skip if we can't fetch projects
-			}
-		}
-	}
-
-	// Fetch users for each resource with selected projects
-	let allUsers: Awaited<ReturnType<AtlassianClient['getUsersByProjects']>> = []
+	const repository = new AtlassianWorklogAuthorRepository(client)
+	const useCase = new FindWorklogAuthorsUseCase(repository)
 
 	try {
-		const userPromises = Array.from(projectKeysByResource.entries()).map(
-			async ([resourceId, projectKeys]) => {
-				try {
-					return await client.getUsersByProjects(resourceId, projectKeys, {
-						signal: request.signal,
-						maxResults
-					})
-				} catch {
-					// Skip resources that fail
-					return []
-				}
-			}
-		)
+		const users: WorklogAuthor[] = await useCase.execute({
+			signal: request.signal,
+			projectIds,
+			maxResults,
+			query
+		})
 
-		const userArrays = await Promise.all(userPromises)
-		// Deduplicate users by accountId (users can appear in multiple resources/projects)
-		const userMap = new Map<string, Awaited<ReturnType<AtlassianClient['getUsersByProjects']>>[0]>()
-		for (const users of userArrays) {
-			for (const user of users) {
-				if (!userMap.has(user.accountId)) {
-					userMap.set(user.accountId, user)
-				}
-			}
-		}
-		allUsers = Array.from(userMap.values())
+		return Response.json({ users })
 	} catch (error) {
-		// If request was aborted, return empty result
 		if (error instanceof Error && error.name === 'AbortError') {
 			return Response.json({ users: [] })
 		}
 		const errorMessage = error instanceof Error ? error.message : String(error)
 		return Response.json({ error: `Failed to fetch users: ${errorMessage}` }, { status: 500 })
 	}
-
-	// Map Jira users to domain entities
-	const worklogAuthors: WorklogAuthor[] = allUsers.map(mapJiraUserToWorklogAuthor)
-
-	return Response.json({ users: worklogAuthors })
 })

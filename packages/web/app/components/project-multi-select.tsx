@@ -215,6 +215,7 @@ export function ProjectMultiSelect({
 		</CommandGroup>
 	)
 
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: UI rendering logic is intentionally branching for UX details
 	const renderLeafNode = (option: ProjectOptionLeaf, level: number): React.ReactNode => {
 		const selected = normalizedSelection.includes(option.value)
 		const isArchived = option.archived === true

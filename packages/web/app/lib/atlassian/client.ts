@@ -164,6 +164,7 @@ export class AtlassianClient {
 		return allResources
 	}
 
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Jira pagination and error handling requires branching
 	async getProjects(
 		resourceId: string,
 		resourceUrl: string,
@@ -428,6 +429,7 @@ export class AtlassianClient {
 		return allWorklogs
 	}
 
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Jira pagination and query handling requires branching
 	async getUsers(
 		resourceId: string,
 		options?: AtlassianClientBaseRequestOptions & {
@@ -524,6 +526,7 @@ export class AtlassianClient {
 		return allUsers
 	}
 
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Jira pagination and multi-project queries require branching
 	async getUsersByProjects(
 		resourceId: string,
 		projectKeys: string[],

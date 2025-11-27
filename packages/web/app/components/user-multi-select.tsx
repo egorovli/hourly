@@ -139,6 +139,7 @@ export function UserMultiSelect({
 	const preview = selectedOptions.slice(0, maxPreview)
 	const remaining = Math.max(selectedOptions.length - preview.length, 0)
 
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: UI rendering logic needs branching for badges/avatars
 	const renderUserOption = (option: UserOption): React.ReactNode => {
 		const selected = normalizedSelection.includes(option.value)
 		const isInactive = option.active === false

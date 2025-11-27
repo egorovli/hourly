@@ -55,7 +55,7 @@ if (isProduction) {
 		)
 	}
 } else {
-	console.log('[MikroORM] Using TsMorphMetadataProvider for development mode')
+	// Development mode: rely on TsMorphMetadataProvider without logging to avoid noisy output
 }
 
 export const config: Options = {

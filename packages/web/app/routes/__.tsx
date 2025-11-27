@@ -47,6 +47,7 @@ export default function CommonLayout({ loaderData }: Route.ComponentProps): Reac
 	)
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Auth/session loader handles multiple early exits and redirects
 export let loader = withRequestContext(async function loader({ request }: Route.LoaderArgs) {
 	function redirectToSignIn(): never {
 		const url = new URL(request.url)
