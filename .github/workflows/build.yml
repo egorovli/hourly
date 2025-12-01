@@ -45,7 +45,7 @@ jobs:
           echo "**Concurrency Group:** \`$CONCURRENCY_GROUP\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -94,7 +94,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -143,7 +143,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -191,7 +191,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -237,7 +237,7 @@ jobs:
   #   timeout-minutes: 15
   #   steps:
   #     - name: Checkout repository
-  #       uses: actions/checkout@v5
+  #       uses: actions/checkout@v6
   #
   #     - name: Setup Bun
   #       uses: oven-sh/setup-bun@v2
@@ -266,7 +266,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           # Fetch full history for better cache hits
           fetch-depth: 0
