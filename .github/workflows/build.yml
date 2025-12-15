@@ -65,7 +65,7 @@ jobs:
 
       - name: Cache Bun install cache
         id: cache-bun-install
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ steps.bun-cache-path.outputs.cache-path }}
           key: bun-install-${{ runner.os }}-${{ hashFiles('bun.lock') }}
@@ -74,7 +74,7 @@ jobs:
 
       - name: Cache node_modules
         id: cache-node-modules
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-${{ hashFiles('bun.lock') }}
@@ -113,7 +113,7 @@ jobs:
         run: echo "cache-path=$(bun pm cache)" >> $GITHUB_OUTPUT
 
       - name: Cache Bun install cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ steps.bun-cache-path.outputs.cache-path }}
           key: bun-install-${{ runner.os }}-${{ hashFiles('bun.lock') }}
@@ -121,7 +121,7 @@ jobs:
             bun-install-${{ runner.os }}-
 
       - name: Cache node_modules
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-${{ hashFiles('bun.lock') }}
@@ -162,7 +162,7 @@ jobs:
         run: echo "cache-path=$(bun pm cache)" >> $GITHUB_OUTPUT
 
       - name: Cache Bun install cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ steps.bun-cache-path.outputs.cache-path }}
           key: bun-install-${{ runner.os }}-${{ hashFiles('bun.lock') }}
@@ -170,7 +170,7 @@ jobs:
             bun-install-${{ runner.os }}-
 
       - name: Cache node_modules
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-${{ hashFiles('bun.lock') }}
@@ -210,7 +210,7 @@ jobs:
         run: echo "cache-path=$(bun pm cache)" >> $GITHUB_OUTPUT
 
       - name: Cache Bun install cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ steps.bun-cache-path.outputs.cache-path }}
           key: bun-install-${{ runner.os }}-${{ hashFiles('bun.lock') }}
@@ -218,7 +218,7 @@ jobs:
             bun-install-${{ runner.os }}-
 
       - name: Cache node_modules
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-${{ hashFiles('bun.lock') }}
@@ -354,7 +354,7 @@ jobs:
           #   "npm_token=${{ secrets.NPM_TOKEN }}"
 
       - name: Cache Trivy vulnerability database
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/trivy
           key: ${{ runner.os }}-trivy-db-latest
