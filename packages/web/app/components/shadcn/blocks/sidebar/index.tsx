@@ -14,7 +14,7 @@ import {
 	Sparkles,
 	TimerIcon
 } from 'lucide-react'
-import { Link, NavLink, useMatch, useResolvedPath } from 'react-router'
+import { Form, Link, NavLink, useMatch, useResolvedPath } from 'react-router'
 
 import { Avatar, AvatarFallback, AvatarImage } from '~/components/shadcn/ui/avatar.tsx'
 
@@ -226,10 +226,20 @@ function NavUser({ user }: { user: { name: string; email: string; avatar: string
 							</DropdownMenuItem>
 						</DropdownMenuGroup>
 						<DropdownMenuSeparator />
-						<DropdownMenuItem>
-							<LogOut />
-							Log out
-						</DropdownMenuItem>
+						<Form
+							method='post'
+							action='/auth/sign-out'
+						>
+							<DropdownMenuItem asChild>
+								<button
+									type='submit'
+									className='w-full'
+								>
+									<LogOut />
+									Log out
+								</button>
+							</DropdownMenuItem>
+						</Form>
 					</DropdownMenuContent>
 				</DropdownMenu>
 			</SidebarMenuItem>

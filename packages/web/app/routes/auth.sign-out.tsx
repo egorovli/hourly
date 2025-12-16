@@ -15,6 +15,7 @@ export const action = withRequestContext(async function action({ request }: Rout
 	const sessionStorage = createSessionStorage()
 	const cookieSession = await sessionStorage.getSession(request.headers.get('Cookie'))
 
+	// Find the session in the database
 	const session = await orm.em.findOne(Session, { id: cookieSession.id })
 
 	if (session) {
@@ -32,6 +33,7 @@ export const action = withRequestContext(async function action({ request }: Rout
 		await orm.em.flush()
 	}
 
+	// Destroy the session cookie and redirect to sign-in
 	return redirect('/auth/sign-in', {
 		headers: {
 			'Set-Cookie': await sessionStorage.destroySession(cookieSession)

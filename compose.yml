@@ -2,7 +2,7 @@ name: hourly
 
 services:
   postgres:
-    image: postgres:18.0-alpine3.22
+    image: postgres:18.1-alpine3.23
     networks:
       - postgres
     ports:
@@ -35,8 +35,6 @@ services:
 
 networks:
   postgres:
-    driver: bridge
 
 volumes:
   postgres:
-    driver: local
