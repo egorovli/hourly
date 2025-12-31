@@ -11,16 +11,16 @@ import {
 	withRequestContext
 } from '~/lib/mikro-orm/index.ts'
 
-export const loader = withRequestContext(async function loader({ request }: Route.LoaderArgs) {
+type SignOutOptions = Pick<Route.LoaderArgs | Route.ActionArgs, 'request'>
+
+async function signOut({ request }: SignOutOptions): Promise<Response> {
 	const { em } = orm
 	const sessionStorage = createSessionStorage()
 	const cookieSession = await sessionStorage.getSession(request.headers.get('Cookie'))
 
-	// Find the session in the database
 	const session = await em.findOne(Session, { id: cookieSession.id })
 
 	if (session) {
-		// Delete all profile connections for this session
 		const connections = await em.find(ProfileSessionConnection, {
 			session: { id: session.id }
 		})
@@ -29,15 +29,21 @@ export const loader = withRequestContext(async function loader({ request }: Rout
 			em.remove(connection)
 		}
 
-		// Delete the session entity itself
 		em.remove(session)
 		await em.flush()
 	}
 
-	// Destroy the session cookie and redirect to sign-in
 	return redirect('/auth/sign-in', {
 		headers: {
 			'Set-Cookie': await sessionStorage.destroySession(cookieSession)
 		}
 	})
+}
+
+export const action = withRequestContext(async function action({ request }: Route.ActionArgs) {
+	return signOut({ request })
+})
+
+export const loader = withRequestContext(async function loader({ request }: Route.LoaderArgs) {
+	return signOut({ request })
 })
