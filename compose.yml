@@ -33,8 +33,134 @@ services:
       - "com.hourly.managed-by=docker-compose"
     restart: unless-stopped
 
+  opensearch:
+    image: opensearchproject/opensearch:2.19.2
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    networks:
+      - opensearch
+    ports:
+      - 9200:9200
+      - 9600:9600
+    environment:
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_ADMIN_PASSWORD}
+      - OPENSEARCH_JAVA_OPTS=-Xms256m -Xmx256m
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+      - discovery.type=single-node
+      - plugins.security.disabled=true
+      - cluster.routing.allocation.disk.threshold_enabled=true
+      - cluster.routing.allocation.disk.watermark.low=512mb
+      - cluster.routing.allocation.disk.watermark.high=256mb
+      - cluster.routing.allocation.disk.watermark.flood_stage=128mb
+    volumes:
+      - opensearch:/usr/share/opensearch/data:rw
+    healthcheck:
+      test: curl -f http://localhost:9200/_cluster/health
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  opensearch-dashboard:
+    image: opensearchproject/opensearch-dashboards:2.19.2
+    networks:
+      - opensearch
+    ports:
+      - 5601:5601
+    environment:
+      - OPENSEARCH_HOSTS=["http://opensearch:9200"]
+      - OPENSEARCH_PASSWORD=${OPENSEARCH_ADMIN_PASSWORD}
+      - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
+    healthcheck:
+      test: curl -f http://localhost:5601/api/status
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  temporal:
+    image: temporalio/auto-setup:1.27.2
+    depends_on:
+      - opensearch
+    networks:
+      postgres:
+      opensearch:
+      temporal:
+        ipv4_address: 172.100.0.2
+    ports:
+      - 7233:7233
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PWD=${POSTGRES_PASSWORD}
+      - POSTGRES_SEEDS=postgres
+      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
+      - TEMPORAL_ADDRESS=temporal:7233
+      - BIND_ON_IP=0.0.0.0
+      - TEMPORAL_BROADCAST_ADDRESS=172.100.0.2
+      - ENABLE_ES=true
+      - ES_SEEDS=opensearch
+      - ES_PWD=${OPENSEARCH_ADMIN_PASSWORD}
+    volumes:
+      - ./packages/temporal/dynamicconfig:/etc/temporal/config/dynamicconfig
+    healthcheck:
+      test: tctl --address temporal:7233 --namespace default namespace list
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    labels:
+      kompose.volume.type: configMap
+    restart: unless-stopped
+
+  temporal-admin-tools:
+    image: temporalio/admin-tools:1.27.2-tctl-1.18.2-cli-1.3.0
+    depends_on:
+      - temporal
+    networks:
+      - temporal
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CLI_ADDRESS=temporal:7233
+    stdin_open: true
+    tty: true
+    healthcheck:
+      test: tctl --address temporal:7233 --namespace default namespace list
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  temporal-ui:
+    image: temporalio/ui:v2.37.4
+    depends_on:
+      - temporal
+    networks:
+      - temporal
+    ports:
+      - 9002:8080
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CORS_ORIGINS=http://localhost:9002
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:8080/readyz
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
 networks:
   postgres:
+  opensearch:
+
+  temporal:
+    ipam:
+      config:
+        - subnet: 172.100.0.0/24
+          gateway: 172.100.0.1
 
 volumes:
   postgres:
+  opensearch:
