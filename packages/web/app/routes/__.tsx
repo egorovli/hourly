@@ -1,7 +1,21 @@
 import type { Route } from './+types/__.ts'
 
-import { Outlet, redirect } from 'react-router'
-import { wrap } from '@mikro-orm/core'
+import { Form, Outlet, redirect } from 'react-router'
+import { LogOut } from 'lucide-react'
+
+import { Logo } from '~/components/logo.tsx'
+import { Avatar, AvatarFallback, AvatarImage } from '~/components/shadcn/ui/avatar.tsx'
+import { createSessionStorage } from '~/lib/session/index.ts'
+import { ProfileConnectionType } from '~/domain/index.ts'
+
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuLabel,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger
+} from '~/components/shadcn/ui/dropdown-menu.tsx'
 
 import {
 	orm,
@@ -10,24 +24,80 @@ import {
 	withRequestContext
 } from '~/lib/mikro-orm/index.ts'
 
-import { createSessionStorage } from '~/lib/session/index.ts'
-import { ProfileConnectionType } from '~/domain/index.ts'
+interface ProfileData {
+	displayName: string
+	email?: string
+	avatarUrl?: string
+}
 
-function Header(): React.ReactNode {
+function getInitials(name: string): string {
+	return name
+		.split(' ')
+		.map(n => n[0])
+		.join('')
+		.toUpperCase()
+		.slice(0, 2)
+}
+
+function Header({ profile }: { profile: ProfileData }): React.ReactNode {
+	const initials = getInitials(profile.displayName)
+
 	return (
-		<div className='h-16 bg-red-500'>
-			<h1>Header</h1>
-		</div>
+		<header className='border-b bg-background'>
+			<div className='flex h-14 items-center justify-between px-6'>
+				<Logo />
+
+				<DropdownMenu>
+					<DropdownMenuTrigger className='flex items-center gap-2 rounded-md px-2 py-1.5 outline-none hover:bg-accent'>
+						<Avatar className='size-8'>
+							<AvatarImage
+								src={profile.avatarUrl}
+								alt={profile.displayName}
+							/>
+							<AvatarFallback className='text-xs'>{initials}</AvatarFallback>
+						</Avatar>
+						<span className='text-sm'>{profile.displayName}</span>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent
+						align='end'
+						className='w-56'
+					>
+						<DropdownMenuLabel className='font-normal'>
+							<div className='flex flex-col space-y-1'>
+								<p className='text-sm font-medium'>{profile.displayName}</p>
+								{profile.email && <p className='text-xs text-muted-foreground'>{profile.email}</p>}
+							</div>
+						</DropdownMenuLabel>
+						<DropdownMenuSeparator />
+						<Form
+							method='post'
+							action='/auth/sign-out'
+						>
+							<DropdownMenuItem asChild>
+								<button
+									type='submit'
+									className='w-full cursor-pointer'
+								>
+									<LogOut className='mr-2 size-4' />
+									Sign out
+								</button>
+							</DropdownMenuItem>
+						</Form>
+					</DropdownMenuContent>
+				</DropdownMenu>
+			</div>
+		</header>
 	)
 }
 
 export default function AuthenticatedLayout({ loaderData }: Route.ComponentProps): React.ReactNode {
 	return (
-		<div className='h-full'>
-			<Header />
-			<Outlet />
+		<div className='flex h-full flex-col'>
+			<Header profile={loaderData.profile} />
 
-			<pre>{JSON.stringify(loaderData, null, 2)}</pre>
+			<main className='flex-1'>
+				<Outlet />
+			</main>
 		</div>
 	)
 }
@@ -77,7 +147,17 @@ export let loader = withRequestContext(async function loader({ request }: Route.
 		redirectToSignIn()
 	}
 
+	// TODO: Proper types.
+	const profile = connection.profile
+	const profileData = profile.data as unknown as ProfileData
+
 	return {
-		profile: wrap(connection.profile).toObject()
+		profile: {
+			id: profile.id,
+			provider: profile.provider,
+			displayName: profileData.displayName,
+			email: profileData.email,
+			avatarUrl: profileData.avatarUrl
+		}
 	}
 })

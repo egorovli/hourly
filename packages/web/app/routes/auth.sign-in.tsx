@@ -10,10 +10,10 @@ import {
 	SiGitlabHex
 } from '@icons-pack/react-simple-icons'
 
-import { Timer } from 'lucide-react'
 import { Link } from 'react-router'
 import { useState } from 'react'
 
+import { Logo } from '~/components/logo.tsx'
 import { Button } from '~/components/shadcn/ui/button.tsx'
 import { Label } from '~/components/shadcn/ui/label.tsx'
 import { withRequestContext } from '~/lib/mikro-orm/index.ts'
@@ -75,15 +75,7 @@ export default function SignInPage(): React.ReactNode {
 		<div className='grid min-h-svh lg:grid-cols-2'>
 			<div className='flex flex-col gap-4 p-6 md:p-10'>
 				<div className='flex justify-center gap-2 md:justify-start'>
-					<Link
-						to='/'
-						className='flex items-center gap-2 font-medium'
-					>
-						<div className='bg-primary text-primary-foreground flex size-6 items-center justify-center rounded-md'>
-							<Timer className='size-4' />
-						</div>
-						Hourly
-					</Link>
+					<Logo />
 				</div>
 				<div className='flex flex-1 items-center justify-center'>
 					<div className='w-full max-w-xs'>
