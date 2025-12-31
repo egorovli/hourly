@@ -1,4 +1,4 @@
-import type { PluginDef } from '@fullcalendar/core'
+import type { FormatterInput, PluginDef } from '@fullcalendar/core'
 import type { MetaDescriptor } from 'react-router'
 import type { Route } from './+types/__._index.ts'
 import type { Draggable } from '@fullcalendar/interaction'
@@ -9,6 +9,12 @@ import { Virtuoso } from 'react-virtuoso'
 import { invariant } from '~/lib/util/index.ts'
 
 const FullCalendar = lazy(() => import('@fullcalendar/react'))
+
+const dayHeaderFormat: FormatterInput = {
+	month: 'short',
+	day: '2-digit',
+	weekday: 'short'
+}
 
 export default function IndexPage(): React.ReactNode {
 	const [displayCalendar, setDisplayCalendar] = useState(false)
@@ -37,8 +43,8 @@ export default function IndexPage(): React.ReactNode {
 		])
 			.then(() => {
 				setDisplayCalendar(true)
-				console.log(pluginsRef.current)
-				console.log(draggableConstructorRef.current)
+				// console.log(pluginsRef.current)
+				// console.log(draggableConstructorRef.current)
 			})
 			.catch(err => {
 				console.error(err)
@@ -81,11 +87,67 @@ export default function IndexPage(): React.ReactNode {
 						plugins={pluginsRef.current}
 						initialView='timeGridWeek'
 						height='100%'
+						dayHeaderFormat={dayHeaderFormat}
 						events={[]}
-						datesSet={() => {}}
+						datesSet={args => {
+							console.log(args)
+						}}
 						firstDay={1}
+						allDaySlot={false}
+						nowIndicator
 						editable
 						droppable
+						// TODO: only enable when "edit" mode is enabled
+						selectable
+						selectMirror
+						eventAdd={info => {
+							console.log('Event add', info)
+						}}
+						eventChange={info => {
+							console.log('Event change', info)
+						}}
+						eventRemove={info => {
+							console.log('Event remove', info)
+						}}
+						eventsSet={events => {
+							console.log('Events set', events)
+						}}
+						eventClick={info => {
+							console.log('Event click', info)
+						}}
+						eventMouseEnter={info => {
+							console.log('Event mouse enter', info)
+						}}
+						eventMouseLeave={info => {
+							console.log('Event mouse leave', info)
+						}}
+						eventDragStart={info => {
+							console.log('Event drag start', info)
+						}}
+						eventDragStop={info => {
+							console.log('Event drag stop', info)
+						}}
+						eventDrop={info => {
+							console.log('Event drop', info)
+						}}
+						drop={info => {
+							console.log('Drop', info)
+						}}
+						eventReceive={info => {
+							console.log('Event receive', info)
+						}}
+						eventLeave={info => {
+							console.log('Event leave', info)
+						}}
+						eventResizeStart={info => {
+							console.log('Event resize start', info)
+						}}
+						eventResizeStop={info => {
+							console.log('Event resize stop', info)
+						}}
+						eventResize={info => {
+							console.log('Event resize', info)
+						}}
 					/>
 				</Suspense>
 			</div>
