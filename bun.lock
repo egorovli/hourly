@@ -15,6 +15,7 @@
       "name": "@hourly/web",
       "dependencies": {
         "@fullcalendar/core": "^6.1.20",
+        "@fullcalendar/interaction": "^6.1.20",
         "@fullcalendar/react": "^6.1.20",
         "@fullcalendar/timegrid": "^6.1.20",
         "@hapi/iron": "^7.0.1",
@@ -332,6 +333,8 @@
     "@fullcalendar/core": ["@fullcalendar/core@6.1.20", "", { "dependencies": { "preact": "~10.12.1" } }, "sha512-1cukXLlePFiJ8YKXn/4tMKsy0etxYLCkXk8nUCFi11nRONF2Ba2CD5b21/ovtOO2tL6afTJfwmc1ed3HG7eB1g=="],
 
     "@fullcalendar/daygrid": ["@fullcalendar/daygrid@6.1.20", "", { "peerDependencies": { "@fullcalendar/core": "~6.1.20" } }, "sha512-AO9vqhkLP77EesmJzuU+IGXgxNulsA8mgQHynclJ8U70vSwAVnbcLG9qftiTAFSlZjiY/NvhE7sflve6cJelyQ=="],
+
+    "@fullcalendar/interaction": ["@fullcalendar/interaction@6.1.20", "", { "peerDependencies": { "@fullcalendar/core": "~6.1.20" } }, "sha512-p6txmc5txL0bMiPaJxe2ip6o0T384TyoD2KGdsU6UjZ5yoBlaY+dg7kxfnYKpYMzEJLG58n+URrHr2PgNL2fyA=="],
 
     "@fullcalendar/react": ["@fullcalendar/react@6.1.20", "", { "peerDependencies": { "@fullcalendar/core": "~6.1.20", "react": "^16.7.0 || ^17 || ^18 || ^19", "react-dom": "^16.7.0 || ^17 || ^18 || ^19" } }, "sha512-1w0pZtceaUdfAnxMSCGHCQalhi+mR1jOe76sXzyAXpcPz/Lf0zHSdcGK/U2XpZlnQgQtBZW+d+QBnnzVQKCxAA=="],
 
