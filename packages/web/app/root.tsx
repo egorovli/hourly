@@ -3,8 +3,8 @@
 
 import 'temporal-polyfill/global'
 
-import type { Route } from './+types/root.ts'
 import type { Preferences } from '~/domain/preferences.ts'
+import type { Route } from './+types/root.ts'
 
 import { QueryClientProvider } from '@tanstack/react-query'
 
@@ -22,7 +22,6 @@ import {
 import * as cookies from '~/lib/cookies/index.ts'
 import * as query from '~/lib/query/index.ts'
 import { cn } from '~/lib/util/index.ts'
-import { DragProvider, useDrag } from '~/contexts/drag-context.tsx'
 
 import '~/styles/global.css'
 
@@ -43,7 +42,7 @@ export function Layout({ children }: LayoutProps): React.ReactNode {
 		<html
 			lang={data?.locale ?? data?.preferences?.locale ?? 'en'}
 			className={cn(
-				'min-h-screen bg-background text-foreground',
+				'h-full min-h-screen bg-background text-foreground',
 				data?.preferences?.theme === 'light' && 'light',
 				data?.preferences?.theme === 'dark' && 'dark'
 			)}
@@ -76,18 +75,8 @@ export function Layout({ children }: LayoutProps): React.ReactNode {
 
 				<Meta />
 				<Links />
-
-				{data?.env && (
-					<script
-						dangerouslySetInnerHTML={{
-							__html: `
-								window.env = ${JSON.stringify(data.env)};
-							`
-						}}
-					/>
-				)}
 			</head>
-			<body className='min-h-screen'>
+			<body className='h-full border'>
 				{children}
 
 				<ScrollRestoration />
@@ -102,26 +91,11 @@ interface AppProvidersProps {
 }
 
 function AppProviders({ children }: AppProvidersProps): React.ReactNode {
-	return (
-		<QueryClientProvider client={query.client}>
-			<DragProvider>{children}</DragProvider>
-		</QueryClientProvider>
-	)
+	return <QueryClientProvider client={query.client}>{children}</QueryClientProvider>
 }
 
 function InnerApp(): React.ReactNode {
-	const { isDragging } = useDrag()
-
-	return (
-		<div
-			className={cn(
-				'flex h-screen flex-col overflow-hidden',
-				isDragging && 'select-none cursor-resize'
-			)}
-		>
-			<Outlet />
-		</div>
-	)
+	return <Outlet />
 }
 
 export default function App({ loaderData }: Route.ComponentProps): React.ReactNode {
