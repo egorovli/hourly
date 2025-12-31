@@ -1,12 +1,31 @@
 import type { EventInput, FormatterInput, PluginDef } from '@fullcalendar/core'
+import type { Draggable } from '@fullcalendar/interaction'
 import type { MetaDescriptor } from 'react-router'
 import type { Route } from './+types/__._index.ts'
-import type { Draggable } from '@fullcalendar/interaction'
 
 import { Suspense, useEffect, useRef, useState, lazy } from 'react'
+import {
+	Bug,
+	CheckCircle2,
+	Circle,
+	CircleDashed,
+	Clock,
+	Eye,
+	Layers,
+	Lightbulb,
+	Rocket,
+	SignalHigh,
+	SignalLow,
+	SignalMedium,
+	Sparkles,
+	Zap
+} from 'lucide-react'
 import { Virtuoso } from 'react-virtuoso'
 
-import { invariant } from '~/lib/util/index.ts'
+import { Avatar, AvatarFallback, AvatarImage } from '~/components/shadcn/ui/avatar.tsx'
+import { Badge } from '~/components/shadcn/ui/badge.tsx'
+import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/shadcn/ui/tooltip.tsx'
+import { cn, invariant } from '~/lib/util/index.ts'
 
 const FullCalendar = lazy(() => import('@fullcalendar/react'))
 
@@ -81,8 +100,8 @@ const fakeIssues: Issue[] = [
 		status: IssueStatus.Open,
 		priority: IssuePriority.Low,
 		name: 'Issue 1',
-		description:
-			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
+		// description:
+		// 	'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
 
 		author: {
 			id: '1',
@@ -141,6 +160,7 @@ export default function IndexPage(): React.ReactNode {
 	const [displayCalendar, setDisplayCalendar] = useState(false)
 	const [events, setEvents] = useState<CalendarEvent[]>([])
 	const [issues, setIssues] = useState<Issue[]>([])
+
 	const pluginsRef = useRef<PluginDef[]>([])
 	const draggableConstructorRef = useRef<typeof Draggable>(null)
 
@@ -196,8 +216,8 @@ export default function IndexPage(): React.ReactNode {
 
 	return (
 		<div className='h-full flex flex-row gap-4 p-4'>
-			<div className='flex flex-col gap-4 border'>
-				<h2 className='text-2xl font-bold'>Issues</h2>
+			<div className='flex w-80 shrink-0 flex-col gap-3 rounded-lg border bg-muted/30 p-3'>
+				<h2 className='text-lg font-semibold text-foreground'>Issues</h2>
 				<Virtuoso
 					// style={{ height: '100%' }}
 					data={issues}
@@ -206,12 +226,15 @@ export default function IndexPage(): React.ReactNode {
 						invariant(draggableConstructorRef.current, 'Draggable constructor is not defined')
 
 						return (
-							<IssueItem
-								{...issue}
-								components={{
-									Draggable: draggableConstructorRef.current
-								}}
-							/>
+							<div className='pb-2'>
+								<IssueItem
+									{...issue}
+									isDragged={false}
+									components={{
+										Draggable: draggableConstructorRef.current
+									}}
+								/>
+							</div>
 						)
 					}}
 				/>
@@ -292,11 +315,57 @@ export default function IndexPage(): React.ReactNode {
 }
 
 interface IssueItemProps extends Issue {
+	isDragged: boolean
 	components: IssueItemComponents
 }
 
 interface IssueItemComponents {
 	Draggable: typeof Draggable
+}
+
+type BadgeVariant = 'default' | 'secondary' | 'outline'
+
+interface IssueTypeDisplayConfig {
+	icon: React.ElementType
+	label: string
+	className: string
+}
+
+interface IssueStatusDisplayConfig {
+	icon: React.ElementType
+	label: string
+	variant: BadgeVariant
+}
+
+interface IssuePriorityDisplayConfig {
+	icon: React.ElementType
+	label: string
+	className: string
+}
+
+const issueTypeConfig: Record<IssueType, IssueTypeDisplayConfig> = {
+	[IssueType.Bug]: { icon: Bug, label: 'Bug', className: 'text-red-500' },
+	[IssueType.Feature]: { icon: Sparkles, label: 'Feature', className: 'text-purple-500' },
+	[IssueType.Task]: { icon: CheckCircle2, label: 'Task', className: 'text-blue-500' },
+	[IssueType.SubTask]: { icon: Layers, label: 'Subtask', className: 'text-slate-500' },
+	[IssueType.Story]: { icon: Lightbulb, label: 'Story', className: 'text-amber-500' }
+}
+
+const issueStatusConfig: Record<IssueStatus, IssueStatusDisplayConfig> = {
+	[IssueStatus.Open]: { icon: Circle, label: 'Open', variant: 'outline' },
+	[IssueStatus.Closed]: { icon: CheckCircle2, label: 'Closed', variant: 'secondary' },
+	[IssueStatus.InProgress]: { icon: Clock, label: 'In Progress', variant: 'default' },
+	[IssueStatus.Done]: { icon: CheckCircle2, label: 'Done', variant: 'secondary' },
+	[IssueStatus.Backlog]: { icon: CircleDashed, label: 'Backlog', variant: 'outline' },
+	[IssueStatus.Review]: { icon: Eye, label: 'Review', variant: 'default' },
+	[IssueStatus.Deployed]: { icon: Rocket, label: 'Deployed', variant: 'secondary' }
+}
+
+const issuePriorityConfig: Record<IssuePriority, IssuePriorityDisplayConfig> = {
+	[IssuePriority.Low]: { icon: SignalLow, label: 'Low', className: 'text-slate-400' },
+	[IssuePriority.Medium]: { icon: SignalMedium, label: 'Medium', className: 'text-blue-500' },
+	[IssuePriority.High]: { icon: SignalHigh, label: 'High', className: 'text-orange-500' },
+	[IssuePriority.Critical]: { icon: Zap, label: 'Critical', className: 'text-red-500' }
 }
 
 function IssueItem(props: IssueItemProps): React.ReactNode {
@@ -325,7 +394,145 @@ function IssueItem(props: IssueItemProps): React.ReactNode {
 		}
 	}, [Draggable, props.id])
 
-	return <div ref={ref}>Item {props.name}</div>
+	const typeConfig = issueTypeConfig[props.type]
+	const statusConfig = issueStatusConfig[props.status]
+	const priorityConfig = issuePriorityConfig[props.priority]
+
+	const TypeIcon = typeConfig.icon
+	const StatusIcon = statusConfig.icon
+	const PriorityIcon = priorityConfig.icon
+
+	return (
+		<div
+			ref={ref}
+			className='group cursor-grab rounded-lg border border-border/50 bg-card p-3 shadow-xs select-none //transition-all //hover:border-border //hover:shadow-md active:cursor-grabbing'
+		>
+			<div className='flex flex-row justify-start items-baseline gap-2 pb-1'>
+				{/* Title */}
+				<h3 className='text-sm font-medium text-foreground grow line-clamp-1'>{props.name}</h3>
+
+				{/* Header: ID + Type */}
+				<div className='flex items-center gap-2 shrink-0'>
+					<Badge
+						variant='outline'
+						className='font-mono text-xs whitespace-nowrap'
+					>
+						{props.id}
+					</Badge>
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<span className={cn('flex items-center gap-1 text-xs', typeConfig.className)}>
+								<TypeIcon className='size-3.5' />
+								<span className='sr-only'>{typeConfig.label}</span>
+							</span>
+						</TooltipTrigger>
+						<TooltipContent>{typeConfig.label}</TooltipContent>
+					</Tooltip>
+				</div>
+			</div>
+
+			<p className='mb-3 line-clamp-2 text-xs leading-relaxed text-muted-foreground'>
+				{props.description || 'No description provided'}
+			</p>
+
+			{/* Footer: Status, Priority, Author, Assignees */}
+			<div className='flex items-center justify-between gap-2'>
+				<div className='flex items-center gap-1.5'>
+					{/* Status */}
+					<Badge
+						variant={statusConfig.variant}
+						className='gap-1 text-[10px]'
+					>
+						<StatusIcon className='size-3' />
+						{statusConfig.label}
+					</Badge>
+
+					{/* Priority */}
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<span className={cn('flex items-center', priorityConfig.className)}>
+								<PriorityIcon className='size-4' />
+							</span>
+						</TooltipTrigger>
+						<TooltipContent>{priorityConfig.label} priority</TooltipContent>
+					</Tooltip>
+				</div>
+
+				{/* People: Author + Assignees */}
+				<div className='flex items-center gap-1'>
+					{/* Author */}
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<Avatar className='size-5 ring-2 ring-background'>
+								{props.author.avatarUrl && (
+									<AvatarImage
+										src={props.author.avatarUrl}
+										alt={props.author.name}
+									/>
+								)}
+								<AvatarFallback className='text-[8px] font-medium'>
+									{props.author.initials}
+								</AvatarFallback>
+							</Avatar>
+						</TooltipTrigger>
+						<TooltipContent>
+							<div className='text-center'>
+								<div className='font-medium'>{props.author.name}</div>
+								<div className='text-muted-foreground'>Author</div>
+							</div>
+						</TooltipContent>
+					</Tooltip>
+
+					{/* Assignees */}
+					{props.assignees.length > 0 && (
+						<div className='flex -space-x-1.5'>
+							{props.assignees.slice(0, 3).map(assignee => (
+								<Tooltip key={assignee.id}>
+									<TooltipTrigger asChild>
+										<Avatar className='size-5 ring-2 ring-background'>
+											{assignee.avatarUrl && (
+												<AvatarImage
+													src={assignee.avatarUrl}
+													alt={assignee.name}
+												/>
+											)}
+											<AvatarFallback className='text-[8px] font-medium'>
+												{assignee.initials}
+											</AvatarFallback>
+										</Avatar>
+									</TooltipTrigger>
+									<TooltipContent>
+										<div className='text-center'>
+											<div className='font-medium'>{assignee.name}</div>
+											<div className='text-muted-foreground'>Assignee</div>
+										</div>
+									</TooltipContent>
+								</Tooltip>
+							))}
+							{props.assignees.length > 3 && (
+								<Tooltip>
+									<TooltipTrigger asChild>
+										<Avatar className='size-5 ring-2 ring-background'>
+											<AvatarFallback className='bg-muted text-[8px] font-medium'>
+												+{props.assignees.length - 3}
+											</AvatarFallback>
+										</Avatar>
+									</TooltipTrigger>
+									<TooltipContent>
+										<div className='text-center'>
+											{props.assignees.slice(3).map(a => (
+												<div key={a.id}>{a.name}</div>
+											))}
+										</div>
+									</TooltipContent>
+								</Tooltip>
+							)}
+						</div>
+					)}
+				</div>
+			</div>
+		</div>
+	)
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
