@@ -1,17 +1,27 @@
 import type { MetaDescriptor } from 'react-router'
 import type { Route } from './+types/auth.sign-in.ts'
 
+import { Link } from 'react-router'
+import { useState } from 'react'
+
 import { withRequestContext } from '~/lib/mikro-orm/index.ts'
 
 export default function SignInPage(): React.ReactNode {
+	const [provider, setProvider] = useState<string>('atlassian')
+
 	return (
 		<div>
 			<h1>Sign In</h1>
+			<Link to={`/auth/${provider}/sign-in`}>Sign In</Link>
+			<Link to={`/auth/${provider}/sign-out`}>Sign Out</Link>
 		</div>
 	)
 }
 
-export const loader = withRequestContext(async function loader({ request }: Route.LoaderArgs) {
+export const loader = withRequestContext(async function loader({
+	request,
+	...args
+}: Route.LoaderArgs) {
 	return {}
 })
 
