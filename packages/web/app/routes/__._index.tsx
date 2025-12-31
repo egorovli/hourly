@@ -1,4 +1,4 @@
-import type { FormatterInput, PluginDef } from '@fullcalendar/core'
+import type { EventInput, FormatterInput, PluginDef } from '@fullcalendar/core'
 import type { MetaDescriptor } from 'react-router'
 import type { Route } from './+types/__._index.ts'
 import type { Draggable } from '@fullcalendar/interaction'
@@ -16,8 +16,24 @@ const dayHeaderFormat: FormatterInput = {
 	weekday: 'short'
 }
 
+interface CalendarEvent extends EventInput {}
+
+const fakeEvents: CalendarEvent[] = [
+	{
+		id: '1',
+		title: 'Event 1',
+		start: new Date(),
+		end: new Date(new Date().getTime() + 1000 * 60 * 60 * 2),
+		classNames: ['custom-event', ''],
+		backgroundColor: '#ffcc00cc',
+		borderColor: '#ffcc00ff'
+	}
+]
+
 export default function IndexPage(): React.ReactNode {
 	const [displayCalendar, setDisplayCalendar] = useState(false)
+	const [events, setEvents] = useState<CalendarEvent[]>([])
+
 	const pluginsRef = useRef<PluginDef[]>([])
 	const draggableConstructorRef = useRef<typeof Draggable>(null)
 
@@ -43,6 +59,19 @@ export default function IndexPage(): React.ReactNode {
 		])
 			.then(() => {
 				setDisplayCalendar(true)
+				setEvents(fakeEvents)
+
+				setTimeout(() => {
+					setEvents(events => [
+						...events,
+						{
+							id: '2',
+							title: 'Event 2',
+							start: new Date(new Date().getTime() + 1000 * 60 * 60 * 2),
+							end: new Date(new Date().getTime() + 1000 * 60 * 60 * 4)
+						}
+					])
+				}, 3000)
 				// console.log(pluginsRef.current)
 				// console.log(draggableConstructorRef.current)
 			})
@@ -88,7 +117,7 @@ export default function IndexPage(): React.ReactNode {
 						initialView='timeGridWeek'
 						height='100%'
 						dayHeaderFormat={dayHeaderFormat}
-						events={[]}
+						events={events}
 						datesSet={args => {
 							console.log(args)
 						}}
@@ -98,8 +127,8 @@ export default function IndexPage(): React.ReactNode {
 						editable
 						droppable
 						// TODO: only enable when "edit" mode is enabled
-						selectable
-						selectMirror
+						// selectable
+						// selectMirror
 						eventAdd={info => {
 							console.log('Event add', info)
 						}}
