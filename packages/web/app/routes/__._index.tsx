@@ -3,27 +3,30 @@ import type { Draggable } from '@fullcalendar/interaction'
 import type { MetaDescriptor } from 'react-router'
 import type { Route } from './+types/__._index.ts'
 
-import { Suspense, useEffect, useRef, useState, lazy } from 'react'
-import {
-	Bug,
-	CheckCircle2,
-	Circle,
-	CircleDashed,
-	Clock,
-	Eye,
-	Layers,
-	Lightbulb,
-	Rocket,
-	SignalHigh,
-	SignalLow,
-	SignalMedium,
-	Sparkles,
-	Zap
-} from 'lucide-react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Virtuoso } from 'react-virtuoso'
+
+import {
+	BugIcon,
+	CheckCircle2Icon,
+	CircleDashedIcon,
+	CircleIcon,
+	ClockIcon,
+	EyeIcon,
+	LayersIcon,
+	LightbulbIcon,
+	RocketIcon,
+	SearchIcon,
+	SignalHighIcon,
+	SignalLowIcon,
+	SignalMediumIcon,
+	SparklesIcon,
+	ZapIcon
+} from 'lucide-react'
 
 import { Avatar, AvatarFallback, AvatarImage } from '~/components/shadcn/ui/avatar.tsx'
 import { Badge } from '~/components/shadcn/ui/badge.tsx'
+import { Input } from '~/components/shadcn/ui/input.tsx'
 import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/shadcn/ui/tooltip.tsx'
 import { cn, invariant } from '~/lib/util/index.ts'
 
@@ -218,6 +221,14 @@ export default function IndexPage(): React.ReactNode {
 		<div className='h-full flex flex-row gap-4 p-4'>
 			<div className='flex w-80 shrink-0 flex-col gap-3 rounded-lg border bg-muted/30 p-3'>
 				<h2 className='text-lg font-semibold text-foreground'>Issues</h2>
+				<div className='relative'>
+					<SearchIcon className='absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground' />
+					<Input
+						type='search'
+						placeholder='Search issues...'
+						className='pl-8'
+					/>
+				</div>
 				<Virtuoso
 					// style={{ height: '100%' }}
 					data={issues}
@@ -344,28 +355,28 @@ interface IssuePriorityDisplayConfig {
 }
 
 const issueTypeConfig: Record<IssueType, IssueTypeDisplayConfig> = {
-	[IssueType.Bug]: { icon: Bug, label: 'Bug', className: 'text-red-500' },
-	[IssueType.Feature]: { icon: Sparkles, label: 'Feature', className: 'text-purple-500' },
-	[IssueType.Task]: { icon: CheckCircle2, label: 'Task', className: 'text-blue-500' },
-	[IssueType.SubTask]: { icon: Layers, label: 'Subtask', className: 'text-slate-500' },
-	[IssueType.Story]: { icon: Lightbulb, label: 'Story', className: 'text-amber-500' }
+	[IssueType.Bug]: { icon: BugIcon, label: 'Bug', className: 'text-red-500' },
+	[IssueType.Feature]: { icon: SparklesIcon, label: 'Feature', className: 'text-purple-500' },
+	[IssueType.Task]: { icon: CheckCircle2Icon, label: 'Task', className: 'text-blue-500' },
+	[IssueType.SubTask]: { icon: LayersIcon, label: 'Subtask', className: 'text-slate-500' },
+	[IssueType.Story]: { icon: LightbulbIcon, label: 'Story', className: 'text-amber-500' }
 }
 
 const issueStatusConfig: Record<IssueStatus, IssueStatusDisplayConfig> = {
-	[IssueStatus.Open]: { icon: Circle, label: 'Open', variant: 'outline' },
-	[IssueStatus.Closed]: { icon: CheckCircle2, label: 'Closed', variant: 'secondary' },
-	[IssueStatus.InProgress]: { icon: Clock, label: 'In Progress', variant: 'default' },
-	[IssueStatus.Done]: { icon: CheckCircle2, label: 'Done', variant: 'secondary' },
-	[IssueStatus.Backlog]: { icon: CircleDashed, label: 'Backlog', variant: 'outline' },
-	[IssueStatus.Review]: { icon: Eye, label: 'Review', variant: 'default' },
-	[IssueStatus.Deployed]: { icon: Rocket, label: 'Deployed', variant: 'secondary' }
+	[IssueStatus.Open]: { icon: CircleIcon, label: 'Open', variant: 'outline' },
+	[IssueStatus.Closed]: { icon: CheckCircle2Icon, label: 'Closed', variant: 'secondary' },
+	[IssueStatus.InProgress]: { icon: ClockIcon, label: 'In Progress', variant: 'default' },
+	[IssueStatus.Done]: { icon: CheckCircle2Icon, label: 'Done', variant: 'secondary' },
+	[IssueStatus.Backlog]: { icon: CircleDashedIcon, label: 'Backlog', variant: 'outline' },
+	[IssueStatus.Review]: { icon: EyeIcon, label: 'Review', variant: 'default' },
+	[IssueStatus.Deployed]: { icon: RocketIcon, label: 'Deployed', variant: 'secondary' }
 }
 
 const issuePriorityConfig: Record<IssuePriority, IssuePriorityDisplayConfig> = {
-	[IssuePriority.Low]: { icon: SignalLow, label: 'Low', className: 'text-slate-400' },
-	[IssuePriority.Medium]: { icon: SignalMedium, label: 'Medium', className: 'text-blue-500' },
-	[IssuePriority.High]: { icon: SignalHigh, label: 'High', className: 'text-orange-500' },
-	[IssuePriority.Critical]: { icon: Zap, label: 'Critical', className: 'text-red-500' }
+	[IssuePriority.Low]: { icon: SignalLowIcon, label: 'Low', className: 'text-slate-400' },
+	[IssuePriority.Medium]: { icon: SignalMediumIcon, label: 'Medium', className: 'text-blue-500' },
+	[IssuePriority.High]: { icon: SignalHighIcon, label: 'High', className: 'text-orange-500' },
+	[IssuePriority.Critical]: { icon: ZapIcon, label: 'Critical', className: 'text-red-500' }
 }
 
 function IssueItem(props: IssueItemProps): React.ReactNode {
