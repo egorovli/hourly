@@ -5,6 +5,7 @@ declare global {
 			VERSION: string
 
 			SESSION_SECURE: 'true' | 'false'
+			REDIS_URL: string
 			DATABASE_URL: string
 
 			OAUTH_ATLASSIAN_CLIENT_ID: string

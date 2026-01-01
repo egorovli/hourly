@@ -227,9 +227,26 @@ services:
       - "com.hourly.managed-by=docker-compose"
     restart: unless-stopped
 
+  redis:
+    image: redis:8.0.2-alpine
+    command: redis-server --appendonly yes --save 60 1 --requirepass "${REDIS_PASSWORD}"
+    networks:
+      - redis
+    ports:
+      - 6379:6379
+    volumes:
+      - redis:/data:rw
+    healthcheck:
+      test: redis-cli -a "${REDIS_PASSWORD}" ping
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
 networks:
   postgres:
   opensearch:
+  redis:
 
   temporal:
     ipam:
@@ -240,3 +257,4 @@ networks:
 volumes:
   postgres:
   opensearch:
+  redis:

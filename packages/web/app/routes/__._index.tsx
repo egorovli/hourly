@@ -1,14 +1,18 @@
 import type { EventInput, FormatterInput, PluginDef } from '@fullcalendar/core'
 import type { Draggable } from '@fullcalendar/interaction'
 import type { MetaDescriptor } from 'react-router'
+import type { Route as LayoutRoute } from './+types/__.ts'
+import type { AccessibleResource, Project } from '~/lib/atlassian/index.ts'
 import type { Route } from './+types/__._index.ts'
 
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Virtuoso } from 'react-virtuoso'
+import { useRouteLoaderData } from 'react-router'
 
 import {
 	BugIcon,
 	CheckCircle2Icon,
+	ChevronDownIcon,
 	CircleDashedIcon,
 	CircleIcon,
 	ClockIcon,
@@ -20,15 +24,40 @@ import {
 	SignalHighIcon,
 	SignalLowIcon,
 	SignalMediumIcon,
+	SlidersHorizontalIcon,
 	SparklesIcon,
 	ZapIcon
 } from 'lucide-react'
 
 import { Avatar, AvatarFallback, AvatarImage } from '~/components/shadcn/ui/avatar.tsx'
 import { Badge } from '~/components/shadcn/ui/badge.tsx'
+import { Button } from '~/components/shadcn/ui/button.tsx'
+import { Checkbox } from '~/components/shadcn/ui/checkbox.tsx'
 import { Input } from '~/components/shadcn/ui/input.tsx'
+import { Label } from '~/components/shadcn/ui/label.tsx'
+import { Popover, PopoverContent, PopoverTrigger } from '~/components/shadcn/ui/popover.tsx'
+import { ScrollArea } from '~/components/shadcn/ui/scroll-area.tsx'
+import { Skeleton } from '~/components/shadcn/ui/skeleton.tsx'
+import { Spinner } from '~/components/shadcn/ui/spinner.tsx'
 import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/shadcn/ui/tooltip.tsx'
 import { cn, invariant } from '~/lib/util/index.ts'
+
+import {
+	Collapsible,
+	CollapsibleContent,
+	CollapsibleTrigger
+} from '~/components/shadcn/ui/collapsible.tsx'
+
+import {
+	Command,
+	CommandEmpty,
+	CommandGroup,
+	CommandInput,
+	CommandItem,
+	CommandList
+} from '~/components/shadcn/ui/command.tsx'
+
+import { useQuery } from '@tanstack/react-query'
 
 const FullCalendar = lazy(() => import('@fullcalendar/react'))
 
@@ -74,6 +103,48 @@ interface Person {
 	email: string
 	initials: string
 	avatarUrl?: string
+}
+
+interface User {
+	id: string
+	name: string
+	email?: string
+	avatarUrl?: string
+}
+
+interface ProjectsByResource {
+	resource: AccessibleResource
+	projects: Project[]
+}
+
+interface ProjectOption {
+	value: string
+	resource: AccessibleResource
+	project: Project
+}
+
+const PROJECT_AVATAR_SIZE = '32x32'
+
+function getProjectAvatarUrl(project: Project): string | undefined {
+	const preferredOrder = [PROJECT_AVATAR_SIZE, '48x48', '24x24', '16x16']
+
+	for (const size of preferredOrder) {
+		if (project.avatarUrls?.[size]) {
+			return project.avatarUrls[size]
+		}
+	}
+
+	const [firstAvatar] = Object.values(project.avatarUrls ?? {})
+	return firstAvatar
+}
+
+function getInitialsFromLabel(label: string): string {
+	return label
+		.split(' ')
+		.map(part => part[0])
+		.join('')
+		.toUpperCase()
+		.slice(0, 2)
 }
 
 const dayHeaderFormat: FormatterInput = {
@@ -159,10 +230,609 @@ const fakeIssues: Issue[] = [
 	}
 ]
 
+const fakeUsers: User[] = [
+	{
+		id: '1',
+		name: 'Alice Johnson',
+		email: 'alice.johnson@example.com',
+		avatarUrl: undefined
+	},
+	{
+		id: '2',
+		name: 'Bob Smith',
+		email: 'bob.smith@example.com',
+		avatarUrl: undefined
+	},
+	{
+		id: '3',
+		name: 'Charlie Brown',
+		email: undefined,
+		avatarUrl: undefined
+	},
+	{
+		id: '4',
+		name: 'Diana Prince',
+		email: 'diana.prince@example.com',
+		avatarUrl: undefined
+	},
+	{
+		id: '5',
+		name: 'Eve Wilson',
+		email: undefined,
+		avatarUrl: undefined
+	},
+	{
+		id: '6',
+		name: 'Frank Miller',
+		email: 'frank.miller@example.com',
+		avatarUrl: undefined
+	}
+]
+
+function UsersFilter({
+	users,
+	isLoading,
+	isQueryEnabled,
+	value,
+	onChange
+}: {
+	users: User[]
+	isLoading: boolean
+	isQueryEnabled: boolean
+	value: string[]
+	onChange: (value: string[]) => void
+}): React.ReactNode {
+	const [open, setOpen] = useState(false)
+
+	const selectedUsers = users.filter(user => value.includes(user.id))
+	const selectedPreview = selectedUsers.slice(0, 2)
+
+	function toggleValue(userId: string): void {
+		onChange(
+			value.includes(userId) ? value.filter(current => current !== userId) : [...value, userId]
+		)
+	}
+
+	const firstSelected = selectedUsers[0]
+	const isEmpty = !isLoading && users.length === 0
+	// Disable if loading, empty, or query is not enabled (no projects selected)
+	const isDisabled = isLoading || isEmpty || !isQueryEnabled
+
+	let summary = 'Select users'
+
+	if (!isQueryEnabled) {
+		summary = 'Select projects first'
+	} else if (isLoading) {
+		summary = 'Loading users...'
+	} else if (isEmpty) {
+		summary = 'No users available'
+	} else if (selectedUsers.length === 1 && firstSelected) {
+		summary = firstSelected.name
+	} else if (selectedUsers.length > 1) {
+		summary = `${selectedUsers.length} users`
+	}
+
+	return (
+		<div className='space-y-2'>
+			<Label htmlFor='filter-users'>Users</Label>
+			<Popover
+				open={open}
+				onOpenChange={setOpen}
+			>
+				<PopoverTrigger asChild>
+					<Button
+						id='filter-users'
+						variant='outline'
+						role='combobox'
+						aria-expanded={open}
+						className='group h-10 w-full justify-between border-border/50 bg-background px-3 text-left shadow-sm transition-all hover:border-border hover:shadow-xs data-[state=open]:border-border data-[state=open]:shadow-xs disabled:opacity-50 disabled:cursor-not-allowed'
+						disabled={isDisabled}
+					>
+						<div className='flex min-w-0 flex-1 items-center gap-2.5'>
+							{isLoading ? (
+								<>
+									<Skeleton className='size-6 rounded-full' />
+									<Skeleton className='h-4 flex-1 max-w-[140px]' />
+									<Spinner
+										className='ml-auto size-4 shrink-0 text-muted-foreground'
+										aria-label='Loading users'
+									/>
+								</>
+							) : isEmpty ? (
+								<span className='text-sm text-muted-foreground'>{summary}</span>
+							) : selectedUsers.length > 0 ? (
+								<>
+									<div className='flex -space-x-1.5'>
+										{selectedPreview.map(user => (
+											<Avatar
+												key={user.id}
+												className='size-6 border-2 border-background shadow-xs ring-1 ring-border/20'
+											>
+												{user.avatarUrl && (
+													<AvatarImage
+														src={user.avatarUrl}
+														alt={user.name}
+													/>
+												)}
+												<AvatarFallback className='text-[10px] font-semibold'>
+													{getInitialsFromLabel(user.name)}
+												</AvatarFallback>
+											</Avatar>
+										))}
+									</div>
+									<span className='truncate text-sm font-medium'>{summary}</span>
+									{selectedUsers.length > selectedPreview.length && (
+										<Badge
+											variant='secondary'
+											className='ml-auto shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium'
+										>
+											+{selectedUsers.length - selectedPreview.length}
+										</Badge>
+									)}
+								</>
+							) : (
+								<span className='text-sm text-muted-foreground'>{summary}</span>
+							)}
+						</div>
+						<ChevronDownIcon className='ml-2 size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180' />
+					</Button>
+				</PopoverTrigger>
+				<PopoverContent
+					align='start'
+					className='w-[440px] p-0'
+				>
+					<Command className='rounded-lg'>
+						<CommandInput
+							placeholder='Search users...'
+							className='h-11 border-0'
+							disabled={isLoading || isEmpty}
+						/>
+						<CommandList>
+							{isLoading ? null : isEmpty ? (
+								<div className='flex flex-col items-center justify-center py-12 px-4 text-center'>
+									<div className='mb-3 flex size-12 items-center justify-center rounded-full bg-muted'>
+										<CircleIcon
+											className='size-6 text-muted-foreground'
+											aria-hidden='true'
+										/>
+									</div>
+									<p className='mb-1 text-sm font-medium text-foreground'>
+										{isQueryEnabled ? 'No users available' : 'Select projects first'}
+									</p>
+									<p className='text-xs text-muted-foreground'>
+										{isQueryEnabled
+											? 'Users will appear here once projects are selected'
+											: 'Select at least one project to load users'}
+									</p>
+								</div>
+							) : (
+								<>
+									<CommandEmpty className='py-8 text-sm text-muted-foreground'>
+										No users found
+									</CommandEmpty>
+									<ScrollArea className='max-h-[320px]'>
+										<div className='p-2'>
+											<CommandGroup className='p-0'>
+												<div className='space-y-0.5'>
+													{users.map(user => {
+														const checked = value.includes(user.id)
+
+														return (
+															<CommandItem
+																key={user.id}
+																value={`${user.name} ${user.email ?? ''}`}
+																onSelect={() => {
+																	toggleValue(user.id)
+																}}
+																className='group/item relative flex items-center gap-3 rounded-md px-2.5 py-2.5 text-sm outline-hidden transition-colors data-[selected=true]:bg-accent/50 data-[selected=true]:text-accent-foreground hover:bg-accent/30'
+															>
+																<Checkbox
+																	checked={checked}
+																	className='pointer-events-none shrink-0'
+																/>
+																<Avatar className='size-8 shrink-0 border border-border/40 shadow-xs ring-1 ring-border/20'>
+																	{user.avatarUrl && (
+																		<AvatarImage
+																			src={user.avatarUrl}
+																			alt={user.name}
+																		/>
+																	)}
+																	<AvatarFallback className='text-[11px] font-semibold'>
+																		{getInitialsFromLabel(user.name)}
+																	</AvatarFallback>
+																</Avatar>
+																<div className='flex min-w-0 flex-1 flex-col gap-0.5'>
+																	<span className='truncate text-sm font-medium leading-tight'>
+																		{user.name}
+																	</span>
+																	{user.email && (
+																		<span className='truncate text-xs text-muted-foreground'>
+																			{user.email}
+																		</span>
+																	)}
+																</div>
+															</CommandItem>
+														)
+													})}
+												</div>
+											</CommandGroup>
+										</div>
+									</ScrollArea>
+								</>
+							)}
+						</CommandList>
+						{!isLoading && !isEmpty && (
+							<div
+								className={cn(
+									'overflow-hidden border-t border-border/50 bg-muted/30 transition-all duration-200',
+									selectedUsers.length > 0 ? 'max-h-12 opacity-100' : 'max-h-0 border-0 opacity-0'
+								)}
+							>
+								<div className='flex items-center justify-between px-3 py-2'>
+									<span className='text-xs font-medium text-muted-foreground'>
+										{selectedUsers.length} {selectedUsers.length === 1 ? 'user' : 'users'} selected
+									</span>
+									<Button
+										type='button'
+										variant='ghost'
+										size='sm'
+										className='h-7 px-2 text-xs font-medium'
+										onClick={() => {
+											onChange([])
+										}}
+									>
+										Clear all
+									</Button>
+								</div>
+							</div>
+						)}
+					</Command>
+				</PopoverContent>
+			</Popover>
+		</div>
+	)
+}
+
+function ProjectsFilter({
+	projects,
+	accessibleResources,
+	isLoading,
+	resourcesLoaded,
+	value,
+	onChange
+}: {
+	projects: Project[]
+	accessibleResources: AccessibleResource[]
+	isLoading: boolean
+	resourcesLoaded: boolean
+	value: string[]
+	onChange: (value: string[]) => void
+}): React.ReactNode {
+	const [open, setOpen] = useState(false)
+
+	// Group projects by resource by matching domains
+	const projectGroups = useMemo<ProjectsByResource[]>(() => {
+		const groups = new Map<string, ProjectsByResource>()
+
+		// Initialize groups for all resources
+		for (const resource of accessibleResources) {
+			groups.set(resource.id, {
+				resource,
+				projects: []
+			})
+		}
+
+		// Match projects to resources by extracting resource ID from project's self URL
+		// Project self URL format: https://api.atlassian.com/ex/jira/{resourceId}/rest/api/3/project/{projectId}
+		for (const project of projects) {
+			if (project.archived ?? false) {
+				continue
+			}
+
+			// Extract resource ID from project's self URL
+			let projectResourceId: string | undefined
+			try {
+				const projectUrl = new URL(project.self)
+				// Extract resource ID from path: /ex/jira/{resourceId}/rest/api/3/project/{projectId}
+				const pathMatch = projectUrl.pathname.match(/^\/ex\/jira\/([^/]+)\//)
+				if (pathMatch?.[1]) {
+					projectResourceId = pathMatch[1]
+				}
+			} catch {
+				// Invalid URL, skip this project
+				continue
+			}
+
+			if (!projectResourceId) {
+				continue
+			}
+
+			// Find matching resource by ID
+			const matchingResource = accessibleResources.find(
+				resource => resource.id === projectResourceId
+			)
+
+			if (matchingResource) {
+				const group = groups.get(matchingResource.id)
+				if (group) {
+					group.projects.push(project)
+				}
+			}
+		}
+
+		// Return only groups that have projects
+		return Array.from(groups.values()).filter(group => group.projects.length > 0)
+	}, [projects, accessibleResources])
+
+	const options = projectGroups.flatMap<ProjectOption>(group =>
+		group.projects.map(project => ({
+			value: `${group.resource.id}:${project.id}`,
+			project,
+			resource: group.resource
+		}))
+	)
+
+	const selectedOptions = options.filter(option => value.includes(option.value))
+	const selectedPreview = selectedOptions.slice(0, 2)
+
+	function toggleValue(nextValue: string): void {
+		onChange(
+			value.includes(nextValue)
+				? value.filter(current => current !== nextValue)
+				: [...value, nextValue]
+		)
+	}
+
+	const firstSelected = selectedOptions[0]
+	// isEmpty should only be true when:
+	// 1. Not loading (isLoading is false)
+	// 2. Resources query has completed (resourcesLoaded is true) - this ensures grouping can happen
+	// 3. AND projectGroups is empty (no projects after grouping)
+	//
+	// Important: If resources query hasn't completed, we can't group projects properly,
+	// so we shouldn't show "empty" - we should still be showing loading state
+	const isEmpty = !isLoading && resourcesLoaded && projectGroups.length === 0
+	const isDisabled = isLoading || isEmpty
+
+	let summary = 'Select projects'
+
+	if (isLoading) {
+		summary = 'Loading projects...'
+	} else if (isEmpty) {
+		summary = 'No projects available'
+	} else if (selectedOptions.length === 1 && firstSelected) {
+		summary = firstSelected.project.name
+	} else if (selectedOptions.length > 1) {
+		summary = `${selectedOptions.length} projects`
+	}
+
+	return (
+		<div className='space-y-2'>
+			<Label htmlFor='filter-project'>Projects</Label>
+			<Popover
+				open={open}
+				onOpenChange={setOpen}
+			>
+				<PopoverTrigger asChild>
+					<Button
+						id='filter-project'
+						variant='outline'
+						role='combobox'
+						aria-expanded={open}
+						className='group h-10 w-full justify-between border-border/50 bg-background px-3 text-left shadow-sm transition-all hover:border-border hover:shadow-xs data-[state=open]:border-border data-[state=open]:shadow-xs disabled:opacity-50 disabled:cursor-not-allowed'
+						disabled={isDisabled}
+					>
+						<div className='flex min-w-0 flex-1 items-center gap-2.5'>
+							{isLoading ? (
+								<>
+									<Skeleton className='size-6 rounded-full' />
+									<Skeleton className='h-4 flex-1 max-w-[140px]' />
+									<Spinner
+										className='ml-auto size-4 shrink-0 text-muted-foreground'
+										aria-label='Loading projects'
+									/>
+								</>
+							) : isEmpty ? (
+								<span className='text-sm text-muted-foreground'>{summary}</span>
+							) : selectedOptions.length > 0 ? (
+								<>
+									<div className='flex -space-x-1.5'>
+										{selectedPreview.map(option => (
+											<Avatar
+												key={option.value}
+												className='size-6 border-2 border-background shadow-xs ring-1 ring-border/20'
+											>
+												{getProjectAvatarUrl(option.project) && (
+													<AvatarImage
+														src={getProjectAvatarUrl(option.project)}
+														alt={option.project.name}
+													/>
+												)}
+												<AvatarFallback className='text-[10px] font-semibold'>
+													{getInitialsFromLabel(option.project.key ?? option.project.name)}
+												</AvatarFallback>
+											</Avatar>
+										))}
+									</div>
+									<span className='truncate text-sm font-medium'>{summary}</span>
+									{selectedOptions.length > selectedPreview.length && (
+										<Badge
+											variant='secondary'
+											className='ml-auto shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium'
+										>
+											+{selectedOptions.length - selectedPreview.length}
+										</Badge>
+									)}
+								</>
+							) : (
+								<span className='text-sm text-muted-foreground'>{summary}</span>
+							)}
+						</div>
+						<ChevronDownIcon className='ml-2 size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180' />
+					</Button>
+				</PopoverTrigger>
+				<PopoverContent
+					align='start'
+					className='w-[440px] p-0'
+				>
+					<Command className='rounded-lg'>
+						<CommandInput
+							placeholder='Search projects or resources...'
+							className='h-11 border-0'
+							disabled={isLoading || isEmpty}
+						/>
+						<CommandList>
+							{isLoading ? null : isEmpty ? (
+								<div className='flex flex-col items-center justify-center py-12 px-4 text-center'>
+									<div className='mb-3 flex size-12 items-center justify-center rounded-full bg-muted'>
+										<LayersIcon
+											className='size-6 text-muted-foreground'
+											aria-hidden='true'
+										/>
+									</div>
+									<p className='mb-1 text-sm font-medium text-foreground'>No projects available</p>
+									<p className='text-xs text-muted-foreground'>
+										Projects will appear here once they're loaded
+									</p>
+								</div>
+							) : (
+								<>
+									<CommandEmpty className='py-8 text-sm text-muted-foreground'>
+										No projects found
+									</CommandEmpty>
+									<ScrollArea className='max-h-[320px]'>
+										<div className='p-2'>
+											{projectGroups.map((group, groupIndex) => (
+												<div
+													key={group.resource.id}
+													className={cn('rounded-lg', groupIndex > 0 && 'mt-3')}
+												>
+													<CommandGroup className='p-0'>
+														<div className='mb-2 flex items-center gap-2.5 px-2 py-1.5'>
+															<Avatar className='size-5 shrink-0 rounded border border-border/40 shadow-xs'>
+																{group.resource.avatarUrl && (
+																	<AvatarImage
+																		src={group.resource.avatarUrl}
+																		alt={group.resource.name}
+																	/>
+																)}
+																<AvatarFallback className='bg-primary/10 text-[10px] font-semibold uppercase text-primary'>
+																	{getInitialsFromLabel(group.resource.name)}
+																</AvatarFallback>
+															</Avatar>
+															<span className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
+																{group.resource.name}
+															</span>
+															<div className='h-px flex-1 bg-border/50' />
+															<Badge
+																variant='secondary'
+																className='shrink-0 rounded px-1.5 py-0 text-[10px] font-medium'
+															>
+																{group.projects.length}
+															</Badge>
+														</div>
+														<div className='space-y-0.5'>
+															{group.projects.map(project => {
+																const optionValue = `${group.resource.id}:${project.id}`
+																const checked = value.includes(optionValue)
+																const projectAvatarUrl = getProjectAvatarUrl(project)
+
+																return (
+																	<CommandItem
+																		key={optionValue}
+																		value={`${project.name} ${group.resource.name} ${project.key}`}
+																		onSelect={() => {
+																			toggleValue(optionValue)
+																		}}
+																		className='group/item relative flex items-center gap-3 rounded-md px-2.5 py-2.5 text-sm outline-hidden transition-colors data-[selected=true]:bg-accent/50 data-[selected=true]:text-accent-foreground hover:bg-accent/30'
+																	>
+																		<Checkbox
+																			checked={checked}
+																			className='pointer-events-none shrink-0 //bg-background //border-input //data-[state=checked]:bg-primary //data-[state=checked]:border-primary //data-[state=checked]:text-primary-foreground'
+																		/>
+																		<Avatar className='size-8 shrink-0 border border-border/40 shadow-xs ring-1 ring-border/20'>
+																			{projectAvatarUrl && (
+																				<AvatarImage
+																					src={projectAvatarUrl}
+																					alt={project.name}
+																				/>
+																			)}
+																			<AvatarFallback className='text-[11px] font-semibold'>
+																				{getInitialsFromLabel(project.key ?? project.name)}
+																			</AvatarFallback>
+																		</Avatar>
+																		<div className='flex min-w-0 flex-1 items-center gap-2'>
+																			<div className='flex min-w-0 flex-1 flex-col gap-0.5'>
+																				<span className='truncate text-sm font-medium leading-tight'>
+																					{project.name}
+																				</span>
+																				<span className='truncate text-xs text-muted-foreground'>
+																					{project.projectTypeKey}
+																				</span>
+																			</div>
+																			<Badge
+																				variant='outline'
+																				className='ml-auto shrink-0 font-mono text-[10px] font-medium'
+																			>
+																				{project.key}
+																			</Badge>
+																		</div>
+																	</CommandItem>
+																)
+															})}
+														</div>
+													</CommandGroup>
+												</div>
+											))}
+										</div>
+									</ScrollArea>
+								</>
+							)}
+						</CommandList>
+						{!isLoading && !isEmpty && (
+							<div
+								className={cn(
+									'overflow-hidden border-t border-border/50 bg-muted/30 transition-all duration-200',
+									selectedOptions.length > 0 ? 'max-h-12 opacity-100' : 'max-h-0 border-0 opacity-0'
+								)}
+							>
+								<div className='flex items-center justify-between px-3 py-2'>
+									<span className='text-xs font-medium text-muted-foreground'>
+										{selectedOptions.length} {selectedOptions.length === 1 ? 'project' : 'projects'}{' '}
+										selected
+									</span>
+									<Button
+										type='button'
+										variant='ghost'
+										size='sm'
+										className='h-7 px-2 text-xs font-medium'
+										onClick={() => {
+											onChange([])
+										}}
+									>
+										Clear all
+									</Button>
+								</div>
+							</div>
+						)}
+					</Command>
+				</PopoverContent>
+			</Popover>
+		</div>
+	)
+}
+
 export default function IndexPage(): React.ReactNode {
+	const layoutLoaderData = useRouteLoaderData<LayoutRoute.ComponentProps['loaderData']>('routes/__')
+
 	const [displayCalendar, setDisplayCalendar] = useState(false)
 	const [events, setEvents] = useState<CalendarEvent[]>([])
 	const [issues, setIssues] = useState<Issue[]>([])
+
+	const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([])
+	const [selectedUserIds, setSelectedUserIds] = useState<string[]>([])
+
+	const [isFiltersOpen, setIsFiltersOpen] = useState(true)
 
 	const pluginsRef = useRef<PluginDef[]>([])
 	const draggableConstructorRef = useRef<typeof Draggable>(null)
@@ -207,9 +877,92 @@ export default function IndexPage(): React.ReactNode {
 				// console.log(draggableConstructorRef.current)
 			})
 			.catch(err => {
-				console.error(err)
+				// console.error(err)
 			})
 	}, [])
+
+	const resourcesQuery = useQuery({
+		queryKey: ['resources', { userId: layoutLoaderData?.user.account_id }],
+
+		async queryFn({ queryKey, signal }) {
+			const response = await fetch('/api/resources', { signal })
+
+			if (!response.ok) {
+				throw new Error(`Failed to fetch resources: ${response.statusText}`)
+			}
+
+			const resources = (await response.json()) as AccessibleResource[]
+			return resources
+		},
+
+		enabled(query) {
+			return layoutLoaderData?.user.account_id !== undefined
+		}
+	})
+
+	const projectsQuery = useQuery({
+		queryKey: [
+			'projects',
+
+			{
+				userId: layoutLoaderData?.user.account_id,
+				accessibleResourceIds: resourcesQuery.data?.map(resource => resource.id)
+			}
+		],
+
+		async queryFn({ queryKey, signal }) {
+			const response = await fetch('/api/projects', { signal })
+
+			if (!response.ok) {
+				throw new Error(`Failed to fetch projects: ${response.statusText}`)
+			}
+
+			const projects = (await response.json()) as Project[]
+			return projects
+		},
+
+		enabled(query) {
+			return (
+				resourcesQuery.isEnabled &&
+				resourcesQuery.isSuccess &&
+				Array.isArray(resourcesQuery.data) &&
+				resourcesQuery.data.length > 0
+			)
+		}
+	})
+
+	const usersQuery = useQuery({
+		queryKey: [
+			'users',
+			{
+				userId: layoutLoaderData?.user.account_id,
+				projectIds: selectedProjectIds
+			}
+		],
+
+		async queryFn({ queryKey, signal }) {
+			await new Promise(resolve => setTimeout(resolve, 1000))
+			return fakeUsers
+		},
+
+		enabled(query) {
+			return (
+				projectsQuery.isEnabled &&
+				projectsQuery.isSuccess &&
+				Array.isArray(projectsQuery.data) &&
+				projectsQuery.data.length > 0 &&
+				selectedProjectIds.length > 0
+			)
+		}
+	})
+
+	const users = usersQuery.data ?? []
+	const projects = projectsQuery.data ?? []
+	const accessibleResources = resourcesQuery.data ?? []
+
+	const resourcesLoading = resourcesQuery.isPending || resourcesQuery.isFetching
+	const projectsLoading = projectsQuery.isPending || projectsQuery.isFetching
+	const usersLoading = usersQuery.isEnabled && (usersQuery.isPending || usersQuery.isFetching)
 
 	if (!displayCalendar) {
 		return null
@@ -218,108 +971,161 @@ export default function IndexPage(): React.ReactNode {
 	// invariant(draggableConstructorRef.current, 'Draggable constructor not found')
 
 	return (
-		<div className='h-full flex flex-row gap-4 p-4'>
-			<div className='flex w-80 shrink-0 flex-col gap-3 rounded-lg border bg-muted/30 p-3'>
-				<h2 className='text-lg font-semibold text-foreground'>Issues</h2>
-				<div className='relative'>
-					<SearchIcon className='absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground' />
-					<Input
-						type='search'
-						placeholder='Search issues...'
-						className='pl-8'
+		<div className='flex flex-col h-full gap-4 p-4'>
+			<Collapsible
+				open={isFiltersOpen}
+				onOpenChange={setIsFiltersOpen}
+				className='rounded-xl border bg-linear-to-r from-background via-card to-muted/50 shadow-xs //ring-1 //ring-border/60 backdrop-blur'
+			>
+				<div className='flex items-center justify-between px-4 py-3'>
+					<div className='flex items-center gap-3'>
+						<div className='flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary'>
+							<SlidersHorizontalIcon className='size-5' />
+						</div>
+						<div className='space-y-0.5'>
+							<p className='text-sm font-semibold leading-none'>Filters</p>
+							<p className='text-xs text-muted-foreground'>Shape what shows on the calendar</p>
+						</div>
+					</div>
+					<CollapsibleTrigger asChild>
+						<Button
+							variant='ghost'
+							size='sm'
+							className='group gap-1 rounded-full border border-transparent px-3 text-xs hover:border-border'
+						>
+							{isFiltersOpen ? 'Hide' : 'Show'}
+							<ChevronDownIcon
+								className={cn(
+									'size-4 transition-transform duration-200',
+									isFiltersOpen ? 'rotate-180' : ''
+								)}
+							/>
+						</Button>
+					</CollapsibleTrigger>
+				</div>
+				<CollapsibleContent className='border-t px-4 pb-4 pt-3'>
+					<div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-3'>
+						<ProjectsFilter
+							projects={projects}
+							accessibleResources={accessibleResources}
+							isLoading={resourcesLoading || projectsLoading}
+							resourcesLoaded={resourcesQuery.isSuccess}
+							value={selectedProjectIds}
+							onChange={setSelectedProjectIds}
+						/>
+						<UsersFilter
+							users={users}
+							isLoading={usersLoading}
+							isQueryEnabled={usersQuery.isEnabled}
+							value={selectedUserIds}
+							onChange={setSelectedUserIds}
+						/>
+					</div>
+				</CollapsibleContent>
+			</Collapsible>
+			<div className='flex flex-row gap-4 grow'>
+				<div className='flex w-80 shrink-0 flex-col gap-3 rounded-lg border bg-muted/30 p-3'>
+					<h2 className='text-lg font-semibold text-foreground'>Issues</h2>
+					<div className='relative'>
+						<SearchIcon className='absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground' />
+						<Input
+							type='search'
+							placeholder='Search issues...'
+							className='pl-8'
+						/>
+					</div>
+					<Virtuoso
+						// style={{ height: '100%' }}
+						data={issues}
+						totalCount={issues.length}
+						itemContent={(index, issue, context) => {
+							invariant(draggableConstructorRef.current, 'Draggable constructor is not defined')
+
+							return (
+								<div className='pb-2'>
+									<IssueItem
+										{...issue}
+										isDragged={false}
+										components={{
+											Draggable: draggableConstructorRef.current
+										}}
+									/>
+								</div>
+							)
+						}}
 					/>
 				</div>
-				<Virtuoso
-					// style={{ height: '100%' }}
-					data={issues}
-					totalCount={issues.length}
-					itemContent={(index, issue, context) => {
-						invariant(draggableConstructorRef.current, 'Draggable constructor is not defined')
-
-						return (
-							<div className='pb-2'>
-								<IssueItem
-									{...issue}
-									isDragged={false}
-									components={{
-										Draggable: draggableConstructorRef.current
-									}}
-								/>
-							</div>
-						)
-					}}
-				/>
-			</div>
-			<div className='flex flex-col grow gap-4'>
-				<h2 className='text-2xl font-bold'>Calendar</h2>
-				<Suspense fallback={<div>Loading...</div>}>
-					<FullCalendar
-						plugins={pluginsRef.current}
-						initialView='timeGridWeek'
-						height='100%'
-						dayHeaderFormat={dayHeaderFormat}
-						events={events}
-						datesSet={args => {
-							console.log(args)
-						}}
-						firstDay={1}
-						allDaySlot={false}
-						nowIndicator
-						editable
-						droppable
-						// TODO: only enable when "edit" mode is enabled
-						// selectable
-						// selectMirror
-						eventAdd={info => {
-							console.log('Event add', info)
-						}}
-						eventChange={info => {
-							console.log('Event change', info)
-						}}
-						eventRemove={info => {
-							console.log('Event remove', info)
-						}}
-						eventsSet={events => {
-							console.log('Events set', events)
-						}}
-						eventClick={info => {
-							console.log('Event click', info)
-						}}
-						eventMouseEnter={info => {
-							console.log('Event mouse enter', info)
-						}}
-						eventMouseLeave={info => {
-							console.log('Event mouse leave', info)
-						}}
-						eventDragStart={info => {
-							console.log('Event drag start', info)
-						}}
-						eventDragStop={info => {
-							console.log('Event drag stop', info)
-						}}
-						eventDrop={info => {
-							console.log('Event drop', info)
-						}}
-						drop={info => {
-							console.log('Drop', info)
-						}}
-						eventReceive={info => {
-							console.log('Event receive', info)
-						}}
-						eventLeave={info => {
-							console.log('Event leave', info)
-						}}
-						eventResizeStart={info => {
-							console.log('Event resize start', info)
-						}}
-						eventResizeStop={info => {
-							console.log('Event resize stop', info)
-						}}
-						eventResize={info => {
-							console.log('Event resize', info)
-						}}
-					/>
-				</Suspense>
+				<div className='flex flex-col grow gap-4'>
+					<h2 className='text-2xl font-bold'>Calendar</h2>
+					<Suspense fallback={<div>Loading...</div>}>
+						<FullCalendar
+							plugins={pluginsRef.current}
+							initialView='timeGridWeek'
+							height='100%'
+							dayHeaderFormat={dayHeaderFormat}
+							events={events}
+							datesSet={args => {
+								// console.log(args)
+							}}
+							firstDay={1}
+							allDaySlot={false}
+							nowIndicator
+							editable
+							droppable
+							// TODO: only enable when "edit" mode is enabled
+							// selectable
+							// selectMirror
+							eventAdd={info => {
+								// console.log('Event add', info)
+							}}
+							eventChange={info => {
+								// console.log('Event change', info)
+							}}
+							eventRemove={info => {
+								// console.log('Event remove', info)
+							}}
+							eventsSet={events => {
+								// console.log('Events set', events)
+							}}
+							eventClick={info => {
+								// console.log('Event click', info)
+							}}
+							eventMouseEnter={info => {
+								// console.log('Event mouse enter', info)
+							}}
+							eventMouseLeave={info => {
+								// console.log('Event mouse leave', info)
+							}}
+							eventDragStart={info => {
+								// console.log('Event drag start', info)
+							}}
+							eventDragStop={info => {
+								// console.log('Event drag stop', info)
+							}}
+							eventDrop={info => {
+								// console.log('Event drop', info)
+							}}
+							drop={info => {
+								// console.log('Drop', info)
+							}}
+							eventReceive={info => {
+								// console.log('Event receive', info)
+							}}
+							eventLeave={info => {
+								// console.log('Event leave', info)
+							}}
+							eventResizeStart={info => {
+								// console.log('Event resize start', info)
+							}}
+							eventResizeStop={info => {
+								// console.log('Event resize stop', info)
+							}}
+							eventResize={info => {
+								// console.log('Event resize', info)
+							}}
+						/>
+					</Suspense>
+				</div>
 			</div>
 		</div>
 	)
@@ -544,10 +1350,6 @@ function IssueItem(props: IssueItemProps): React.ReactNode {
 			</div>
 		</div>
 	)
-}
-
-export async function loader({ request }: Route.LoaderArgs) {
-	return {}
 }
 
 export function meta(args: Route.MetaArgs): MetaDescriptor[] {

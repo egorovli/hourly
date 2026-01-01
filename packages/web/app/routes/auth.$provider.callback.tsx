@@ -54,12 +54,6 @@ export const loader = withRequestContext(async function loader({
 		em.persist(profile)
 	}
 
-	const profileData = (() => {
-		const { accessToken, refreshToken, expiresAt, scopes, ...rest } = account
-		return rest
-	})()
-
-	profile.data = profileData
 	profile.deletedAt = undefined
 	profile.reportedAt = undefined
 	profile.updatedAt = new Date()

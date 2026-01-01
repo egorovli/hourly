@@ -1,19 +1,20 @@
 import type { Route } from './+types/__.ts'
+import type { User } from '~/lib/atlassian/user.ts'
 
 import { Form, Outlet, redirect } from 'react-router'
-import { LogOut } from 'lucide-react'
+import { LogOutIcon, UserIcon } from 'lucide-react'
 
 import { Logo } from '~/components/logo.tsx'
 import { Avatar, AvatarFallback, AvatarImage } from '~/components/shadcn/ui/avatar.tsx'
 import { createSessionStorage } from '~/lib/session/index.ts'
 import { ProfileConnectionType } from '~/domain/index.ts'
+import { AtlassianClient } from '~/lib/atlassian/index.ts'
+import { cached } from '~/lib/cached/index.ts'
 
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
-	DropdownMenuLabel,
-	DropdownMenuSeparator,
 	DropdownMenuTrigger
 } from '~/components/shadcn/ui/dropdown-menu.tsx'
 
@@ -21,14 +22,9 @@ import {
 	orm,
 	ProfileSessionConnection,
 	Session,
+	Token,
 	withRequestContext
 } from '~/lib/mikro-orm/index.ts'
-
-interface ProfileData {
-	displayName: string
-	email?: string
-	avatarUrl?: string
-}
 
 function getInitials(name: string): string {
 	return name
@@ -39,9 +35,11 @@ function getInitials(name: string): string {
 		.slice(0, 2)
 }
 
-function Header({ profile }: { profile: ProfileData }): React.ReactNode {
-	const initials = getInitials(profile.displayName)
+interface HeaderProps {
+	user: User
+}
 
+function Header({ user }: HeaderProps): React.ReactNode {
 	return (
 		<header className='border-b bg-background'>
 			<div className='flex h-14 items-center justify-between px-6'>
@@ -50,25 +48,22 @@ function Header({ profile }: { profile: ProfileData }): React.ReactNode {
 				<DropdownMenu>
 					<DropdownMenuTrigger className='flex items-center gap-2 rounded-md px-2 py-1.5 outline-none hover:bg-accent'>
 						<Avatar className='size-8'>
-							<AvatarImage
-								src={profile.avatarUrl}
-								alt={profile.displayName}
-							/>
-							<AvatarFallback className='text-xs'>{initials}</AvatarFallback>
+							{user.picture && (
+								<AvatarImage
+									src={user.picture}
+									alt={user.name ?? 'User'}
+								/>
+							)}
+							<AvatarFallback className='text-xs'>
+								{user.name ? getInitials(user.name) : <UserIcon className='size-4' />}
+							</AvatarFallback>
 						</Avatar>
-						<span className='text-sm'>{profile.displayName}</span>
+						{user.name && <span className='text-sm'>{user.name}</span>}
 					</DropdownMenuTrigger>
 					<DropdownMenuContent
 						align='end'
-						className='w-56'
+						className='w-48'
 					>
-						<DropdownMenuLabel className='font-normal'>
-							<div className='flex flex-col space-y-1'>
-								<p className='text-sm font-medium'>{profile.displayName}</p>
-								{profile.email && <p className='text-xs text-muted-foreground'>{profile.email}</p>}
-							</div>
-						</DropdownMenuLabel>
-						<DropdownMenuSeparator />
 						<Form
 							method='post'
 							action='/auth/sign-out'
@@ -78,7 +73,7 @@ function Header({ profile }: { profile: ProfileData }): React.ReactNode {
 									type='submit'
 									className='w-full cursor-pointer'
 								>
-									<LogOut className='mr-2 size-4' />
+									<LogOutIcon className='mr-2 size-4' />
 									Sign out
 								</button>
 							</DropdownMenuItem>
@@ -93,7 +88,7 @@ function Header({ profile }: { profile: ProfileData }): React.ReactNode {
 export default function AuthenticatedLayout({ loaderData }: Route.ComponentProps): React.ReactNode {
 	return (
 		<div className='flex h-full flex-col'>
-			<Header profile={loaderData.profile} />
+			<Header user={loaderData.user} />
 
 			<main className='flex-1'>
 				<Outlet />
@@ -147,17 +142,33 @@ export let loader = withRequestContext(async function loader({ request }: Route.
 		redirectToSignIn()
 	}
 
-	// TODO: Proper types.
-	const profile = connection.profile
-	const profileData = (profile.data ?? {}) as unknown as ProfileData
+	const { profile } = connection
+
+	const token = await em.findOne(Token, {
+		profileId: profile.id,
+		provider: profile.provider
+	})
+
+	if (!token) {
+		redirectToSignIn()
+	}
+
+	const client = new AtlassianClient({ accessToken: token.accessToken })
+
+	const getMe = cached(client.getMe.bind(client))
+	const getAccessibleResources = cached(client.getAccessibleResources.bind(client))
+	const getProjects = cached(client.getProjects.bind(client))
+
+	const user = await getMe()
+	const accessibleResources = await getAccessibleResources()
+
+	const projects = await Promise.all(
+		accessibleResources.map(async resource => getProjects(resource.id))
+	)
 
 	return {
-		profile: {
-			id: profile.id,
-			provider: profile.provider,
-			displayName: profileData.displayName,
-			email: profileData.email,
-			avatarUrl: profileData.avatarUrl
-		}
+		user,
+		accessibleResources,
+		projects
 	}
 })

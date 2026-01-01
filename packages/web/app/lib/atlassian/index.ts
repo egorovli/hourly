@@ -1,1 +1,5 @@
+export * from './accessible-resource.ts'
 export * from './client.ts'
+export * from './jira-user.ts'
+export * from './project.ts'
+export * from './user.ts'

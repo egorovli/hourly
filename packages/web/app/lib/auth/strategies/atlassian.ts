@@ -78,20 +78,19 @@ export const atlassianStrategy = new AtlassianStrategy<ProviderAccount>(
 
 		const client = new AtlassianClient({
 			accessToken,
-			refreshToken,
 			baseUrl: AtlassianStrategy.baseUrl
 		})
 
-		const profile = await client.getMe()
+		const user = await client.getMe()
 
 		return {
 			provider: Provider.Atlassian,
-			id: profile.account_id,
-			accountId: profile.account_id,
-			accountType: profile.account_type,
-			displayName: profile.name ?? profile.nickname ?? profile.email ?? profile.account_id,
-			email: profile.email,
-			avatarUrl: profile.picture,
+			id: user.account_id,
+			accountId: user.account_id,
+			accountType: user.account_type,
+			displayName: user.name ?? user.nickname ?? user.email ?? user.account_id,
+			email: user.email,
+			avatarUrl: user.picture,
 			expiresAt,
 			scopes,
 
