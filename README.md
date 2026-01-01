@@ -191,6 +191,11 @@ SESSION_SECRET=<random-secret>
 # VERSION=0.0.1
 ```
 
+The reporter worker reuses the Atlassian OAuth values above. Optional overrides for its token refresh schedule:
+
+- `TEMPORAL_TOKEN_REFRESH_SCHEDULE_ID` (default `atlassian-token-refresh-schedule`)
+- `ATLASSIAN_TOKEN_REFRESH_INTERVAL` (default `1h`, schedule cadence)
+
 ### User Preferences
 
 Stored in cookie, configurable via Settings:

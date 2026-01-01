@@ -1,0 +1,15 @@
+### Report accounts to Atlassian privacy API
+# Replace the bearer token and account details as needed.
+POST https://api.atlassian.com/app/report-accounts/
+Authorization: Bearer {{ATLASSIAN_PRIVACY_TOKEN}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "accounts": [
+    {
+      "accountId": "user-account-id",
+      "updatedAt": "2025-01-01T00:00:00Z"
+    }
+  ]
+}

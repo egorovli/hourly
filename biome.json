@@ -227,6 +227,12 @@
 					}
 				}
 			}
+		},
+		{
+			"includes": ["packages/workers/reporter/src/**/*.ts"],
+			"javascript": {
+				"globals": ["Bun"]
+			}
 		}
 	]
 }

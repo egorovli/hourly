@@ -149,7 +149,7 @@ export let loader = withRequestContext(async function loader({ request }: Route.
 
 	// TODO: Proper types.
 	const profile = connection.profile
-	const profileData = profile.data as unknown as ProfileData
+	const profileData = (profile.data ?? {}) as unknown as ProfileData
 
 	return {
 		profile: {

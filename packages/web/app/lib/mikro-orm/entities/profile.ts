@@ -20,8 +20,14 @@ export class Profile extends BaseEntity {
 	@PrimaryKey()
 	provider!: string
 
-	@Property({ type: 'json' })
-	data!: Record<string, unknown>
+	@Property({ type: 'json', nullable: true })
+	data?: Record<string, unknown>
+
+	@Property({ name: 'deleted_at', nullable: true })
+	deletedAt?: Date
+
+	@Property({ name: 'reported_at', nullable: true })
+	reportedAt?: Date
 
 	@OneToMany(
 		() => Token,

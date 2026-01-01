@@ -9,6 +9,9 @@
 .react-router
 .mikro-orm
 
+.gocache
+.gocache*
+
 .mcp.json
 
 /packages/web/build

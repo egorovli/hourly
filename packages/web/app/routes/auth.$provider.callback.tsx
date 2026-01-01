@@ -60,6 +60,8 @@ export const loader = withRequestContext(async function loader({
 	})()
 
 	profile.data = profileData
+	profile.deletedAt = undefined
+	profile.reportedAt = undefined
 	profile.updatedAt = new Date()
 
 	let token = await em.findOne(Token, {
