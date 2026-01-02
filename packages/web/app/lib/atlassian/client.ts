@@ -1,4 +1,5 @@
 import type { AccessibleResource } from './accessible-resource.ts'
+import type { IssueSearchApiResponse, SearchIssuesParams, SearchIssuesResult } from './issue.ts'
 import type { JiraUser } from './jira-user.ts'
 import type { Project } from './project.ts'
 import type { User } from './user.ts'
@@ -1050,6 +1051,175 @@ export class AtlassianClient {
 		}
 
 		return undefined
+	}
+
+	/**
+	 * Searches for Jira issues using JQL with support for text search and user relevance.
+	 *
+	 * When a search query is provided, it prioritizes matching issue keys, summaries, and descriptions.
+	 * When no query is provided, it returns issues relevant to the specified users (assigned or reported).
+	 *
+	 * @param params - Search parameters including projectKeys, userAccountIds, dateRange, and query
+	 * @returns Promise resolving to paginated issue results
+	 *
+	 * @example
+	 * ```ts
+	 * // Text search
+	 * const results = await client.searchIssues({
+	 *   accessibleResourceId: 'resource-id',
+	 *   projectKeys: ['PROJ'],
+	 *   query: 'authentication bug',
+	 *   maxResults: 20
+	 * })
+	 *
+	 * // Relevance search (issues for specific users)
+	 * const results = await client.searchIssues({
+	 *   accessibleResourceId: 'resource-id',
+	 *   projectKeys: ['PROJ'],
+	 *   userAccountIds: ['user-account-id'],
+	 *   dateFrom: '2024-01-01',
+	 *   dateTo: '2024-01-31'
+	 * })
+	 * ```
+	 */
+	async searchIssues(params: SearchIssuesParams): Promise<SearchIssuesResult> {
+		const {
+			accessibleResourceId,
+			projectKeys,
+			userAccountIds,
+			dateFrom,
+			dateTo,
+			query,
+			nextPageToken,
+			maxResults = 50,
+			signal,
+			headers
+		} = params
+
+		const jqlParts: string[] = []
+		const quoteJqlValue = (value: string) =>
+			`"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+
+		// Filter by projects (required for meaningful results)
+		if (projectKeys && projectKeys.length > 0) {
+			jqlParts.push(`project in (${projectKeys.map(quoteJqlValue).join(',')})`)
+		}
+
+		// Text search takes priority when provided
+		const trimmedQuery = query?.trim()
+		if (trimmedQuery && trimmedQuery.length > 0) {
+			// Check if query looks like an issue key (e.g., "PROJ-123")
+			const isIssueKey = /^[A-Z]+-\d+$/i.test(trimmedQuery)
+
+			if (isIssueKey) {
+				// Direct key match
+				jqlParts.push(`key = ${quoteJqlValue(trimmedQuery.toUpperCase())}`)
+			} else {
+				// Full-text search on summary and description
+				jqlParts.push(`text ~ ${quoteJqlValue(trimmedQuery)}`)
+			}
+		} else if (userAccountIds && userAccountIds.length > 0) {
+			// No text query - filter by user relevance (assignee or reporter)
+			const userList = userAccountIds.map(quoteJqlValue).join(',')
+			jqlParts.push(`(assignee in (${userList}) OR reporter in (${userList}))`)
+		}
+
+		// Apply date range filter - find issues with activity in the date range
+		// Uses multiple date fields to catch all relevant issues:
+		// - created: issue was created in the range
+		// - updated: issue had any update in the range
+		// - resolutiondate: issue was resolved in the range
+		// - worklogDate: worklogs were added in the range
+		// - duedate: issue is due in the range
+		if (dateFrom || dateTo) {
+			const fromDate = dateFrom ? DateTime.fromISO(dateFrom) : undefined
+			const toDate = dateTo ? DateTime.fromISO(dateTo) : undefined
+			const fromStr = fromDate?.isValid ? quoteJqlValue(fromDate.toFormat('yyyy-MM-dd')) : undefined
+			const toStr = toDate?.isValid ? quoteJqlValue(toDate.toFormat('yyyy-MM-dd')) : undefined
+
+			if (fromStr || toStr) {
+				const dateFields = ['created', 'updated', 'resolutiondate', 'worklogDate', 'duedate']
+				const orConditions: string[] = []
+
+				for (const field of dateFields) {
+					const fieldConditions: string[] = []
+					if (fromStr) {
+						fieldConditions.push(`${field} >= ${fromStr}`)
+					}
+					if (toStr) {
+						fieldConditions.push(`${field} <= ${toStr}`)
+					}
+					if (fieldConditions.length > 0) {
+						orConditions.push(`(${fieldConditions.join(' AND ')})`)
+					}
+				}
+
+				if (orConditions.length > 0) {
+					jqlParts.push(`(${orConditions.join(' OR ')})`)
+				}
+			}
+		}
+
+		// Build the full JQL query
+		const jql =
+			jqlParts.length > 0
+				? `${jqlParts.join(' AND ')} ORDER BY updated DESC`
+				: 'ORDER BY updated DESC'
+
+		const requestBody: Record<string, unknown> = {
+			jql,
+			maxResults: Math.min(maxResults, 100),
+			fields: [
+				'summary',
+				'description',
+				'issuetype',
+				'status',
+				'priority',
+				'assignee',
+				'reporter',
+				'created',
+				'updated',
+				'resolutiondate',
+				'duedate',
+				'project',
+				'timespent'
+			]
+		}
+
+		if (nextPageToken) {
+			requestBody['nextPageToken'] = nextPageToken
+		}
+
+		const response = await fetch(
+			`${this.baseUrl}/ex/jira/${accessibleResourceId}/rest/api/3/search/jql`,
+			{
+				method: 'POST',
+				signal,
+				headers: {
+					'Accept': 'application/json',
+					'Authorization': `Bearer ${this.accessToken}`,
+					'Content-Type': 'application/json',
+					'User-Agent': this.userAgent,
+					...(headers ?? {})
+				},
+				body: JSON.stringify(requestBody)
+			}
+		)
+
+		if (!response.ok) {
+			const errorText = await response.text().catch(() => response.statusText)
+			throw new Error(`Failed to search issues: ${response.status} ${errorText}`)
+		}
+
+		const payload = (await response.json()) as IssueSearchApiResponse
+
+		return {
+			issues: payload.issues,
+			maxResults: payload.maxResults,
+			total: payload.total,
+			isLast: payload.isLast ?? true,
+			nextPageToken: payload.nextPageToken
+		}
 	}
 
 	/**

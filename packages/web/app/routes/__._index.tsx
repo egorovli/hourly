@@ -7,45 +7,52 @@ import type {
 	PluginDef
 } from '@fullcalendar/core'
 
+import type {
+	AccessibleResource,
+	JiraIssueSearchResult,
+	JiraUser,
+	Project,
+	WorklogEntry
+} from '~/lib/atlassian/index.ts'
+
 import type { Draggable, EventReceiveArg, EventResizeDoneArg } from '@fullcalendar/interaction'
 import type FullCalendarType from '@fullcalendar/react'
 import type { MetaDescriptor } from 'react-router'
-import type { AccessibleResource, JiraUser, Project, WorklogEntry } from '~/lib/atlassian/index.ts'
 import type { Route } from './+types/__._index.ts'
 import type { Route as LayoutRoute } from './+types/__.ts'
 import type { SaveWorklogsActionResponse } from './api.worklog.entries.tsx'
 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouteLoaderData } from 'react-router'
 import { toast } from 'sonner'
 import { Virtuoso } from 'react-virtuoso'
 import { nanoid } from 'nanoid'
 
 import {
-	BugIcon,
-	CheckCircle2Icon,
+	lazy,
+	Suspense,
+	useCallback,
+	useDeferredValue,
+	useEffect,
+	useMemo,
+	useRef,
+	useState
+} from 'react'
+
+import {
 	ChevronDownIcon,
 	ChevronLeftIcon,
 	ChevronRightIcon,
-	CircleDashedIcon,
 	CircleIcon,
-	ClockIcon,
-	EyeIcon,
 	LayersIcon,
-	LightbulbIcon,
 	Loader2Icon,
+	MoreVerticalIcon,
 	PencilIcon,
-	RocketIcon,
 	SaveIcon,
 	SearchIcon,
-	SignalHighIcon,
-	SignalLowIcon,
-	SignalMediumIcon,
 	SlidersHorizontalIcon,
-	SparklesIcon,
-	XIcon,
-	ZapIcon
+	UsersIcon,
+	XIcon
 } from 'lucide-react'
 
 import { Avatar, AvatarFallback, AvatarImage } from '~/components/shadcn/ui/avatar.tsx'
@@ -63,6 +70,13 @@ import { getQueryKeyParams } from '~/lib/query/get-query-key-params.ts'
 import { cn, invariant } from '~/lib/util/index.ts'
 
 import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger
+} from '~/components/shadcn/ui/dropdown-menu.tsx'
+
+import {
 	Collapsible,
 	CollapsibleContent,
 	CollapsibleTrigger
@@ -78,57 +92,6 @@ import {
 } from '~/components/shadcn/ui/command.tsx'
 
 const FullCalendar = lazy(() => import('@fullcalendar/react'))
-
-enum IssueType {
-	Bug = 'bug',
-	Feature = 'feature',
-	Task = 'task',
-	SubTask = 'subtask',
-	Story = 'story'
-}
-
-enum IssueStatus {
-	Open = 'open',
-	Closed = 'closed',
-	InProgress = 'in-progress',
-	Done = 'done',
-	Backlog = 'backlog',
-	Review = 'review',
-	Deployed = 'deployed'
-}
-
-enum IssuePriority {
-	Low = 'low',
-	Medium = 'medium',
-	High = 'high',
-	Critical = 'critical'
-}
-
-interface Issue {
-	id: string
-	type: IssueType
-	status: IssueStatus
-	priority: IssuePriority
-	name: string
-	description?: string
-	author: Person
-	assignees: Person[]
-}
-
-interface Person {
-	id: string
-	name: string
-	email: string
-	initials: string
-	avatarUrl?: string
-}
-
-interface User {
-	id: string
-	name: string
-	email?: string
-	avatarUrl?: string
-}
 
 interface ProjectsByResource {
 	resource: AccessibleResource
@@ -248,108 +211,6 @@ interface WorklogSaveEntry {
 // 		</div>
 // 	)
 // }
-
-const fakeIssues: Issue[] = [
-	{
-		id: 'LP-123',
-		type: IssueType.Bug,
-		status: IssueStatus.InProgress,
-		priority: IssuePriority.Critical,
-		name: 'Issue 1',
-		// description:
-		// 	'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
-
-		author: {
-			id: '1',
-			name: 'John Doe',
-			email: 'john.doe@example.com',
-			initials: 'JD'
-		},
-		assignees: [
-			{
-				id: '2',
-				name: 'Jane Doe',
-				email: 'jane.doe@example.com',
-				initials: 'JD'
-			},
-			{
-				id: '3',
-				name: 'Jim Doe',
-				email: 'jim.doe@example.com',
-				initials: 'JD'
-			}
-		]
-	},
-
-	{
-		id: 'LP-124',
-		type: IssueType.Feature,
-		status: IssueStatus.Open,
-		priority: IssuePriority.Low,
-		name: 'Issue 2',
-		description:
-			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
-		author: {
-			id: '1',
-			name: 'John Doe',
-			email: 'john.doe@example.com',
-			initials: 'JD'
-		},
-		assignees: [
-			{
-				id: '2',
-				name: 'Jane Doe',
-				email: 'jane.doe@example.com',
-				initials: 'JD'
-			},
-			{
-				id: '3',
-				name: 'Jim Doe',
-				email: 'jim.doe@example.com',
-				initials: 'JD'
-			}
-		]
-	}
-]
-
-// const fakeUsers: User[] = [
-// 	{
-// 		id: '1',
-// 		name: 'Alice Johnson',
-// 		email: 'alice.johnson@example.com',
-// 		avatarUrl: undefined
-// 	},
-// 	{
-// 		id: '2',
-// 		name: 'Bob Smith',
-// 		email: 'bob.smith@example.com',
-// 		avatarUrl: undefined
-// 	},
-// 	{
-// 		id: '3',
-// 		name: 'Charlie Brown',
-// 		email: undefined,
-// 		avatarUrl: undefined
-// 	},
-// 	{
-// 		id: '4',
-// 		name: 'Diana Prince',
-// 		email: 'diana.prince@example.com',
-// 		avatarUrl: undefined
-// 	},
-// 	{
-// 		id: '5',
-// 		name: 'Eve Wilson',
-// 		email: undefined,
-// 		avatarUrl: undefined
-// 	},
-// 	{
-// 		id: '6',
-// 		name: 'Frank Miller',
-// 		email: 'frank.miller@example.com',
-// 		avatarUrl: undefined
-// 	}
-// ]
 
 const ONE_WEEK_IN_MS = 7 * 24 * 60 * 60 * 1000
 
@@ -1082,6 +943,64 @@ function useWorklogEntriesQuery(options: UseWorklogEntriesQueryOptions) {
 	})
 }
 
+interface IssuesSearchResponse {
+	issues: JiraIssueSearchResult[]
+	total: number
+	page: number
+	pageSize: number
+}
+
+interface UseIssuesQueryOptions {
+	userId?: string
+	projectIds?: string[]
+	userIds?: string[]
+	fromDate?: Date
+	toDate?: Date
+	query?: string
+	enabled?: boolean
+}
+
+function useIssuesQuery(options: UseIssuesQueryOptions) {
+	const { userId, projectIds, userIds, fromDate, toDate, query, enabled } = options
+
+	return useQuery({
+		queryKey: [
+			'issues',
+			{
+				userId: userId,
+				projectIds: projectIds,
+				userIds: userIds,
+				fromDate: fromDate,
+				toDate: toDate,
+				query: query
+			}
+		],
+
+		async queryFn({ queryKey, signal }) {
+			const params = getQueryKeyParams(queryKey)
+
+			const searchParams = new URLSearchParams([
+				...(params.projectIds?.map(projectId => ['filter[project]', projectId]) ?? []),
+				...(params.userIds?.map(userId => ['filter[user]', userId]) ?? []),
+				...(params.fromDate ? [['filter[from]', params.fromDate.toISOString()]] : []),
+				...(params.toDate ? [['filter[to]', params.toDate.toISOString()]] : []),
+				...(params.query ? [['filter[query]', params.query]] : [])
+			])
+
+			const response = await fetch(`/api/issues?${searchParams}`, { signal })
+
+			if (!response.ok) {
+				throw new Error(`Failed to fetch issues: ${response.statusText}`)
+			}
+
+			const data = (await response.json()) as IssuesSearchResponse
+			return data
+		},
+
+		enabled
+	})
+}
+
 interface UseFullCalendarOptions {
 	onSuccess?: () => void
 }
@@ -1149,7 +1068,9 @@ export default function IndexPage(): React.ReactNode {
 	// Pending changes - user modifications not yet saved to API
 	const [pendingChanges, setPendingChanges] = useState(new Map<string, PendingChange>())
 
-	const [issues, setIssues] = useState<Issue[]>([])
+	// Issue search state
+	const [issueSearchQuery, setIssueSearchQuery] = useState('')
+	const deferredIssueSearchQuery = useDeferredValue(issueSearchQuery)
 
 	const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([])
 	const [selectedUserIds, setSelectedUserIds] = useState<string[]>([])
@@ -1160,7 +1081,7 @@ export default function IndexPage(): React.ReactNode {
 
 	const calendar = useFullCalendar({
 		onSuccess: () => {
-			setIssues(fakeIssues)
+			// Calendar is ready
 		}
 	})
 
@@ -1183,6 +1104,16 @@ export default function IndexPage(): React.ReactNode {
 		userId: currentUserId,
 		projectIds: selectedProjectIds,
 		enabled: projectsQuery.isSuccess && selectedProjectIds.length > 0
+	})
+
+	const issuesQuery = useIssuesQuery({
+		userId: currentUserId,
+		projectIds: selectedProjectIds,
+		userIds: selectedUserIds,
+		fromDate: fromDate,
+		toDate: toDate,
+		query: deferredIssueSearchQuery.length > 0 ? deferredIssueSearchQuery : undefined,
+		enabled: projectsQuery.isSuccess && selectedProjectIds.length > 0 && selectedUserIds.length > 0
 	})
 
 	const worklogEntriesQuery = useWorklogEntriesQuery({
@@ -1270,6 +1201,7 @@ export default function IndexPage(): React.ReactNode {
 	const projects = useMemo(() => projectsQuery.data ?? [], [projectsQuery.data])
 	const accessibleResources = useMemo(() => resourcesQuery.data ?? [], [resourcesQuery.data])
 	const worklogEntries = useMemo(() => worklogEntriesQuery.data ?? [], [worklogEntriesQuery.data])
+	const issues = useMemo(() => issuesQuery.data?.issues ?? [], [issuesQuery.data])
 
 	// Create lookup maps for efficient data access
 	const usersByAccountId = useMemo(() => {
@@ -1683,6 +1615,7 @@ export default function IndexPage(): React.ReactNode {
 		usersQuery.isEnabled && (usersQuery.isPending || usersQuery.isFetchingNextPage)
 
 	const entriesLoading = worklogEntriesQuery.isFetching
+	const issuesLoading = issuesQuery.isFetching
 
 	if (!calendar.isVisible) {
 		return null
@@ -1743,34 +1676,110 @@ export default function IndexPage(): React.ReactNode {
 			</Collapsible>
 			<div className='flex flex-row gap-4 grow'>
 				<div className='flex w-80 shrink-0 flex-col gap-3 rounded-lg border bg-muted/30 p-3'>
-					<h2 className='text-lg font-semibold text-foreground'>Issues</h2>
+					{/* Issues Panel Header */}
+					<div className='flex items-center justify-between'>
+						<h2 className='text-lg font-semibold text-foreground'>Issues</h2>
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<Button
+									variant='ghost'
+									size='icon-sm'
+									className='size-7'
+								>
+									<MoreVerticalIcon className='size-4' />
+									<span className='sr-only'>Options</span>
+								</Button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align='end'>
+								<DropdownMenuItem
+									disabled
+									className='gap-2'
+								>
+									<UsersIcon className='size-4' />
+									<span>Prioritize by user</span>
+									<Badge
+										variant='secondary'
+										className='ml-auto text-[10px]'
+									>
+										Soon
+									</Badge>
+								</DropdownMenuItem>
+							</DropdownMenuContent>
+						</DropdownMenu>
+					</div>
+
+					{/* Search Input */}
 					<div className='relative'>
 						<SearchIcon className='absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground' />
 						<Input
 							type='search'
-							placeholder='Search issues...'
-							className='pl-8'
+							placeholder='Search by key or text...'
+							className='pl-8 pr-8'
+							value={issueSearchQuery}
+							onChange={e => setIssueSearchQuery(e.target.value)}
 						/>
+						{issueSearchQuery.length > 0 && (
+							<Button
+								type='button'
+								variant='ghost'
+								size='icon-sm'
+								className='absolute right-1 top-1/2 size-6 -translate-y-1/2'
+								onClick={() => setIssueSearchQuery('')}
+							>
+								<XIcon className='size-3.5' />
+								<span className='sr-only'>Clear search</span>
+							</Button>
+						)}
 					</div>
-					<Virtuoso
-						data={issues}
-						totalCount={issues.length}
-						itemContent={(index, issue, context) => {
-							invariant(calendar.Draggable, 'Draggable constructor is not defined')
 
-							return (
-								<div className='pb-2'>
-									<IssueItem
-										{...issue}
-										isDragged={false}
-										components={{
-											Draggable: calendar.Draggable
-										}}
-									/>
-								</div>
-							)
-						}}
-					/>
+					{/* Issues List */}
+					{issuesLoading ? (
+						<div className='flex flex-col gap-2 py-2'>
+							<IssueItemSkeleton />
+							<IssueItemSkeleton />
+							<IssueItemSkeleton />
+							<IssueItemSkeleton />
+							<IssueItemSkeleton />
+						</div>
+					) : issues.length === 0 ? (
+						<div className='flex flex-col items-center justify-center py-12 px-4 text-center'>
+							<div className='mb-3 flex size-12 items-center justify-center rounded-full bg-muted'>
+								<SearchIcon className='size-6 text-muted-foreground' />
+							</div>
+							<p className='mb-1 text-sm font-medium text-foreground'>
+								{issueSearchQuery.length > 0 ? 'No matching issues' : 'No issues found'}
+							</p>
+							<p className='text-xs text-muted-foreground'>
+								{issueSearchQuery.length > 0
+									? 'Try adjusting your search query'
+									: selectedProjectIds.length === 0
+										? 'Select projects to see issues'
+										: selectedUserIds.length === 0
+											? 'Select users to see their issues'
+											: 'No issues match the current filters'}
+							</p>
+						</div>
+					) : (
+						<Virtuoso
+							data={issues}
+							totalCount={issues.length}
+							itemContent={(index, issue) => {
+								invariant(calendar.Draggable, 'Draggable constructor is not defined')
+
+								return (
+									<div className='pb-2'>
+										<IssueItem
+											issue={issue}
+											isDragged={false}
+											components={{
+												Draggable: calendar.Draggable
+											}}
+										/>
+									</div>
+								)
+							}}
+						/>
+					)}
 				</div>
 				<div className='flex flex-col grow gap-3'>
 					{/* Calendar Navigation */}
@@ -1942,7 +1951,8 @@ export default function IndexPage(): React.ReactNode {
 	)
 }
 
-interface IssueItemProps extends Issue {
+interface IssueItemProps {
+	issue: JiraIssueSearchResult
 	isDragged: boolean
 	components: IssueItemComponents
 }
@@ -1953,53 +1963,39 @@ interface IssueItemComponents {
 
 type BadgeVariant = 'default' | 'secondary' | 'outline'
 
-interface IssueTypeDisplayConfig {
-	icon: React.ElementType
-	label: string
-	className: string
+/**
+ * Maps Jira status category keys to badge variants
+ */
+function getStatusBadgeVariant(categoryKey?: string): BadgeVariant {
+	switch (categoryKey) {
+		case 'done':
+			return 'secondary'
+		case 'indeterminate':
+			return 'default'
+		default:
+			return 'outline'
+	}
 }
 
-interface IssueStatusDisplayConfig {
-	icon: React.ElementType
-	label: string
-	variant: BadgeVariant
-}
-
-interface IssuePriorityDisplayConfig {
-	icon: React.ElementType
-	label: string
-	className: string
-}
-
-const issueTypeConfig: Record<IssueType, IssueTypeDisplayConfig> = {
-	[IssueType.Bug]: { icon: BugIcon, label: 'Bug', className: 'text-red-500' },
-	[IssueType.Feature]: { icon: SparklesIcon, label: 'Feature', className: 'text-purple-500' },
-	[IssueType.Task]: { icon: CheckCircle2Icon, label: 'Task', className: 'text-blue-500' },
-	[IssueType.SubTask]: { icon: LayersIcon, label: 'Subtask', className: 'text-slate-500' },
-	[IssueType.Story]: { icon: LightbulbIcon, label: 'Story', className: 'text-amber-500' }
-}
-
-const issueStatusConfig: Record<IssueStatus, IssueStatusDisplayConfig> = {
-	[IssueStatus.Open]: { icon: CircleIcon, label: 'Open', variant: 'outline' },
-	[IssueStatus.Closed]: { icon: CheckCircle2Icon, label: 'Closed', variant: 'secondary' },
-	[IssueStatus.InProgress]: { icon: ClockIcon, label: 'In Progress', variant: 'default' },
-	[IssueStatus.Done]: { icon: CheckCircle2Icon, label: 'Done', variant: 'secondary' },
-	[IssueStatus.Backlog]: { icon: CircleDashedIcon, label: 'Backlog', variant: 'outline' },
-	[IssueStatus.Review]: { icon: EyeIcon, label: 'Review', variant: 'default' },
-	[IssueStatus.Deployed]: { icon: RocketIcon, label: 'Deployed', variant: 'secondary' }
-}
-
-const issuePriorityConfig: Record<IssuePriority, IssuePriorityDisplayConfig> = {
-	[IssuePriority.Low]: { icon: SignalLowIcon, label: 'Low', className: 'text-slate-400' },
-	[IssuePriority.Medium]: { icon: SignalMediumIcon, label: 'Medium', className: 'text-blue-500' },
-	[IssuePriority.High]: { icon: SignalHighIcon, label: 'High', className: 'text-orange-500' },
-	[IssuePriority.Critical]: { icon: ZapIcon, label: 'Critical', className: 'text-red-500' }
+/**
+ * Formats seconds to a human-readable hours string (e.g., "2.5h")
+ */
+function formatSecondsToHours(seconds: number): string {
+	const hours = seconds / 3600
+	if (hours < 0.1) {
+		return '<0.1h'
+	}
+	return `${hours.toFixed(1).replace(/\.0$/, '')}h`
 }
 
 function IssueItem(props: IssueItemProps): React.ReactNode {
+	const { issue, components } = props
 	const ref = useRef<HTMLDivElement>(null)
-	const Draggable = props.components.Draggable
-	const draggableRef = useRef<Draggable>(null)
+	const Draggable = components.Draggable
+
+	const { fields } = issue
+	const assigneeAvatarUrl =
+		fields.assignee?.avatarUrls?.['48x48'] ?? fields.assignee?.avatarUrls?.['32x32']
 
 	useEffect(() => {
 		if (!ref.current) {
@@ -2007,157 +2003,119 @@ function IssueItem(props: IssueItemProps): React.ReactNode {
 		}
 
 		const draggable = new Draggable(ref.current, {
-			eventData(el) {
-				return {
-					id: props.id,
-					duration: '01:30'
+			eventData: () => ({
+				title: `${issue.key} ${fields.summary}`,
+				duration: '01:00',
+				extendedProps: {
+					issueKey: issue.key,
+					issueSummary: fields.summary,
+					issueId: issue.id
 				}
-			}
+			})
 		})
 
-		draggableRef.current = draggable
+		return () => draggable.destroy()
+	}, [Draggable, issue.id, issue.key, fields.summary])
 
-		return () => {
-			draggable.destroy()
-		}
-	}, [Draggable, props.id])
-
-	const typeConfig = issueTypeConfig[props.type]
-	const statusConfig = issueStatusConfig[props.status]
-	const priorityConfig = issuePriorityConfig[props.priority]
-
-	const TypeIcon = typeConfig.icon
-	const StatusIcon = statusConfig.icon
-	const PriorityIcon = priorityConfig.icon
+	const statusVariant = getStatusBadgeVariant(fields.status?.statusCategory?.key)
 
 	return (
 		<div
 			ref={ref}
-			className='group cursor-grab rounded-lg border border-border/50 bg-card p-3 shadow-xs select-none //transition-all //hover:border-border //hover:shadow-md active:cursor-grabbing'
+			className='group cursor-grab rounded-lg border border-border/50 bg-card p-3 shadow-xs select-none active:cursor-grabbing'
 		>
-			<div className='flex flex-row justify-start items-baseline gap-2 pb-1'>
-				{/* Title */}
-				<h3 className='text-sm font-medium text-foreground grow line-clamp-1'>{props.name}</h3>
-
-				{/* Header: ID + Type */}
-				<div className='flex items-center gap-2 shrink-0'>
-					<Badge
-						variant='outline'
-						className='font-mono text-xs whitespace-nowrap'
-					>
-						{props.id}
-					</Badge>
-					<Tooltip>
-						<TooltipTrigger asChild>
-							<span className={cn('flex items-center gap-1 text-xs', typeConfig.className)}>
-								<TypeIcon className='size-3.5' />
-								<span className='sr-only'>{typeConfig.label}</span>
-							</span>
-						</TooltipTrigger>
-						<TooltipContent>{typeConfig.label}</TooltipContent>
-					</Tooltip>
-				</div>
+			{/* Header: Summary + Key */}
+			<div className='flex items-baseline gap-2 pb-1'>
+				<h3 className='grow truncate text-sm font-medium'>{fields.summary}</h3>
+				<Badge
+					variant='outline'
+					className='shrink-0 font-mono text-xs'
+				>
+					{issue.key}
+				</Badge>
 			</div>
 
-			<p className='mb-3 line-clamp-2 text-xs leading-relaxed text-muted-foreground'>
-				{props.description || 'No description provided'}
-			</p>
-
-			{/* Footer: Status, Priority, Author, Assignees */}
-			<div className='flex items-center justify-between gap-2'>
+			{/* Footer: Type, Status, Priority, Time, Assignee */}
+			<div className='flex items-center justify-between gap-2 pt-1'>
 				<div className='flex items-center gap-1.5'>
+					{/* Type Icon */}
+					{fields.issuetype?.iconUrl && (
+						<Tooltip>
+							<TooltipTrigger asChild>
+								<img
+									src={fields.issuetype.iconUrl}
+									alt={fields.issuetype.name}
+									className='size-4'
+								/>
+							</TooltipTrigger>
+							<TooltipContent>{fields.issuetype.name}</TooltipContent>
+						</Tooltip>
+					)}
+
 					{/* Status */}
 					<Badge
-						variant={statusConfig.variant}
-						className='gap-1 text-[10px]'
+						variant={statusVariant}
+						className='text-[10px]'
 					>
-						<StatusIcon className='size-3' />
-						{statusConfig.label}
+						{fields.status?.name ?? 'Unknown'}
 					</Badge>
 
-					{/* Priority */}
-					<Tooltip>
-						<TooltipTrigger asChild>
-							<span className={cn('flex items-center', priorityConfig.className)}>
-								<PriorityIcon className='size-4' />
-							</span>
-						</TooltipTrigger>
-						<TooltipContent>{priorityConfig.label} priority</TooltipContent>
-					</Tooltip>
+					{/* Priority Icon */}
+					{fields.priority?.iconUrl && (
+						<Tooltip>
+							<TooltipTrigger asChild>
+								<img
+									src={fields.priority.iconUrl}
+									alt={fields.priority.name}
+									className='size-4'
+								/>
+							</TooltipTrigger>
+							<TooltipContent>{fields.priority.name}</TooltipContent>
+						</Tooltip>
+					)}
+
+					{/* Time Spent */}
+					{fields.timespent !== undefined && fields.timespent > 0 && (
+						<span className='text-[10px] text-muted-foreground'>
+							{formatSecondsToHours(fields.timespent)}
+						</span>
+					)}
 				</div>
 
-				{/* People: Author + Assignees */}
-				<div className='flex items-center gap-1'>
-					{/* Author */}
+				{/* Assignee */}
+				{fields.assignee && (
 					<Tooltip>
 						<TooltipTrigger asChild>
-							<Avatar className='size-5 ring-2 ring-background'>
-								{props.author.avatarUrl && (
+							<Avatar className='size-5'>
+								{assigneeAvatarUrl && (
 									<AvatarImage
-										src={props.author.avatarUrl}
-										alt={props.author.name}
+										src={assigneeAvatarUrl}
+										alt={fields.assignee.displayName}
 									/>
 								)}
-								<AvatarFallback className='text-[8px] font-medium'>
-									{props.author.initials}
+								<AvatarFallback className='text-[8px]'>
+									{getInitialsFromLabel(fields.assignee.displayName)}
 								</AvatarFallback>
 							</Avatar>
 						</TooltipTrigger>
-						<TooltipContent>
-							<div className='text-center'>
-								<div className='font-medium'>{props.author.name}</div>
-								<div className='text-muted-foreground'>Author</div>
-							</div>
-						</TooltipContent>
+						<TooltipContent>{fields.assignee.displayName}</TooltipContent>
 					</Tooltip>
+				)}
+			</div>
+		</div>
+	)
+}
 
-					{/* Assignees */}
-					{props.assignees.length > 0 && (
-						<div className='flex -space-x-1.5'>
-							{props.assignees.slice(0, 3).map(assignee => (
-								<Tooltip key={assignee.id}>
-									<TooltipTrigger asChild>
-										<Avatar className='size-5 ring-2 ring-background'>
-											{assignee.avatarUrl && (
-												<AvatarImage
-													src={assignee.avatarUrl}
-													alt={assignee.name}
-												/>
-											)}
-											<AvatarFallback className='text-[8px] font-medium'>
-												{assignee.initials}
-											</AvatarFallback>
-										</Avatar>
-									</TooltipTrigger>
-									<TooltipContent>
-										<div className='text-center'>
-											<div className='font-medium'>{assignee.name}</div>
-											<div className='text-muted-foreground'>Assignee</div>
-										</div>
-									</TooltipContent>
-								</Tooltip>
-							))}
-							{props.assignees.length > 3 && (
-								<Tooltip>
-									<TooltipTrigger asChild>
-										<Avatar className='size-5 ring-2 ring-background'>
-											<AvatarFallback className='bg-muted text-[8px] font-medium'>
-												+{props.assignees.length - 3}
-											</AvatarFallback>
-										</Avatar>
-									</TooltipTrigger>
-									<TooltipContent>
-										<div className='text-center'>
-											{props.assignees.slice(3).map(a => (
-												<div key={a.id}>{a.name}</div>
-											))}
-										</div>
-									</TooltipContent>
-								</Tooltip>
-							)}
-						</div>
-					)}
-				</div>
+function IssueItemSkeleton(): React.ReactNode {
+	return (
+		<div className='rounded-lg border border-border/50 bg-card p-3'>
+			<div className='flex items-center justify-between pb-2'>
+				<Skeleton className='h-4 w-32' />
+				<Skeleton className='h-5 w-16' />
+			</div>
+			<div className='flex items-center justify-between pt-1'>
+				<Skeleton className='h-5 w-20' />
+				<Skeleton className='size-5 rounded-full' />
 			</div>
 		</div>
 	)
