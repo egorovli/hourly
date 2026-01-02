@@ -1,12 +1,13 @@
 import type {
 	DatesSetArg,
 	EventContentArg,
+	EventDropArg,
 	EventInput,
 	FormatterInput,
 	PluginDef
 } from '@fullcalendar/core'
 
-import type { Draggable } from '@fullcalendar/interaction'
+import type { Draggable, EventReceiveArg, EventResizeDoneArg } from '@fullcalendar/interaction'
 import type { MetaDescriptor } from 'react-router'
 import type { AccessibleResource, JiraUser, Project, WorklogEntry } from '~/lib/atlassian/index.ts'
 import type { Route } from './+types/__._index.ts'
@@ -16,6 +17,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouteLoaderData } from 'react-router'
 import { Virtuoso } from 'react-virtuoso'
+import { nanoid } from 'nanoid'
 
 import {
 	BugIcon,
@@ -27,13 +29,16 @@ import {
 	EyeIcon,
 	LayersIcon,
 	LightbulbIcon,
+	PencilIcon,
 	RocketIcon,
+	SaveIcon,
 	SearchIcon,
 	SignalHighIcon,
 	SignalLowIcon,
 	SignalMediumIcon,
 	SlidersHorizontalIcon,
 	SparklesIcon,
+	XIcon,
 	ZapIcon
 } from 'lucide-react'
 
@@ -187,6 +192,18 @@ const dayHeaderFormat: FormatterInput = {
 }
 
 interface CalendarEvent extends EventInput {}
+
+/**
+ * Represents a pending change to an event (create, update, or delete).
+ * Used to track user modifications before they are saved to the API.
+ */
+type PendingChangeType = 'create' | 'update' | 'delete'
+
+interface PendingChange {
+	type: PendingChangeType
+	event: CalendarEvent
+	originalEvent?: CalendarEvent
+}
 
 // function renderWorklogEventContent(eventInfo: EventContentArg): React.ReactNode {
 // 	const author = eventInfo.event.extendedProps['authorDisplayName'] as string | undefined
@@ -1101,8 +1118,14 @@ function useFullCalendar(options: UseFullCalendarOptions) {
 
 export default function IndexPage(): React.ReactNode {
 	const layoutLoaderData = useRouteLoaderData<LayoutRoute.ComponentProps['loaderData']>('routes/__')
+	const currentUserId = layoutLoaderData?.user.account_id
 
-	const [events, setEvents] = useState<CalendarEvent[]>([])
+	// Loaded events cache - stores all events fetched from API (persists across date range changes)
+	const loadedEventsRef = useRef(new Map<string, CalendarEvent>())
+
+	// Pending changes - user modifications not yet saved to API
+	const [pendingChanges, setPendingChanges] = useState(new Map<string, PendingChange>())
+
 	const [issues, setIssues] = useState<Issue[]>([])
 
 	const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([])
@@ -1119,11 +1142,11 @@ export default function IndexPage(): React.ReactNode {
 	})
 
 	const resourcesQuery = useResourcesQuery({
-		userId: layoutLoaderData?.user.account_id
+		userId: currentUserId
 	})
 
 	const projectsQuery = useProjectsQuery({
-		userId: layoutLoaderData?.user.account_id,
+		userId: currentUserId,
 		accessibleResourceIds: resourcesQuery.data?.map(resource => resource.id),
 
 		enabled:
@@ -1134,13 +1157,13 @@ export default function IndexPage(): React.ReactNode {
 	})
 
 	const usersQuery = useUsersQuery({
-		userId: layoutLoaderData?.user.account_id,
+		userId: currentUserId,
 		projectIds: selectedProjectIds,
 		enabled: projectsQuery.isSuccess && selectedProjectIds.length > 0
 	})
 
 	const worklogEntriesQuery = useWorklogEntriesQuery({
-		userId: layoutLoaderData?.user.account_id,
+		userId: currentUserId,
 		projectIds: selectedProjectIds,
 		userIds: selectedUserIds,
 		fromDate: fromDate,
@@ -1156,7 +1179,6 @@ export default function IndexPage(): React.ReactNode {
 	const projects = useMemo(() => projectsQuery.data ?? [], [projectsQuery.data])
 	const accessibleResources = useMemo(() => resourcesQuery.data ?? [], [resourcesQuery.data])
 	const worklogEntries = useMemo(() => worklogEntriesQuery.data ?? [], [worklogEntriesQuery.data])
-	const currentUserId = layoutLoaderData?.user.account_id
 
 	// Create lookup maps for efficient data access
 	const usersByAccountId = useMemo(() => {
@@ -1179,8 +1201,9 @@ export default function IndexPage(): React.ReactNode {
 		return map
 	}, [projects])
 
-	useEffect(() => {
-		const events = worklogEntries.map<CalendarEvent>(entry => {
+	// Transform worklog entries to CalendarEvent and cache them
+	const transformWorklogToEvent = useMemo(() => {
+		return (entry: WorklogEntry): CalendarEvent => {
 			const projectKey = getProjectKeyFromIssueKey(entry.issueKey)
 			const { backgroundColor, borderColor } = getWorklogColors(entry.authorAccountId, projectKey)
 			const isEditable = currentUserId !== undefined && entry.authorAccountId === currentUserId
@@ -1193,11 +1216,13 @@ export default function IndexPage(): React.ReactNode {
 
 			// Look up author data
 			const author = entry.authorAccountId ? usersByAccountId.get(entry.authorAccountId) : undefined
+
 			const authorAvatarUrl =
 				author?.avatarUrls?.['48x48'] ??
 				author?.avatarUrls?.['32x32'] ??
 				author?.avatarUrls?.['24x24'] ??
 				undefined
+
 			const authorEmail = author?.emailAddress
 
 			// Look up project data
@@ -1231,13 +1256,258 @@ export default function IndexPage(): React.ReactNode {
 					projectName,
 					projectAvatarUrl,
 					timeSpentSeconds: entry.timeSpentSeconds,
-					started: entry.started
+					started: entry.started,
+					isModified: false
 				}
 			}
-		})
+		}
+	}, [currentUserId, usersByAccountId, projectsByKey])
 
-		setEvents(events)
-	}, [currentUserId, worklogEntries, usersByAccountId, projectsByKey])
+	// Transform worklog entries to CalendarEvents and cache them
+	const loadedEvents = useMemo(() => {
+		const eventsMap = new Map<string, CalendarEvent>()
+
+		for (const entry of worklogEntries) {
+			// Check if we already have this event cached
+			const cached = loadedEventsRef.current.get(entry.id)
+			if (cached) {
+				eventsMap.set(entry.id, cached)
+			} else {
+				const event = transformWorklogToEvent(entry)
+				loadedEventsRef.current.set(entry.id, event)
+				eventsMap.set(entry.id, event)
+			}
+		}
+
+		return eventsMap
+	}, [worklogEntries, transformWorklogToEvent])
+
+	// Merge loaded events with pending changes to create display events
+	const displayEvents = useMemo(() => {
+		const result: CalendarEvent[] = []
+
+		// Start with all loaded events
+		for (const [id, event] of loadedEvents) {
+			const pendingChange = pendingChanges.get(id)
+
+			if (pendingChange) {
+				// Apply pending change
+				if (pendingChange.type === 'delete') {
+					// Skip deleted events
+					continue
+				}
+				// For update, use the modified event with isModified flag
+				result.push({
+					...pendingChange.event,
+					extendedProps: {
+						...pendingChange.event.extendedProps,
+						isModified: true
+					}
+				})
+			} else {
+				// No pending change, use original
+				result.push(event)
+			}
+		}
+
+		// Add newly created events (not in loaded cache)
+		for (const [id, change] of pendingChanges) {
+			if (change.type === 'create') {
+				result.push({
+					...change.event,
+					extendedProps: {
+						...change.event.extendedProps,
+						isModified: true
+					}
+				})
+			}
+		}
+
+		return result
+	}, [loadedEvents, pendingChanges])
+
+	// Check if there are any pending changes
+	const hasPendingChanges = pendingChanges.size > 0
+
+	// Helper function to add/update a pending change
+	const updatePendingChange = (eventId: string, event: CalendarEvent, type: PendingChangeType) => {
+		setPendingChanges(prev => {
+			const next = new Map(prev)
+			const originalEvent = loadedEventsRef.current.get(eventId)
+
+			next.set(eventId, {
+				type: originalEvent ? type : 'create',
+				event,
+				originalEvent
+			})
+
+			return next
+		})
+	}
+
+	// Helper function to discard all pending changes
+	const discardPendingChanges = () => {
+		setPendingChanges(new Map())
+	}
+
+	// Helper function to discard a single pending change
+	const discardPendingChange = (eventId: string) => {
+		setPendingChanges(prev => {
+			const next = new Map(prev)
+			next.delete(eventId)
+			return next
+		})
+	}
+
+	// Handler for when an event is dragged to a new time/date
+	const handleEventDrop = (info: EventDropArg) => {
+		const { event, oldEvent, revert } = info
+		const eventId = event.id
+
+		// Only allow editing own events
+		if (event.extendedProps['authorAccountId'] !== currentUserId) {
+			revert()
+			return
+		}
+
+		// Calculate new duration (preserve original duration if end is null)
+		const originalDuration =
+			oldEvent.end && oldEvent.start
+				? oldEvent.end.getTime() - oldEvent.start.getTime()
+				: ((event.extendedProps['timeSpentSeconds'] as number) ?? 3600) * 1000
+
+		const newStart = event.start
+		const newEnd =
+			event.end ?? (newStart ? new Date(newStart.getTime() + originalDuration) : undefined)
+
+		// Get the original or pending event to merge with
+		const existingPending = pendingChanges.get(eventId)
+		const baseEvent = existingPending?.event ?? loadedEventsRef.current.get(eventId)
+
+		if (!baseEvent || !newStart) {
+			revert()
+			return
+		}
+
+		// Calculate new timeSpentSeconds
+		const newTimeSpentSeconds = newEnd
+			? Math.round((newEnd.getTime() - newStart.getTime()) / 1000)
+			: ((baseEvent.extendedProps?.['timeSpentSeconds'] as number) ?? 3600)
+
+		const updatedEvent: CalendarEvent = {
+			...baseEvent,
+			start: newStart.toISOString(),
+			end: newEnd,
+			extendedProps: {
+				...baseEvent.extendedProps,
+				started: newStart.toISOString(),
+				timeSpentSeconds: newTimeSpentSeconds
+			}
+		}
+
+		updatePendingChange(eventId, updatedEvent, 'update')
+	}
+
+	// Handler for when an event is resized
+	const handleEventResize = (info: EventResizeDoneArg) => {
+		const { event, oldEvent, revert } = info
+		const eventId = event.id
+
+		// Only allow editing own events
+		if (event.extendedProps['authorAccountId'] !== currentUserId) {
+			revert()
+			return
+		}
+
+		const newStart = event.start
+		const newEnd = event.end
+
+		// Get the original or pending event to merge with
+		const existingPending = pendingChanges.get(eventId)
+		const baseEvent = existingPending?.event ?? loadedEventsRef.current.get(eventId)
+
+		if (!baseEvent || !newStart || !newEnd) {
+			revert()
+			return
+		}
+
+		// Calculate new timeSpentSeconds
+		const newTimeSpentSeconds = Math.round((newEnd.getTime() - newStart.getTime()) / 1000)
+
+		const updatedEvent: CalendarEvent = {
+			...baseEvent,
+			start: newStart.toISOString(),
+			end: newEnd,
+			extendedProps: {
+				...baseEvent.extendedProps,
+				started: newStart.toISOString(),
+				timeSpentSeconds: newTimeSpentSeconds
+			}
+		}
+
+		updatePendingChange(eventId, updatedEvent, 'update')
+	}
+
+	// Handler for when an external event is dropped onto the calendar
+	const handleEventReceive = (info: EventReceiveArg) => {
+		const { event, revert } = info
+
+		// Generate a temporary ID for new events
+		const tempId = nanoid()
+
+		const newStart = event.start
+		const newEnd = event.end
+
+		if (!newStart) {
+			revert()
+			return
+		}
+
+		// Default duration: 1 hour if no end time
+		const defaultDuration = 3600 * 1000
+		const actualEnd = newEnd ?? new Date(newStart.getTime() + defaultDuration)
+		const timeSpentSeconds = Math.round((actualEnd.getTime() - newStart.getTime()) / 1000)
+
+		// Extract issue data from the dragged element or event props
+		const issueKey = (event.extendedProps['issueKey'] as string | undefined) ?? event.title
+		const issueSummary = (event.extendedProps['issueSummary'] as string | undefined) ?? ''
+		const issueId = (event.extendedProps['issueId'] as string | undefined) ?? ''
+		const projectKey = issueKey ? getProjectKeyFromIssueKey(issueKey) : undefined
+
+		const { backgroundColor, borderColor } = getWorklogColors(currentUserId, projectKey)
+
+		const newEvent: CalendarEvent = {
+			id: tempId,
+			title: `${issueKey} ${issueSummary}`.trim(),
+			start: newStart.toISOString(),
+			end: actualEnd,
+			editable: true,
+			startEditable: true,
+			durationEditable: true,
+			classNames: ['worklog-event'],
+			backgroundColor,
+			borderColor,
+			extendedProps: {
+				worklogEntryId: tempId,
+				issueId,
+				issueKey,
+				issueSummary,
+				authorAccountId: currentUserId,
+				authorDisplayName: layoutLoaderData?.user.name ?? 'You',
+				authorEmail: layoutLoaderData?.user.email,
+				authorAvatarUrl: layoutLoaderData?.user.picture,
+				projectKey,
+				timeSpentSeconds,
+				started: newStart.toISOString(),
+				isNew: true
+			}
+		}
+
+		// Remove the FullCalendar-created event (we'll manage it ourselves)
+		event.remove()
+
+		updatePendingChange(tempId, newEvent, 'create')
+	}
 
 	const resourcesLoading = resourcesQuery.isPending || resourcesQuery.isFetching
 	const projectsLoading = projectsQuery.isPending || projectsQuery.isFetching
@@ -1251,6 +1521,39 @@ export default function IndexPage(): React.ReactNode {
 
 	return (
 		<div className='flex flex-col h-full gap-4 p-4'>
+			{/* Floating Save Bar - shows when there are pending changes */}
+			{hasPendingChanges ? (
+				<div className='fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full border bg-background/95 px-4 py-2 shadow-lg backdrop-blur-sm'>
+					<div className='flex items-center gap-2'>
+						<div className='flex size-6 items-center justify-center rounded-full bg-amber-500/20 text-amber-600'>
+							<PencilIcon className='size-3' />
+						</div>
+						<span className='text-sm font-medium'>
+							{pendingChanges.size} unsaved {pendingChanges.size === 1 ? 'change' : 'changes'}
+						</span>
+					</div>
+					<div className='h-4 w-px bg-border' />
+					<div className='flex items-center gap-2'>
+						<Button
+							variant='ghost'
+							size='sm'
+							onClick={discardPendingChanges}
+							className='gap-1.5 text-muted-foreground hover:text-foreground'
+						>
+							<XIcon className='size-4' />
+							Discard
+						</Button>
+						<Button
+							size='sm'
+							className='gap-1.5'
+						>
+							<SaveIcon className='size-4' />
+							Save Changes
+						</Button>
+					</div>
+				</div>
+			) : null}
+
 			<Collapsible
 				open={isFiltersOpen}
 				onOpenChange={setIsFiltersOpen}
@@ -1341,7 +1644,7 @@ export default function IndexPage(): React.ReactNode {
 							initialView='timeGridWeek'
 							height='100%'
 							dayHeaderFormat={dayHeaderFormat}
-							events={events}
+							events={displayEvents}
 							eventTimeFormat={{
 								hour: '2-digit',
 								minute: '2-digit',
@@ -1387,15 +1690,11 @@ export default function IndexPage(): React.ReactNode {
 							eventDragStop={info => {
 								// console.log('Event drag stop', info)
 							}}
-							eventDrop={info => {
-								// console.log('Event drop', info)
-							}}
+							eventDrop={handleEventDrop}
 							drop={info => {
 								// console.log('Drop', info)
 							}}
-							eventReceive={info => {
-								// console.log('Event receive', info)
-							}}
+							eventReceive={handleEventReceive}
 							eventLeave={info => {
 								// console.log('Event leave', info)
 							}}
@@ -1405,9 +1704,7 @@ export default function IndexPage(): React.ReactNode {
 							eventResizeStop={info => {
 								// console.log('Event resize stop', info)
 							}}
-							eventResize={info => {
-								// console.log('Event resize', info)
-							}}
+							eventResize={handleEventResize}
 						/>
 					</Suspense>
 				</div>
@@ -1646,17 +1943,15 @@ function CalendarEventContent(props: CalendarEventContentProps): React.ReactNode
 	const issueKey = event.extendedProps['issueKey'] as string | undefined
 	const issueSummary = event.extendedProps['issueSummary'] as string | undefined
 	const authorDisplayName = event.extendedProps['authorDisplayName'] as string | undefined
-	const authorAccountId = event.extendedProps['authorAccountId'] as string | undefined
-	const authorEmail = event.extendedProps['authorEmail'] as string | undefined
 	const authorAvatarUrl = event.extendedProps['authorAvatarUrl'] as string | undefined
 	const projectKey = event.extendedProps['projectKey'] as string | undefined
-	const projectName = event.extendedProps['projectName'] as string | undefined
-	const projectAvatarUrl = event.extendedProps['projectAvatarUrl'] as string | undefined
+	const isModified = event.extendedProps['isModified'] === true
 
 	// Fallback parsing from title if extendedProps are missing
 	const titleParts = event.title?.split(' ') ?? []
 	const parsedIssueKey = issueKey ?? titleParts[0]
 	const parsedIssueSummary = issueSummary ?? (titleParts.slice(1).join(' ') || 'Untitled Issue')
+
 	const parsedProjectKey =
 		projectKey ?? (parsedIssueKey ? getProjectKeyFromIssueKey(parsedIssueKey) : undefined)
 
@@ -1665,16 +1960,27 @@ function CalendarEventContent(props: CalendarEventContentProps): React.ReactNode
 
 	// Use props with fallbacks
 	const displayAuthor = authorDisplayName ?? 'Unknown Author'
-	const displayAuthorEmail = authorEmail
 	const displayAuthorAvatarUrl = authorAvatarUrl
 	const displayProject = parsedProjectKey ?? 'PROJ'
-	const displayProjectName = projectName
-	const displayProjectAvatarUrl = projectAvatarUrl
 	const displayIssueKey = parsedIssueKey ?? 'ISSUE-000'
 	const displayIssueSummary = parsedIssueSummary
 
 	return (
-		<div className='flex h-full flex-col gap-1.5 overflow-hidden p-1.5'>
+		<div className='relative flex h-full flex-col gap-1.5 overflow-hidden p-1.5'>
+			{/* Modified Indicator */}
+			{isModified ? (
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<div className='absolute right-1 top-1 flex size-4 items-center justify-center rounded-full bg-amber-500/90 text-white shadow-sm'>
+							<PencilIcon className='size-2.5' />
+						</div>
+					</TooltipTrigger>
+					<TooltipContent side='left'>
+						<span className='text-xs'>Unsaved changes</span>
+					</TooltipContent>
+				</Tooltip>
+			) : null}
+
 			{/* Time and Issue Key Row */}
 			<div className='flex w-full items-baseline justify-between gap-2'>
 				<Badge
@@ -1687,7 +1993,10 @@ function CalendarEventContent(props: CalendarEventContentProps): React.ReactNode
 				{displayTime ? (
 					<Badge
 						variant='outline'
-						className='h-4 shrink-0 border-border/50 bg-background/60 px-1.5 py-0 text-[10px] font-semibold leading-none text-foreground shadow-xs backdrop-blur-sm'
+						className={cn(
+							'h-4 shrink-0 border-border/50 bg-background/60 px-1.5 py-0 text-[10px] font-semibold leading-none text-foreground shadow-xs backdrop-blur-sm',
+							isModified && 'mr-4'
+						)}
 					>
 						{displayTime}
 					</Badge>
