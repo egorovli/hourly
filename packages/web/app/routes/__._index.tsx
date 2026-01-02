@@ -2,12 +2,13 @@ import type { EventInput, FormatterInput, PluginDef } from '@fullcalendar/core'
 import type { Draggable } from '@fullcalendar/interaction'
 import type { MetaDescriptor } from 'react-router'
 import type { Route as LayoutRoute } from './+types/__.ts'
-import type { AccessibleResource, Project } from '~/lib/atlassian/index.ts'
+import type { AccessibleResource, JiraUser, Project } from '~/lib/atlassian/index.ts'
 import type { Route } from './+types/__._index.ts'
 
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Virtuoso } from 'react-virtuoso'
 import { useRouteLoaderData } from 'react-router'
+import { useQuery } from '@tanstack/react-query'
 
 import {
 	BugIcon,
@@ -41,6 +42,7 @@ import { Skeleton } from '~/components/shadcn/ui/skeleton.tsx'
 import { Spinner } from '~/components/shadcn/ui/spinner.tsx'
 import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/shadcn/ui/tooltip.tsx'
 import { cn, invariant } from '~/lib/util/index.ts'
+import { getQueryKeyParams } from '~/lib/query/get-query-key-params.ts'
 
 import {
 	Collapsible,
@@ -56,8 +58,6 @@ import {
 	CommandItem,
 	CommandList
 } from '~/components/shadcn/ui/command.tsx'
-
-import { useQuery } from '@tanstack/react-query'
 
 const FullCalendar = lazy(() => import('@fullcalendar/react'))
 
@@ -230,44 +230,44 @@ const fakeIssues: Issue[] = [
 	}
 ]
 
-const fakeUsers: User[] = [
-	{
-		id: '1',
-		name: 'Alice Johnson',
-		email: 'alice.johnson@example.com',
-		avatarUrl: undefined
-	},
-	{
-		id: '2',
-		name: 'Bob Smith',
-		email: 'bob.smith@example.com',
-		avatarUrl: undefined
-	},
-	{
-		id: '3',
-		name: 'Charlie Brown',
-		email: undefined,
-		avatarUrl: undefined
-	},
-	{
-		id: '4',
-		name: 'Diana Prince',
-		email: 'diana.prince@example.com',
-		avatarUrl: undefined
-	},
-	{
-		id: '5',
-		name: 'Eve Wilson',
-		email: undefined,
-		avatarUrl: undefined
-	},
-	{
-		id: '6',
-		name: 'Frank Miller',
-		email: 'frank.miller@example.com',
-		avatarUrl: undefined
-	}
-]
+// const fakeUsers: User[] = [
+// 	{
+// 		id: '1',
+// 		name: 'Alice Johnson',
+// 		email: 'alice.johnson@example.com',
+// 		avatarUrl: undefined
+// 	},
+// 	{
+// 		id: '2',
+// 		name: 'Bob Smith',
+// 		email: 'bob.smith@example.com',
+// 		avatarUrl: undefined
+// 	},
+// 	{
+// 		id: '3',
+// 		name: 'Charlie Brown',
+// 		email: undefined,
+// 		avatarUrl: undefined
+// 	},
+// 	{
+// 		id: '4',
+// 		name: 'Diana Prince',
+// 		email: 'diana.prince@example.com',
+// 		avatarUrl: undefined
+// 	},
+// 	{
+// 		id: '5',
+// 		name: 'Eve Wilson',
+// 		email: undefined,
+// 		avatarUrl: undefined
+// 	},
+// 	{
+// 		id: '6',
+// 		name: 'Frank Miller',
+// 		email: 'frank.miller@example.com',
+// 		avatarUrl: undefined
+// 	}
+// ]
 
 function UsersFilter({
 	users,
@@ -276,7 +276,7 @@ function UsersFilter({
 	value,
 	onChange
 }: {
-	users: User[]
+	users: JiraUser[]
 	isLoading: boolean
 	isQueryEnabled: boolean
 	value: string[]
@@ -284,7 +284,7 @@ function UsersFilter({
 }): React.ReactNode {
 	const [open, setOpen] = useState(false)
 
-	const selectedUsers = users.filter(user => value.includes(user.id))
+	const selectedUsers = users.filter(user => value.includes(user.accountId))
 	const selectedPreview = selectedUsers.slice(0, 2)
 
 	function toggleValue(userId: string): void {
@@ -307,7 +307,7 @@ function UsersFilter({
 	} else if (isEmpty) {
 		summary = 'No users available'
 	} else if (selectedUsers.length === 1 && firstSelected) {
-		summary = firstSelected.name
+		summary = firstSelected.displayName
 	} else if (selectedUsers.length > 1) {
 		summary = `${selectedUsers.length} users`
 	}
@@ -345,17 +345,17 @@ function UsersFilter({
 									<div className='flex -space-x-1.5'>
 										{selectedPreview.map(user => (
 											<Avatar
-												key={user.id}
+												key={user.accountId}
 												className='size-6 border-2 border-background shadow-xs ring-1 ring-border/20'
 											>
-												{user.avatarUrl && (
+												{user.avatarUrls?.[PROJECT_AVATAR_SIZE] && (
 													<AvatarImage
-														src={user.avatarUrl}
+														src={user.avatarUrls[PROJECT_AVATAR_SIZE]}
 														alt={user.name}
 													/>
 												)}
 												<AvatarFallback className='text-[10px] font-semibold'>
-													{getInitialsFromLabel(user.name)}
+													{getInitialsFromLabel(user.displayName)}
 												</AvatarFallback>
 											</Avatar>
 										))}
@@ -415,14 +415,14 @@ function UsersFilter({
 											<CommandGroup className='p-0'>
 												<div className='space-y-0.5'>
 													{users.map(user => {
-														const checked = value.includes(user.id)
+														const checked = value.includes(user.accountId)
 
 														return (
 															<CommandItem
-																key={user.id}
-																value={`${user.name} ${user.email ?? ''}`}
+																key={user.accountId}
+																value={`${user.displayName} ${user.emailAddress ?? ''}`}
 																onSelect={() => {
-																	toggleValue(user.id)
+																	toggleValue(user.accountId)
 																}}
 																className='group/item relative flex items-center gap-3 rounded-md px-2.5 py-2.5 text-sm outline-hidden transition-colors data-[selected=true]:bg-accent/50 data-[selected=true]:text-accent-foreground hover:bg-accent/30'
 															>
@@ -431,23 +431,23 @@ function UsersFilter({
 																	className='pointer-events-none shrink-0'
 																/>
 																<Avatar className='size-8 shrink-0 border border-border/40 shadow-xs ring-1 ring-border/20'>
-																	{user.avatarUrl && (
+																	{user.avatarUrls?.[PROJECT_AVATAR_SIZE] && (
 																		<AvatarImage
-																			src={user.avatarUrl}
-																			alt={user.name}
+																			src={user.avatarUrls[PROJECT_AVATAR_SIZE]}
+																			alt={user.displayName}
 																		/>
 																	)}
 																	<AvatarFallback className='text-[11px] font-semibold'>
-																		{getInitialsFromLabel(user.name)}
+																		{getInitialsFromLabel(user.displayName)}
 																	</AvatarFallback>
 																</Avatar>
 																<div className='flex min-w-0 flex-1 flex-col gap-0.5'>
 																	<span className='truncate text-sm font-medium leading-tight'>
-																		{user.name}
+																		{user.displayName}
 																	</span>
-																	{user.email && (
+																	{user.emailAddress && (
 																		<span className='truncate text-xs text-muted-foreground'>
-																			{user.email}
+																			{user.emailAddress}
 																		</span>
 																	)}
 																</div>
@@ -748,7 +748,7 @@ function ProjectsFilter({
 																	>
 																		<Checkbox
 																			checked={checked}
-																			className='pointer-events-none shrink-0 //bg-background //border-input //data-[state=checked]:bg-primary //data-[state=checked]:border-primary //data-[state=checked]:text-primary-foreground'
+																			className='pointer-events-none shrink-0 data-[state=checked]:bg-blue-300 data-[state=checked]:border-blue-300 data-[state=checked]:text-white'
 																		/>
 																		<Avatar className='size-8 shrink-0 border border-border/40 shadow-xs ring-1 ring-border/20'>
 																			{projectAvatarUrl && (
@@ -941,8 +941,19 @@ export default function IndexPage(): React.ReactNode {
 		],
 
 		async queryFn({ queryKey, signal }) {
-			await new Promise(resolve => setTimeout(resolve, 1000))
-			return fakeUsers
+			const params = getQueryKeyParams(queryKey)
+			const searchParams = new URLSearchParams([
+				...params.projectIds.map(projectId => ['filter[project]', projectId])
+			])
+
+			const response = await fetch(`/api/users?${searchParams}`, { signal })
+
+			if (!response.ok) {
+				throw new Error(`Failed to fetch users: ${response.statusText}`)
+			}
+
+			const users = (await response.json()) as JiraUser[]
+			return users
 		},
 
 		enabled(query) {

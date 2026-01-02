@@ -23,4 +23,5 @@ export interface JiraUser {
 	name?: string
 	self: string
 	timeZone?: string
+	locale?: string
 }

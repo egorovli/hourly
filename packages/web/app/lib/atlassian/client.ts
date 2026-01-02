@@ -81,8 +81,13 @@ export class AtlassianClient {
 		accessibleResourceId: AccessibleResource['id'],
 		options?: AtlassianClientRequestOptions
 	): Promise<Project[]> {
+		const searchParams = new URLSearchParams({
+			expand: '',
+			active: 'true'
+		})
+
 		const response = await fetch(
-			`${this.baseUrl}/ex/jira/${accessibleResourceId}/rest/api/3/project`,
+			`${this.baseUrl}/ex/jira/${accessibleResourceId}/rest/api/3/project?${searchParams}`,
 			{
 				method: 'GET',
 				signal: options?.signal,
@@ -157,11 +162,12 @@ export class AtlassianClient {
 		}
 
 		const searchParams = new URLSearchParams({
+			active: 'true',
 			projectKeys: projectKeys.join(',')
 		})
 
 		if (username !== undefined) {
-			searchParams.set('username', username)
+			searchParams.set('query', username)
 		}
 
 		if (startAt !== undefined) {
@@ -174,7 +180,7 @@ export class AtlassianClient {
 			searchParams.set('maxResults', clampedMaxResults.toString())
 		}
 
-		const url = `${this.baseUrl}/ex/jira/${accessibleResourceId}/rest/api/3/user/assignable/search?${searchParams.toString()}`
+		const url = `${this.baseUrl}/ex/jira/${accessibleResourceId}/rest/api/3/user/assignable/multiProjectSearch?${searchParams}`
 
 		const response = await fetch(url, {
 			method: 'GET',
