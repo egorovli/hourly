@@ -134,11 +134,50 @@ export const loader = withRequestContext(async function loader({ request }: Rout
 		throw new Response('No accessible projects found', { status: 403 })
 	}
 
-	// const dateRange = resolveDateRange(query)
 	const userIds = query['filter[user]']
 	const fromDate = query['filter[from]']
+	const toDate = query['filter[to]']
 
-	return []
+	if (fromDate === undefined || toDate === undefined) {
+		throw new Response('Date range is required', { status: 400 })
+	}
+
+	const fromDateTime = DateTime.fromISO(fromDate)
+	const toDateTime = DateTime.fromISO(toDate)
+
+	if (!fromDateTime.isValid || !toDateTime.isValid) {
+		throw new Response('Invalid date range', { status: 400 })
+	}
+
+	const projectsByResource = new Map<AccessibleResource['id'], ProjectWithResource[]>()
+
+	for (const project of validatedProjects) {
+		const existingProjects = projectsByResource.get(project.resourceId)
+
+		if (existingProjects === undefined) {
+			projectsByResource.set(project.resourceId, [project])
+			continue
+		}
+
+		existingProjects.push(project)
+	}
+
+	const worklogPages = await Promise.all(
+		Array.from(projectsByResource.entries()).map(([resourceId, resourceProjects]) =>
+			client.getWorklogEntries({
+				accessibleResourceId: resourceId,
+				projectKeys: resourceProjects.map(project => project.key),
+				userAccountIds: userIds.length > 0 ? userIds : undefined,
+				from: fromDateTime.toUTC().toISO() ?? fromDate,
+				to: toDateTime.toUTC().toISO() ?? toDate,
+				signal: request.signal
+			})
+		)
+	)
+
+	const worklogEntries = worklogPages.flatMap(page => page.entries)
+
+	return worklogEntries
 })
 
 interface EnsureProjectsAccessibleParams {
