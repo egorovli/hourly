@@ -1682,6 +1682,8 @@ export default function IndexPage(): React.ReactNode {
 	const usersLoading =
 		usersQuery.isEnabled && (usersQuery.isPending || usersQuery.isFetchingNextPage)
 
+	const entriesLoading = worklogEntriesQuery.isFetching
+
 	if (!calendar.isVisible) {
 		return null
 	}
@@ -1800,7 +1802,11 @@ export default function IndexPage(): React.ReactNode {
 							</Button>
 						</div>
 						<span className='text-sm font-medium text-foreground'>{calendarTitle}</span>
-						<div className='w-32' />
+						<div className='flex w-32 items-center justify-end'>
+							{entriesLoading && (
+								<Loader2Icon className='size-4 animate-spin text-muted-foreground' />
+							)}
+						</div>
 					</div>
 
 					<Suspense fallback={<div>Loading...</div>}>
@@ -1917,7 +1923,7 @@ export default function IndexPage(): React.ReactNode {
 								<Button
 									size='sm'
 									onClick={handleSaveChanges}
-									disabled={saveWorklogsMutation.isPending}
+									disabled={saveWorklogsMutation.isPending || entriesLoading}
 									className='h-8 gap-1.5 text-xs'
 								>
 									{saveWorklogsMutation.isPending ? (
