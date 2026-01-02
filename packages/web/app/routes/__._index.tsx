@@ -1,4 +1,4 @@
-import type { EventInput, FormatterInput, PluginDef } from '@fullcalendar/core'
+import type { DatesSetArg, EventInput, FormatterInput, PluginDef } from '@fullcalendar/core'
 import type { Draggable } from '@fullcalendar/interaction'
 import type { MetaDescriptor } from 'react-router'
 import type { Route as LayoutRoute } from './+types/__.ts'
@@ -171,8 +171,8 @@ const fakeIssues: Issue[] = [
 	{
 		id: 'LP-123',
 		type: IssueType.Bug,
-		status: IssueStatus.Open,
-		priority: IssuePriority.Low,
+		status: IssueStatus.InProgress,
+		priority: IssuePriority.Critical,
 		name: 'Issue 1',
 		// description:
 		// 	'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
@@ -268,6 +268,8 @@ const fakeIssues: Issue[] = [
 // 		avatarUrl: undefined
 // 	}
 // ]
+
+const ONE_WEEK_IN_MS = 7 * 24 * 60 * 60 * 1000
 
 function UsersFilter({
 	users,
@@ -950,6 +952,54 @@ function useUsersQuery(options: UseUsersQueryOptions) {
 	return query
 }
 
+interface UseWorklogEntriesQueryOptions {
+	userId?: string
+	projectIds?: string[]
+	userIds?: string[]
+	fromDate?: Date
+	toDate?: Date
+	enabled?: boolean
+}
+
+function useWorklogEntriesQuery(options: UseWorklogEntriesQueryOptions) {
+	const { userId, projectIds, userIds, fromDate, toDate, enabled } = options
+
+	return useQuery({
+		queryKey: [
+			'worklog-entries',
+			{
+				userId: userId,
+				projectIds: projectIds,
+				userIds: userIds,
+				fromDate: fromDate,
+				toDate: toDate
+			}
+		],
+
+		async queryFn({ queryKey, signal }) {
+			const params = getQueryKeyParams(queryKey)
+
+			const searchParams = new URLSearchParams([
+				...(params.projectIds?.map(projectId => ['filter[project]', projectId]) ?? []),
+				...(params.userIds?.map(userId => ['filter[user]', userId]) ?? []),
+				...(params.fromDate ? [['filter[from]', params.fromDate.toISOString()]] : []),
+				...(params.toDate ? [['filter[to]', params.toDate.toISOString()]] : [])
+			])
+
+			const response = await fetch(`/api/worklog/entries?${searchParams}`, { signal })
+
+			if (!response.ok) {
+				throw new Error(`Failed to fetch worklog entries: ${response.statusText}`)
+			}
+
+			const worklogEntries = (await response.json()) as unknown[]
+			return worklogEntries
+		},
+
+		enabled
+	})
+}
+
 interface UseFullCalendarOptions {
 	onSuccess?: () => void
 }
@@ -1011,6 +1061,8 @@ export default function IndexPage(): React.ReactNode {
 
 	const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([])
 	const [selectedUserIds, setSelectedUserIds] = useState<string[]>([])
+	const [fromDate, setFromDate] = useState<Date | undefined>(undefined)
+	const [toDate, setToDate] = useState<Date | undefined>(undefined)
 
 	const [isFiltersOpen, setIsFiltersOpen] = useState(true)
 
@@ -1039,16 +1091,26 @@ export default function IndexPage(): React.ReactNode {
 	const usersQuery = useUsersQuery({
 		userId: layoutLoaderData?.user.account_id,
 		projectIds: selectedProjectIds,
+		enabled: projectsQuery.isSuccess && selectedProjectIds.length > 0
+	})
+
+	const worklogEntriesQuery = useWorklogEntriesQuery({
+		userId: layoutLoaderData?.user.account_id,
+		projectIds: selectedProjectIds,
+		userIds: selectedUserIds,
+		fromDate: fromDate,
+		toDate: toDate,
 		enabled:
-			projectsQuery.isSuccess &&
-			Array.isArray(projectsQuery.data) &&
-			projectsQuery.data.length > 0 &&
-			selectedProjectIds.length > 0
+			usersQuery.isSuccess &&
+			selectedUserIds.length > 0 &&
+			fromDate !== undefined &&
+			toDate !== undefined
 	})
 
 	const users = useMemo(() => usersQuery.data?.pages.flat() ?? [], [usersQuery.data])
 	const projects = projectsQuery.data ?? []
 	const accessibleResources = resourcesQuery.data ?? []
+	const worklogEntries = worklogEntriesQuery.data ?? []
 
 	const resourcesLoading = resourcesQuery.isPending || resourcesQuery.isFetching
 	const projectsLoading = projectsQuery.isPending || projectsQuery.isFetching
@@ -1153,8 +1215,9 @@ export default function IndexPage(): React.ReactNode {
 							height='100%'
 							dayHeaderFormat={dayHeaderFormat}
 							events={events}
-							datesSet={args => {
-								// console.log(args)
+							datesSet={(args: DatesSetArg) => {
+								setFromDate(args.view.currentStart)
+								setToDate(args.view.currentEnd)
 							}}
 							firstDay={1}
 							allDaySlot={false}
