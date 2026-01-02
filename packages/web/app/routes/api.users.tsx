@@ -35,8 +35,8 @@ const schema = {
 
 			'filter[query]': z.string().trim().optional(),
 
-			'page[size]': z.number().int().positive().optional().default(20),
-			'page[number]': z.number().int().positive().optional().default(1),
+			'page[size]': z.coerce.number().int().positive().optional().default(10),
+			'page[number]': z.coerce.number().int().positive().optional().default(1),
 
 			'sort[key]': z.string().trim().optional().default('name'),
 			'sort[direction]': z.enum(['asc', 'desc']).optional().default('asc')
@@ -108,74 +108,21 @@ export const loader = withRequestContext(async function loader({ request }: Rout
 		})
 	).then(results => results.flat())
 
-	// Create lookup map: projectId -> project
-	const projectsById = new Map(projects.map(project => [project.id, project]))
-	console.log('projectsById', projectsById)
-
 	const url = new URL(request.url)
 
 	const query = await schema.loader.query.parseAsync({
-		'filter[project]': url.searchParams.getAll('filter[project]')
+		'filter[project]': url.searchParams.getAll('filter[project]'),
+		'filter[query]': url.searchParams.get('filter[query]') ?? undefined,
+		'page[size]': url.searchParams.get('page[size]') ?? undefined,
+		'page[number]': url.searchParams.get('page[number]') ?? undefined
 	})
 
-	let projectIds = query['filter[project]']
+	const projectIds =
+		query['filter[project]'].length > 0
+			? query['filter[project]']
+			: projects.map(project => `${project.resourceId}:${project.id}`)
 
-	if (projectIds.length === 0) {
-		projectIds = projects.map(project => `${project.resourceId}:${project.id}`)
-	}
-
-	console.log('projectIds', projectIds)
-
-	// Group projects by resource ID for efficient API calls
-	const projectKeysByResourceId = projectIds.reduce<
-		Record<AccessibleResource['id'], Project['key'][]>
-	>((acc, compoundId) => {
-		const [resourceId, projectId] = compoundId.split(':')
-
-		if (!resourceId || !projectId) {
-			return acc
-		}
-
-		const resource = accessibleResources.find(resource => resource.id === resourceId)
-		const project = projectsById.get(projectId)
-
-		if (!resource || !project) {
-			return acc
-		}
-
-		return {
-			...acc,
-			[resource.id]: [...(acc[resource.id] ?? []), project.key]
-		}
-	}, {})
-
-	console.log('projectKeysByResourceId', projectKeysByResourceId)
-
-	// for (const projectId of projectIdsToUse) {
-	// 	if (projectId === null) {
-	// 		continue
-	// 	}
-
-	// 	const separatorIndex = projectId.indexOf(':')
-	// 	if (separatorIndex === -1) {
-	// 		continue
-	// 	}
-
-	// 	const resourceId = projectId.slice(0, separatorIndex)
-	// 	const numericId = projectId.slice(separatorIndex + 1)
-	// 	const project = projectById.get(numericId)
-
-	// 	if (project === undefined) {
-	// 		continue
-	// 	}
-
-	// 	const keys = projectsByResource[resourceId]
-	// 	if (keys === undefined) {
-	// 		projectsByResource[resourceId] = [project.key]
-	// 	} else {
-	// 		keys.push(project.key)
-	// 	}
-	// }
+	const projectKeysByResourceId = groupProjectsByResourceId({ projects, projectIds })
 
 	// Fetch users for each resource's projects
 	const users = await Promise.all(
@@ -198,11 +145,40 @@ export const loader = withRequestContext(async function loader({ request }: Rout
 		)
 	).then(results => results.flat())
 
-	console.log('users', users)
-
-	// Deduplicate users by accountId (user might be in multiple projects)
-	const uniqueUsers = Array.from(new Map(users.map(user => [user.accountId, user])).values())
-	console.log('uniqueUsers', uniqueUsers)
-
-	return uniqueUsers
+	const unique = Array.from(new Map(users.map(user => [user.accountId, user])).values())
+	return unique
 })
+
+interface GroupProjectsByResourceIdParams {
+	projects: Project[]
+	projectIds: string[]
+}
+
+function groupProjectsByResourceId(
+	params: GroupProjectsByResourceIdParams
+): Record<AccessibleResource['id'], Project['key'][]> {
+	const projectsById = new Map(params.projects.map(project => [project.id, project]))
+	const projectKeysByResourceId: Record<AccessibleResource['id'], Project['key'][]> = {}
+
+	for (const compoundId of params.projectIds) {
+		const [resourceId, projectId] = compoundId.split(':')
+
+		if (!resourceId || !projectId) {
+			continue
+		}
+
+		const project = projectsById.get(projectId)
+
+		if (!project) {
+			continue
+		}
+
+		if (projectKeysByResourceId[resourceId] === undefined) {
+			projectKeysByResourceId[resourceId] = []
+		}
+
+		projectKeysByResourceId[resourceId].push(project.key)
+	}
+
+	return projectKeysByResourceId
+}
