@@ -1,4 +1,11 @@
-import type { DatesSetArg, EventInput, FormatterInput, PluginDef } from '@fullcalendar/core'
+import type {
+	DatesSetArg,
+	EventContentArg,
+	EventInput,
+	FormatterInput,
+	PluginDef
+} from '@fullcalendar/core'
+
 import type { Draggable } from '@fullcalendar/interaction'
 import type { MetaDescriptor } from 'react-router'
 import type { AccessibleResource, JiraUser, Project, WorklogEntry } from '~/lib/atlassian/index.ts'
@@ -168,8 +175,8 @@ function getWorklogColors(authorId: string | undefined, projectKey: string | und
 	const hue = hashStringToHue(key)
 
 	return {
-		backgroundColor: `hsla(${hue}, 70%, 60%, 0.6)`,
-		borderColor: `hsla(${hue}, 70%, 40%, 1)`
+		backgroundColor: `hsla(${hue}, 35%, 85%, 0.5)`,
+		borderColor: `hsla(${hue}, 40%, 70%, 0.75)`
 	}
 }
 
@@ -1151,6 +1158,27 @@ export default function IndexPage(): React.ReactNode {
 	const worklogEntries = useMemo(() => worklogEntriesQuery.data ?? [], [worklogEntriesQuery.data])
 	const currentUserId = layoutLoaderData?.user.account_id
 
+	// Create lookup maps for efficient data access
+	const usersByAccountId = useMemo(() => {
+		const map = new Map<string, JiraUser>()
+		for (const user of users) {
+			if (user.accountId) {
+				map.set(user.accountId, user)
+			}
+		}
+		return map
+	}, [users])
+
+	const projectsByKey = useMemo(() => {
+		const map = new Map<string, Project>()
+		for (const project of projects) {
+			if (project.key) {
+				map.set(project.key, project)
+			}
+		}
+		return map
+	}, [projects])
+
 	useEffect(() => {
 		const events = worklogEntries.map<CalendarEvent>(entry => {
 			const projectKey = getProjectKeyFromIssueKey(entry.issueKey)
@@ -1162,6 +1190,20 @@ export default function IndexPage(): React.ReactNode {
 			const endAt = Number.isNaN(startedAt)
 				? undefined
 				: new Date(startedAt + durationSeconds * 1000)
+
+			// Look up author data
+			const author = entry.authorAccountId ? usersByAccountId.get(entry.authorAccountId) : undefined
+			const authorAvatarUrl =
+				author?.avatarUrls?.['48x48'] ??
+				author?.avatarUrls?.['32x32'] ??
+				author?.avatarUrls?.['24x24'] ??
+				undefined
+			const authorEmail = author?.emailAddress
+
+			// Look up project data
+			const project = projectKey ? projectsByKey.get(projectKey) : undefined
+			const projectName = project?.name
+			const projectAvatarUrl = project ? getProjectAvatarUrl(project) : undefined
 
 			return {
 				id: entry.id,
@@ -1179,14 +1221,23 @@ export default function IndexPage(): React.ReactNode {
 				extendedProps: {
 					worklogEntryId: entry.id,
 					issueId: entry.issueId,
+					issueKey: entry.issueKey,
+					issueSummary: entry.issueSummary,
 					authorAccountId: entry.authorAccountId,
-					authorDisplayName: entry.authorDisplayName
+					authorDisplayName: entry.authorDisplayName,
+					authorEmail,
+					authorAvatarUrl,
+					projectKey,
+					projectName,
+					projectAvatarUrl,
+					timeSpentSeconds: entry.timeSpentSeconds,
+					started: entry.started
 				}
 			}
 		})
 
 		setEvents(events)
-	}, [currentUserId, worklogEntries])
+	}, [currentUserId, worklogEntries, usersByAccountId, projectsByKey])
 
 	const resourcesLoading = resourcesQuery.isPending || resourcesQuery.isFetching
 	const projectsLoading = projectsQuery.isPending || projectsQuery.isFetching
@@ -1291,7 +1342,12 @@ export default function IndexPage(): React.ReactNode {
 							height='100%'
 							dayHeaderFormat={dayHeaderFormat}
 							events={events}
-							// eventContent={renderWorklogEventContent}
+							eventTimeFormat={{
+								hour: '2-digit',
+								minute: '2-digit',
+								hour12: false
+							}}
+							eventContent={content => <CalendarEventContent {...content} />}
 							datesSet={(args: DatesSetArg) => {
 								setFromDate(args.view.currentStart)
 								setToDate(args.view.currentEnd)
@@ -1576,6 +1632,101 @@ function IssueItem(props: IssueItemProps): React.ReactNode {
 						</div>
 					)}
 				</div>
+			</div>
+		</div>
+	)
+}
+
+interface CalendarEventContentProps extends EventContentArg {}
+
+function CalendarEventContent(props: CalendarEventContentProps): React.ReactNode {
+	const { event, timeText } = props
+
+	// Extract data from event extendedProps
+	const issueKey = event.extendedProps['issueKey'] as string | undefined
+	const issueSummary = event.extendedProps['issueSummary'] as string | undefined
+	const authorDisplayName = event.extendedProps['authorDisplayName'] as string | undefined
+	const authorAccountId = event.extendedProps['authorAccountId'] as string | undefined
+	const authorEmail = event.extendedProps['authorEmail'] as string | undefined
+	const authorAvatarUrl = event.extendedProps['authorAvatarUrl'] as string | undefined
+	const projectKey = event.extendedProps['projectKey'] as string | undefined
+	const projectName = event.extendedProps['projectName'] as string | undefined
+	const projectAvatarUrl = event.extendedProps['projectAvatarUrl'] as string | undefined
+
+	// Fallback parsing from title if extendedProps are missing
+	const titleParts = event.title?.split(' ') ?? []
+	const parsedIssueKey = issueKey ?? titleParts[0]
+	const parsedIssueSummary = issueSummary ?? (titleParts.slice(1).join(' ') || 'Untitled Issue')
+	const parsedProjectKey =
+		projectKey ?? (parsedIssueKey ? getProjectKeyFromIssueKey(parsedIssueKey) : undefined)
+
+	// Format time - use FullCalendar's timeText or format manually
+	const displayTime = (timeText ?? '').replace(' - ', '–')
+
+	// Use props with fallbacks
+	const displayAuthor = authorDisplayName ?? 'Unknown Author'
+	const displayAuthorEmail = authorEmail
+	const displayAuthorAvatarUrl = authorAvatarUrl
+	const displayProject = parsedProjectKey ?? 'PROJ'
+	const displayProjectName = projectName
+	const displayProjectAvatarUrl = projectAvatarUrl
+	const displayIssueKey = parsedIssueKey ?? 'ISSUE-000'
+	const displayIssueSummary = parsedIssueSummary
+
+	return (
+		<div className='flex h-full flex-col gap-1.5 overflow-hidden p-1.5'>
+			{/* Time and Issue Key Row */}
+			<div className='flex w-full items-baseline justify-between gap-2'>
+				<Badge
+					variant='outline'
+					className='h-4 shrink-0 border-border/50 bg-background/60 px-1.5 py-0 text-[10px] font-semibold leading-none text-foreground shadow-xs backdrop-blur-sm'
+				>
+					{displayIssueKey}
+				</Badge>
+
+				{displayTime ? (
+					<Badge
+						variant='outline'
+						className='h-4 shrink-0 border-border/50 bg-background/60 px-1.5 py-0 text-[10px] font-semibold leading-none text-foreground shadow-xs backdrop-blur-sm'
+					>
+						{displayTime}
+					</Badge>
+				) : null}
+			</div>
+
+			{/* Issue Summary */}
+			<div className='line-clamp-3 min-h-8 text-[11px] font-medium //leading-tight text-foreground'>
+				{displayIssueSummary}
+			</div>
+
+			{/* Author and Project Row */}
+			<div className='mt-auto flex items-center gap-1.5'>
+				{displayAuthor ? (
+					<div className='flex items-center gap-1 overflow-hidden'>
+						<Avatar className='size-5 shrink-0 border border-border/30 shadow-xs'>
+							{displayAuthorAvatarUrl ? (
+								<AvatarImage
+									src={displayAuthorAvatarUrl}
+									alt={displayAuthor}
+								/>
+							) : null}
+							<AvatarFallback className='bg-background/60 text-[9px] font-semibold leading-none text-foreground/70'>
+								{getInitialsFromLabel(displayAuthor)}
+							</AvatarFallback>
+						</Avatar>
+						<span className='truncate text-[10px] font-medium leading-none text-foreground'>
+							{displayAuthor}
+						</span>
+					</div>
+				) : null}
+				{displayProject ? (
+					<Badge
+						variant='outline'
+						className='ml-auto h-4 shrink-0 border-border/50 bg-background/60 px-1.5 py-0 text-[10px] font-semibold leading-none text-foreground shadow-xs backdrop-blur-sm'
+					>
+						{displayProject}
+					</Badge>
+				) : null}
 			</div>
 		</div>
 	)
