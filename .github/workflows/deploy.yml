@@ -67,7 +67,7 @@ jobs:
       ENVIRONMENT: ${{ github.event.inputs.environment || 'production' }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Determine image tag from workflow run
         id: resolve-tag
