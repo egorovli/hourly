@@ -146,7 +146,20 @@ export default function SignInPage(): React.ReactNode {
 							</div>
 
 							<p className='text-muted-foreground text-center text-xs text-balance'>
-								By continuing, you agree to our Terms of Service and Privacy Policy
+								By continuing, you agree to our{' '}
+								<Link
+									to='/legal/terms-of-service'
+									className='text-primary hover:underline'
+								>
+									Terms of Service
+								</Link>{' '}
+								and{' '}
+								<Link
+									to='/legal/privacy-policy'
+									className='text-primary hover:underline'
+								>
+									Privacy Policy
+								</Link>
 							</p>
 						</div>
 					</div>
