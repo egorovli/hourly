@@ -1,14 +1,14 @@
 import type { DatesSetArg, EventInput, FormatterInput, PluginDef } from '@fullcalendar/core'
 import type { Draggable } from '@fullcalendar/interaction'
 import type { MetaDescriptor } from 'react-router'
-import type { Route as LayoutRoute } from './+types/__.ts'
-import type { AccessibleResource, JiraUser, Project } from '~/lib/atlassian/index.ts'
+import type { AccessibleResource, JiraUser, Project, WorklogEntry } from '~/lib/atlassian/index.ts'
 import type { Route } from './+types/__._index.ts'
+import type { Route as LayoutRoute } from './+types/__.ts'
 
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import { Virtuoso } from 'react-virtuoso'
-import { useRouteLoaderData } from 'react-router'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { useRouteLoaderData } from 'react-router'
+import { Virtuoso } from 'react-virtuoso'
 
 import {
 	BugIcon,
@@ -41,8 +41,8 @@ import { ScrollArea } from '~/components/shadcn/ui/scroll-area.tsx'
 import { Skeleton } from '~/components/shadcn/ui/skeleton.tsx'
 import { Spinner } from '~/components/shadcn/ui/spinner.tsx'
 import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/shadcn/ui/tooltip.tsx'
-import { cn, invariant } from '~/lib/util/index.ts'
 import { getQueryKeyParams } from '~/lib/query/get-query-key-params.ts'
+import { cn, invariant } from '~/lib/util/index.ts'
 
 import {
 	Collapsible,
@@ -147,6 +147,32 @@ function getInitialsFromLabel(label: string): string {
 		.slice(0, 2)
 }
 
+function hashStringToHue(value: string): number {
+	let hash = 0
+
+	for (let index = 0; index < value.length; index += 1) {
+		hash = (hash << 5) - hash + value.charCodeAt(index)
+		hash |= 0
+	}
+
+	return Math.abs(hash) % 360
+}
+
+function getProjectKeyFromIssueKey(issueKey: string): string | undefined {
+	const [projectKey] = issueKey.split('-')
+	return typeof projectKey === 'string' && projectKey.length > 0 ? projectKey : undefined
+}
+
+function getWorklogColors(authorId: string | undefined, projectKey: string | undefined) {
+	const key = `${authorId ?? 'unknown'}:${projectKey ?? 'unknown'}`
+	const hue = hashStringToHue(key)
+
+	return {
+		backgroundColor: `hsla(${hue}, 70%, 60%, 0.6)`,
+		borderColor: `hsla(${hue}, 70%, 40%, 1)`
+	}
+}
+
 const dayHeaderFormat: FormatterInput = {
 	month: 'short',
 	day: '2-digit',
@@ -155,17 +181,30 @@ const dayHeaderFormat: FormatterInput = {
 
 interface CalendarEvent extends EventInput {}
 
-const fakeEvents: CalendarEvent[] = [
-	{
-		id: '1',
-		title: 'Event 1',
-		start: new Date(),
-		end: new Date(Date.now() + 1000 * 60 * 60 * 2),
-		classNames: ['custom-event', ''],
-		backgroundColor: '#ffcc00cc',
-		borderColor: '#ffcc00ff'
-	}
-]
+// function renderWorklogEventContent(eventInfo: EventContentArg): React.ReactNode {
+// 	const author = eventInfo.event.extendedProps['authorDisplayName'] as string | undefined
+
+// 	return (
+// 		<div className='flex flex-col gap-1'>
+// 			<div className='flex items-center gap-2 text-[11px] leading-tight'>
+// 				<span className='rounded-full bg-background/70 px-2 py-0.5 text-[10px] font-semibold text-foreground shadow-xs'>
+// 					{eventInfo.timeText}
+// 				</span>
+// 				<span className='truncate text-[11px] font-semibold text-foreground'>
+// 					{eventInfo.event.title}
+// 				</span>
+// 			</div>
+// 			{author ? (
+// 				<div className='flex items-center gap-2 text-[10px] text-muted-foreground'>
+// 					<span className='flex size-4 items-center justify-center rounded-full bg-background/70 text-[9px] font-semibold text-foreground shadow-xs'>
+// 						{getInitialsFromLabel(author)}
+// 					</span>
+// 					<span className='truncate'>{author}</span>
+// 				</div>
+// 			) : null}
+// 		</div>
+// 	)
+// }
 
 const fakeIssues: Issue[] = [
 	{
@@ -992,7 +1031,7 @@ function useWorklogEntriesQuery(options: UseWorklogEntriesQueryOptions) {
 				throw new Error(`Failed to fetch worklog entries: ${response.statusText}`)
 			}
 
-			const worklogEntries = (await response.json()) as unknown[]
+			const worklogEntries = (await response.json()) as WorklogEntry[]
 			return worklogEntries
 		},
 
@@ -1068,7 +1107,6 @@ export default function IndexPage(): React.ReactNode {
 
 	const calendar = useFullCalendar({
 		onSuccess: () => {
-			setEvents(fakeEvents)
 			setIssues(fakeIssues)
 		}
 	})
@@ -1108,9 +1146,47 @@ export default function IndexPage(): React.ReactNode {
 	})
 
 	const users = useMemo(() => usersQuery.data?.pages.flat() ?? [], [usersQuery.data])
-	const projects = projectsQuery.data ?? []
-	const accessibleResources = resourcesQuery.data ?? []
-	const worklogEntries = worklogEntriesQuery.data ?? []
+	const projects = useMemo(() => projectsQuery.data ?? [], [projectsQuery.data])
+	const accessibleResources = useMemo(() => resourcesQuery.data ?? [], [resourcesQuery.data])
+	const worklogEntries = useMemo(() => worklogEntriesQuery.data ?? [], [worklogEntriesQuery.data])
+	const currentUserId = layoutLoaderData?.user.account_id
+
+	useEffect(() => {
+		const events = worklogEntries.map<CalendarEvent>(entry => {
+			const projectKey = getProjectKeyFromIssueKey(entry.issueKey)
+			const { backgroundColor, borderColor } = getWorklogColors(entry.authorAccountId, projectKey)
+			const isEditable = currentUserId !== undefined && entry.authorAccountId === currentUserId
+			const startedAt = Date.parse(entry.started)
+			const durationSeconds = Math.max(entry.timeSpentSeconds, 0)
+
+			const endAt = Number.isNaN(startedAt)
+				? undefined
+				: new Date(startedAt + durationSeconds * 1000)
+
+			return {
+				id: entry.id,
+				title: `${entry.issueKey} ${entry.issueSummary}`,
+				start: entry.started,
+				end: endAt,
+				editable: isEditable,
+				startEditable: isEditable,
+				durationEditable: isEditable,
+				classNames: isEditable ? ['worklog-event'] : ['worklog-event', 'worklog-event--readonly'],
+
+				backgroundColor,
+				borderColor,
+
+				extendedProps: {
+					worklogEntryId: entry.id,
+					issueId: entry.issueId,
+					authorAccountId: entry.authorAccountId,
+					authorDisplayName: entry.authorDisplayName
+				}
+			}
+		})
+
+		setEvents(events)
+	}, [currentUserId, worklogEntries])
 
 	const resourcesLoading = resourcesQuery.isPending || resourcesQuery.isFetching
 	const projectsLoading = projectsQuery.isPending || projectsQuery.isFetching
@@ -1215,6 +1291,7 @@ export default function IndexPage(): React.ReactNode {
 							height='100%'
 							dayHeaderFormat={dayHeaderFormat}
 							events={events}
+							// eventContent={renderWorklogEventContent}
 							datesSet={(args: DatesSetArg) => {
 								setFromDate(args.view.currentStart)
 								setToDate(args.view.currentEnd)
