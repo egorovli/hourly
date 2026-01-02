@@ -8,7 +8,7 @@ import type { Route } from './+types/__._index.ts'
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Virtuoso } from 'react-virtuoso'
 import { useRouteLoaderData } from 'react-router'
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 
 import {
 	BugIcon,
@@ -789,6 +789,7 @@ function ProjectsFilter({
 								</>
 							)}
 						</CommandList>
+
 						{!isLoading && !isEmpty && (
 							<div
 								className={cn(
@@ -822,17 +823,141 @@ function ProjectsFilter({
 	)
 }
 
-export default function IndexPage(): React.ReactNode {
-	const layoutLoaderData = useRouteLoaderData<LayoutRoute.ComponentProps['loaderData']>('routes/__')
+interface UseResourcesQueryOptions {
+	userId?: string
+}
 
-	const [displayCalendar, setDisplayCalendar] = useState(false)
-	const [events, setEvents] = useState<CalendarEvent[]>([])
-	const [issues, setIssues] = useState<Issue[]>([])
+function useResourcesQuery(options: UseResourcesQueryOptions) {
+	const { userId } = options
 
-	const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([])
-	const [selectedUserIds, setSelectedUserIds] = useState<string[]>([])
+	return useQuery({
+		queryKey: ['resources', { userId }],
+		queryFn: async ({ queryKey, signal }) => {
+			const response = await fetch('/api/resources', { signal })
 
-	const [isFiltersOpen, setIsFiltersOpen] = useState(true)
+			if (!response.ok) {
+				throw new Error(`Failed to fetch resources: ${response.statusText}`)
+			}
+
+			const resources = (await response.json()) as AccessibleResource[]
+			return resources
+		},
+
+		enabled(query) {
+			return userId !== undefined
+		}
+	})
+}
+
+interface UseProjectsQueryOptions {
+	userId?: string
+	accessibleResourceIds?: string[]
+	enabled?: boolean
+}
+
+function useProjectsQuery(options: UseProjectsQueryOptions) {
+	const { userId, accessibleResourceIds, enabled } = options
+
+	return useQuery({
+		queryKey: [
+			'projects',
+
+			{
+				userId: userId,
+				accessibleResourceIds: accessibleResourceIds
+			}
+		],
+
+		async queryFn({ queryKey, signal }) {
+			const response = await fetch('/api/projects', { signal })
+
+			if (!response.ok) {
+				throw new Error(`Failed to fetch projects: ${response.statusText}`)
+			}
+
+			const projects = (await response.json()) as Project[]
+			return projects
+		},
+
+		enabled
+	})
+}
+
+interface UseUsersQueryOptions {
+	userId?: string
+	projectIds?: string[]
+	enabled?: boolean
+}
+
+function useUsersQuery(options: UseUsersQueryOptions) {
+	const { userId, projectIds, enabled } = options
+
+	const query = useInfiniteQuery({
+		queryKey: [
+			'users',
+			{
+				userId: userId,
+				projectIds: projectIds
+			}
+		],
+
+		initialPageParam: 1,
+
+		async queryFn({ queryKey, signal, pageParam }) {
+			const params = getQueryKeyParams(queryKey)
+
+			const searchParams = new URLSearchParams([
+				...(params.projectIds?.map(projectId => ['filter[project]', projectId]) ?? []),
+				['page[number]', pageParam.toString(10)],
+				['page[size]', '10']
+			])
+
+			const response = await fetch(`/api/users?${searchParams}`, { signal })
+
+			if (!response.ok) {
+				throw new Error(`Failed to fetch users: ${response.statusText}`)
+			}
+
+			const users = (await response.json()) as JiraUser[]
+			return users
+		},
+
+		getNextPageParam(lastPage, allPages, lastPageParam, allPageParams) {
+			if (lastPage.length === 0) {
+				return undefined
+			}
+
+			return lastPageParam + 1
+		},
+
+		getPreviousPageParam(firstPage, allPages, firstPageParam, allPageParams) {
+			if (firstPage.length === 0) {
+				return undefined
+			}
+
+			return firstPageParam - 1
+		},
+
+		enabled
+	})
+
+	useEffect(() => {
+		if (query.hasNextPage && !query.isFetchingNextPage && !query.isError) {
+			query.fetchNextPage()
+		}
+	}, [query.hasNextPage, query.isFetchingNextPage, query.isError, query.fetchNextPage])
+
+	return query
+}
+
+interface UseFullCalendarOptions {
+	onSuccess?: () => void
+}
+
+function useFullCalendar(options: UseFullCalendarOptions) {
+	const { onSuccess } = options
+
+	const [isVisible, setIsVisible] = useState(false)
 
 	const pluginsRef = useRef<PluginDef[]>([])
 	const draggableConstructorRef = useRef<typeof Draggable>(null)
@@ -858,128 +983,82 @@ export default function IndexPage(): React.ReactNode {
 				})
 		])
 			.then(() => {
-				setDisplayCalendar(true)
-				setEvents(fakeEvents)
-				setIssues(fakeIssues)
-
-				setTimeout(() => {
-					setEvents(events => [
-						...events,
-						{
-							id: '2',
-							title: 'Event 2',
-							start: new Date(Date.now() + 1000 * 60 * 60 * 2),
-							end: new Date(Date.now() + 1000 * 60 * 60 * 4)
-						}
-					])
-				}, 3000)
-				// console.log(pluginsRef.current)
-				// console.log(draggableConstructorRef.current)
+				setIsVisible(true)
+				onSuccess?.()
 			})
 			.catch(err => {
 				// console.error(err)
 			})
-	}, [])
+	}, [onSuccess])
 
-	const resourcesQuery = useQuery({
-		queryKey: ['resources', { userId: layoutLoaderData?.user.account_id }],
+	const value = useMemo(
+		() => ({
+			plugins: pluginsRef.current,
+			Draggable: draggableConstructorRef.current,
+			isVisible
+		}),
+		[isVisible]
+	)
 
-		async queryFn({ queryKey, signal }) {
-			const response = await fetch('/api/resources', { signal })
+	return value
+}
 
-			if (!response.ok) {
-				throw new Error(`Failed to fetch resources: ${response.statusText}`)
-			}
+export default function IndexPage(): React.ReactNode {
+	const layoutLoaderData = useRouteLoaderData<LayoutRoute.ComponentProps['loaderData']>('routes/__')
 
-			const resources = (await response.json()) as AccessibleResource[]
-			return resources
-		},
+	const [events, setEvents] = useState<CalendarEvent[]>([])
+	const [issues, setIssues] = useState<Issue[]>([])
 
-		enabled(query) {
-			return layoutLoaderData?.user.account_id !== undefined
+	const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([])
+	const [selectedUserIds, setSelectedUserIds] = useState<string[]>([])
+
+	const [isFiltersOpen, setIsFiltersOpen] = useState(true)
+
+	const calendar = useFullCalendar({
+		onSuccess: () => {
+			setEvents(fakeEvents)
+			setIssues(fakeIssues)
 		}
 	})
 
-	const projectsQuery = useQuery({
-		queryKey: [
-			'projects',
-
-			{
-				userId: layoutLoaderData?.user.account_id,
-				accessibleResourceIds: resourcesQuery.data?.map(resource => resource.id)
-			}
-		],
-
-		async queryFn({ queryKey, signal }) {
-			const response = await fetch('/api/projects', { signal })
-
-			if (!response.ok) {
-				throw new Error(`Failed to fetch projects: ${response.statusText}`)
-			}
-
-			const projects = (await response.json()) as Project[]
-			return projects
-		},
-
-		enabled(query) {
-			return (
-				resourcesQuery.isEnabled &&
-				resourcesQuery.isSuccess &&
-				Array.isArray(resourcesQuery.data) &&
-				resourcesQuery.data.length > 0
-			)
-		}
+	const resourcesQuery = useResourcesQuery({
+		userId: layoutLoaderData?.user.account_id
 	})
 
-	const usersQuery = useQuery({
-		queryKey: [
-			'users',
-			{
-				userId: layoutLoaderData?.user.account_id,
-				projectIds: selectedProjectIds
-			}
-		],
+	const projectsQuery = useProjectsQuery({
+		userId: layoutLoaderData?.user.account_id,
+		accessibleResourceIds: resourcesQuery.data?.map(resource => resource.id),
 
-		async queryFn({ queryKey, signal }) {
-			const params = getQueryKeyParams(queryKey)
-			const searchParams = new URLSearchParams([
-				...params.projectIds.map(projectId => ['filter[project]', projectId])
-			])
-
-			const response = await fetch(`/api/users?${searchParams}`, { signal })
-
-			if (!response.ok) {
-				throw new Error(`Failed to fetch users: ${response.statusText}`)
-			}
-
-			const users = (await response.json()) as JiraUser[]
-			return users
-		},
-
-		enabled(query) {
-			return (
-				projectsQuery.isEnabled &&
-				projectsQuery.isSuccess &&
-				Array.isArray(projectsQuery.data) &&
-				projectsQuery.data.length > 0 &&
-				selectedProjectIds.length > 0
-			)
-		}
+		enabled:
+			resourcesQuery.isEnabled &&
+			resourcesQuery.isSuccess &&
+			Array.isArray(resourcesQuery.data) &&
+			resourcesQuery.data.length > 0
 	})
 
-	const users = usersQuery.data ?? []
+	const usersQuery = useUsersQuery({
+		userId: layoutLoaderData?.user.account_id,
+		projectIds: selectedProjectIds,
+		enabled:
+			projectsQuery.isSuccess &&
+			Array.isArray(projectsQuery.data) &&
+			projectsQuery.data.length > 0 &&
+			selectedProjectIds.length > 0
+	})
+
+	const users = useMemo(() => usersQuery.data?.pages.flat() ?? [], [usersQuery.data])
 	const projects = projectsQuery.data ?? []
 	const accessibleResources = resourcesQuery.data ?? []
 
 	const resourcesLoading = resourcesQuery.isPending || resourcesQuery.isFetching
 	const projectsLoading = projectsQuery.isPending || projectsQuery.isFetching
-	const usersLoading = usersQuery.isEnabled && (usersQuery.isPending || usersQuery.isFetching)
 
-	if (!displayCalendar) {
+	const usersLoading =
+		usersQuery.isEnabled && (usersQuery.isPending || usersQuery.isFetchingNextPage)
+
+	if (!calendar.isVisible) {
 		return null
 	}
-
-	// invariant(draggableConstructorRef.current, 'Draggable constructor not found')
 
 	return (
 		<div className='flex flex-col h-full gap-4 p-4'>
@@ -1046,11 +1125,10 @@ export default function IndexPage(): React.ReactNode {
 						/>
 					</div>
 					<Virtuoso
-						// style={{ height: '100%' }}
 						data={issues}
 						totalCount={issues.length}
 						itemContent={(index, issue, context) => {
-							invariant(draggableConstructorRef.current, 'Draggable constructor is not defined')
+							invariant(calendar.Draggable, 'Draggable constructor is not defined')
 
 							return (
 								<div className='pb-2'>
@@ -1058,7 +1136,7 @@ export default function IndexPage(): React.ReactNode {
 										{...issue}
 										isDragged={false}
 										components={{
-											Draggable: draggableConstructorRef.current
+											Draggable: calendar.Draggable
 										}}
 									/>
 								</div>
@@ -1070,7 +1148,7 @@ export default function IndexPage(): React.ReactNode {
 					<h2 className='text-2xl font-bold'>Calendar</h2>
 					<Suspense fallback={<div>Loading...</div>}>
 						<FullCalendar
-							plugins={pluginsRef.current}
+							plugins={calendar.plugins}
 							initialView='timeGridWeek'
 							height='100%'
 							dayHeaderFormat={dayHeaderFormat}
