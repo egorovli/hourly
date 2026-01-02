@@ -19,6 +19,7 @@ import {
 	useRouteLoaderData
 } from 'react-router'
 
+import { Toaster } from '~/components/shadcn/ui/sonner.tsx'
 import * as cookies from '~/lib/cookies/index.ts'
 import * as query from '~/lib/query/index.ts'
 import { cn } from '~/lib/util/index.ts'
@@ -78,6 +79,8 @@ export function Layout({ children }: LayoutProps): React.ReactNode {
 			</head>
 			<body className='h-full border'>
 				{children}
+
+				<Toaster position='bottom-right' />
 
 				<ScrollRestoration />
 				<Scripts />

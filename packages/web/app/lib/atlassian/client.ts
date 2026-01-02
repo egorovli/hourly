@@ -4,6 +4,8 @@ import type { Project } from './project.ts'
 import type { User } from './user.ts'
 import type { WorklogEntry, WorklogEntryPage } from './worklog-entry.ts'
 
+import { DateTime } from 'luxon'
+
 export interface AtlassianClientOptions {
 	accessToken: string
 	refreshToken?: string
@@ -44,6 +46,65 @@ export interface GetWorklogEntriesParams extends AtlassianClientRequestOptions, 
 	from: string
 	to: string
 	query?: string
+}
+
+/**
+ * Input for creating or updating a worklog entry.
+ * See: https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-worklogs/
+ */
+export interface WorklogEntryInput {
+	worklogId?: string
+	issueIdOrKey: string
+	timeSpentSeconds: number
+	started: string
+	comment?: string | AtlassianDocumentFormat
+}
+
+/**
+ * Atlassian Document Format (ADF) for rich text content.
+ * See: https://developer.atlassian.com/cloud/jira/platform/apis/document/structure/
+ */
+export interface AtlassianDocumentFormat {
+	type: 'doc'
+	version: 1
+	content: AtlassianDocumentNode[]
+}
+
+interface AtlassianDocumentNode {
+	type: string
+	content?: AtlassianDocumentNode[]
+	text?: string
+	attrs?: Record<string, unknown>
+}
+
+export interface WorklogSaveResult {
+	input: WorklogEntryInput
+	success: boolean
+	worklog?: WorklogEntry
+	error?: string
+	statusCode?: number
+}
+
+export interface SaveWorklogEntriesResult {
+	results: WorklogSaveResult[]
+	successCount: number
+	failureCount: number
+	totalCount: number
+}
+
+/**
+ * Parameters for batch saving worklog entries with idempotent support.
+ * Uses prefetching and matching to prevent duplicates when resubmitting.
+ */
+export interface SaveWorklogEntriesParams extends AtlassianClientRequestOptions {
+	accessibleResourceId: AccessibleResource['id']
+	entries: WorklogEntryInput[]
+	concurrency?: number
+	batchDelayMs?: number
+	stopOnError?: boolean
+	idempotent?: boolean
+	startedToleranceMs?: number
+	currentUserAccountId?: string
 }
 
 type GetUsersForProjectsPaginatedParams = GetUsersForProjectsParams & PaginationParams
@@ -91,6 +152,20 @@ interface JiraIssue {
 		summary?: string
 		description?: unknown
 	}
+}
+
+interface JiraWorklogResponse {
+	id: string
+	issueId: string
+	author?: JiraWorklogAuthor
+	updateAuthor?: JiraWorklogAuthor
+	timeSpent?: string
+	timeSpentSeconds: number
+	started: string
+	created?: string
+	updated?: string
+	comment?: unknown
+	self?: string
 }
 
 export class AtlassianClient {
@@ -547,5 +622,504 @@ export class AtlassianClient {
 			startAt: normalizedStartAt,
 			maxResults: normalizedMaxResults
 		}
+	}
+
+	/**
+	 * Saves multiple worklog entries in batches with controlled concurrency.
+	 *
+	 * This method efficiently processes worklog create/update operations by:
+	 * - Running multiple requests concurrently (controlled by `concurrency` param)
+	 * - Handling partial failures gracefully (returns detailed results for each entry)
+	 * - Adding delays between batches to avoid rate limiting
+	 *
+	 * Since Jira Cloud does not support bulk worklog creation, each entry is processed
+	 * individually, but concurrency allows for efficient throughput.
+	 *
+	 * @param params - Parameters including accessibleResourceId, entries, and concurrency options
+	 * @returns Promise resolving to aggregated results with success/failure counts
+	 *
+	 * @example
+	 * ```ts
+	 * const result = await client.saveWorklogEntries({
+	 *   accessibleResourceId: 'resource-id',
+	 *   entries: [
+	 *     { issueIdOrKey: 'PROJ-123', timeSpentSeconds: 3600, started: '2024-01-15T09:00:00.000+0000' },
+	 *     { issueIdOrKey: 'PROJ-456', timeSpentSeconds: 7200, started: '2024-01-15T14:00:00.000+0000', comment: 'Bug fix' }
+	 *   ],
+	 *   concurrency: 5
+	 * })
+	 *
+	 * console.log(`Saved ${result.successCount}/${result.totalCount} worklogs`)
+	 * ```
+	 */
+	async saveWorklogEntries(params: SaveWorklogEntriesParams): Promise<SaveWorklogEntriesResult> {
+		const {
+			accessibleResourceId,
+			entries,
+			concurrency = 5,
+			batchDelayMs = 100,
+			stopOnError = false,
+			idempotent = true,
+			startedToleranceMs = 60000,
+			currentUserAccountId,
+			signal,
+			headers
+		} = params
+
+		if (entries.length === 0) {
+			return {
+				results: [],
+				successCount: 0,
+				failureCount: 0,
+				totalCount: 0
+			}
+		}
+
+		// Apply idempotency: match new entries to existing worklogs
+		let processedEntries = entries
+		if (idempotent) {
+			processedEntries = await this.applyIdempotency(
+				accessibleResourceId,
+				entries,
+				startedToleranceMs,
+				currentUserAccountId,
+				signal,
+				headers
+			)
+		}
+
+		const results: WorklogSaveResult[] = []
+		const normalizedConcurrency = Math.max(1, Math.min(concurrency, 20))
+
+		for (
+			let batchStart = 0;
+			batchStart < processedEntries.length;
+			batchStart += normalizedConcurrency
+		) {
+			if (signal?.aborted) {
+				const remainingEntries = processedEntries.slice(batchStart)
+				for (const input of remainingEntries) {
+					results.push({
+						input,
+						success: false,
+						error: 'Operation aborted'
+					})
+				}
+				break
+			}
+
+			const batch = processedEntries.slice(batchStart, batchStart + normalizedConcurrency)
+
+			const batchPromises = batch.map(input =>
+				this.saveSingleWorklogEntry(accessibleResourceId, input, signal, headers)
+			)
+
+			const batchResults = await Promise.allSettled(batchPromises)
+
+			let batchIndex = 0
+			let shouldBreak = false
+
+			for (const settledResult of batchResults) {
+				const input = batch[batchIndex]
+				batchIndex++
+
+				if (input === undefined) {
+					continue
+				}
+
+				if (settledResult.status === 'fulfilled') {
+					results.push(settledResult.value)
+
+					if (stopOnError && !settledResult.value.success) {
+						const remainingEntries = processedEntries.slice(batchStart + batchIndex)
+						for (const remainingInput of remainingEntries) {
+							results.push({
+								input: remainingInput,
+								success: false,
+								error: 'Stopped due to previous error'
+							})
+						}
+						shouldBreak = true
+						break
+					}
+				} else {
+					results.push({
+						input,
+						success: false,
+						error:
+							settledResult.reason instanceof Error
+								? settledResult.reason.message
+								: String(settledResult.reason)
+					})
+
+					if (stopOnError) {
+						const remainingEntries = processedEntries.slice(batchStart + batchIndex)
+						for (const remainingInput of remainingEntries) {
+							results.push({
+								input: remainingInput,
+								success: false,
+								error: 'Stopped due to previous error'
+							})
+						}
+						shouldBreak = true
+						break
+					}
+				}
+			}
+
+			if (shouldBreak) {
+				break
+			}
+
+			if (batchStart + normalizedConcurrency < processedEntries.length && batchDelayMs > 0) {
+				await this.delay(batchDelayMs)
+			}
+		}
+
+		const successCount = results.filter(r => r.success).length
+		const failureCount = results.filter(r => !r.success).length
+
+		return {
+			results,
+			successCount,
+			failureCount,
+			totalCount: results.length
+		}
+	}
+
+	/**
+	 * Saves a single worklog entry (create or update).
+	 */
+	private async saveSingleWorklogEntry(
+		accessibleResourceId: string,
+		input: WorklogEntryInput,
+		signal?: AbortSignal,
+		headers?: HeadersInit
+	): Promise<WorklogSaveResult> {
+		const { worklogId, issueIdOrKey, timeSpentSeconds, started, comment } = input
+
+		if (timeSpentSeconds <= 0) {
+			return {
+				input,
+				success: false,
+				error: 'timeSpentSeconds must be greater than 0'
+			}
+		}
+
+		if (issueIdOrKey.trim().length === 0) {
+			return {
+				input,
+				success: false,
+				error: 'issueIdOrKey is required'
+			}
+		}
+
+		const body: Record<string, unknown> = {
+			timeSpentSeconds,
+			started: this.formatDateForJira(started)
+		}
+
+		if (comment !== undefined) {
+			body['comment'] = this.formatComment(comment)
+		}
+
+		const isUpdate = worklogId !== undefined && worklogId.trim().length > 0
+		const url = isUpdate
+			? `${this.baseUrl}/ex/jira/${accessibleResourceId}/rest/api/3/issue/${issueIdOrKey}/worklog/${worklogId}`
+			: `${this.baseUrl}/ex/jira/${accessibleResourceId}/rest/api/3/issue/${issueIdOrKey}/worklog`
+
+		try {
+			const response = await fetch(url, {
+				method: isUpdate ? 'PUT' : 'POST',
+				signal,
+				headers: {
+					'Accept': 'application/json',
+					'Authorization': `Bearer ${this.accessToken}`,
+					'Content-Type': 'application/json',
+					'User-Agent': this.userAgent,
+					...(headers ?? {})
+				},
+				body: JSON.stringify(body)
+			})
+
+			if (!response.ok) {
+				const errorText = await response.text().catch(() => response.statusText)
+				return {
+					input,
+					success: false,
+					error: `${isUpdate ? 'Update' : 'Create'} failed: ${response.status} ${errorText}`,
+					statusCode: response.status
+				}
+			}
+
+			const payload = (await response.json()) as JiraWorklogResponse
+
+			return {
+				input,
+				success: true,
+				worklog: this.mapJiraWorklogToEntry(payload, issueIdOrKey),
+				statusCode: response.status
+			}
+		} catch (error) {
+			if (error instanceof Error && error.name === 'AbortError') {
+				return {
+					input,
+					success: false,
+					error: 'Request aborted'
+				}
+			}
+
+			return {
+				input,
+				success: false,
+				error: error instanceof Error ? error.message : String(error)
+			}
+		}
+	}
+
+	/**
+	 * Applies idempotency by matching new entries to existing worklogs.
+	 * Returns entries with worklogId populated for matches.
+	 */
+	private async applyIdempotency(
+		accessibleResourceId: string,
+		entries: WorklogEntryInput[],
+		toleranceMs: number,
+		currentUserAccountId: string | undefined,
+		signal: AbortSignal | undefined,
+		headers: HeadersInit | undefined
+	): Promise<WorklogEntryInput[]> {
+		// Separate entries with and without worklogId
+		const newEntries = entries.filter(
+			e => e.worklogId === undefined || e.worklogId.trim().length === 0
+		)
+		const existingEntries = entries.filter(
+			e => e.worklogId !== undefined && e.worklogId.trim().length > 0
+		)
+
+		// If no new entries, nothing to deduplicate
+		if (newEntries.length === 0) {
+			return entries
+		}
+
+		// Group new entries by issue
+		const entriesByIssue = new Map<string, WorklogEntryInput[]>()
+		for (const entry of newEntries) {
+			const key = entry.issueIdOrKey
+			const group = entriesByIssue.get(key) ?? []
+			group.push(entry)
+			entriesByIssue.set(key, group)
+		}
+
+		// Fetch existing worklogs for each issue
+		const existingWorklogsByIssue = new Map<string, JiraWorklog[]>()
+
+		for (const issueIdOrKey of entriesByIssue.keys()) {
+			try {
+				const worklogs = await this.fetchWorklogsForIssue(
+					accessibleResourceId,
+					issueIdOrKey,
+					signal,
+					headers
+				)
+				existingWorklogsByIssue.set(issueIdOrKey, worklogs)
+			} catch {
+				// If we can't fetch worklogs, continue without deduplication for this issue
+				existingWorklogsByIssue.set(issueIdOrKey, [])
+			}
+		}
+
+		// Match new entries to existing worklogs
+		const processedNewEntries: WorklogEntryInput[] = []
+
+		for (const entry of newEntries) {
+			const existingWorklogs = existingWorklogsByIssue.get(entry.issueIdOrKey) ?? []
+			const matchedWorklog = this.findMatchingWorklog(
+				entry,
+				existingWorklogs,
+				toleranceMs,
+				currentUserAccountId
+			)
+
+			if (matchedWorklog) {
+				// Convert create to update
+				processedNewEntries.push({
+					...entry,
+					worklogId: matchedWorklog.id ?? matchedWorklog.worklogId?.toString()
+				})
+			} else {
+				processedNewEntries.push(entry)
+			}
+		}
+
+		// Combine existing entries (already have worklogId) with processed new entries
+		return [...existingEntries, ...processedNewEntries]
+	}
+
+	/**
+	 * Fetches all worklogs for a specific issue.
+	 */
+	private async fetchWorklogsForIssue(
+		accessibleResourceId: string,
+		issueIdOrKey: string,
+		signal: AbortSignal | undefined,
+		headers: HeadersInit | undefined
+	): Promise<JiraWorklog[]> {
+		const allWorklogs: JiraWorklog[] = []
+		let startAt = 0
+		const maxResults = 1000
+		let hasMore = true
+
+		while (hasMore) {
+			const url = new URL(
+				`${this.baseUrl}/ex/jira/${accessibleResourceId}/rest/api/3/issue/${issueIdOrKey}/worklog`
+			)
+			url.searchParams.set('startAt', startAt.toString())
+			url.searchParams.set('maxResults', maxResults.toString())
+
+			const response = await fetch(url.toString(), {
+				method: 'GET',
+				signal,
+				headers: {
+					'Accept': 'application/json',
+					'Authorization': `Bearer ${this.accessToken}`,
+					'User-Agent': this.userAgent,
+					...(headers ?? {})
+				}
+			})
+
+			if (!response.ok) {
+				throw new Error(`Failed to fetch worklogs for issue ${issueIdOrKey}: ${response.status}`)
+			}
+
+			const payload = (await response.json()) as {
+				worklogs: JiraWorklog[]
+				total: number
+				startAt: number
+				maxResults: number
+			}
+
+			allWorklogs.push(...payload.worklogs)
+
+			if (payload.worklogs.length < maxResults || allWorklogs.length >= payload.total) {
+				hasMore = false
+			} else {
+				startAt += payload.worklogs.length
+			}
+		}
+
+		return allWorklogs
+	}
+
+	/**
+	 * Finds a matching worklog based on started time and optional author.
+	 */
+	private findMatchingWorklog(
+		entry: WorklogEntryInput,
+		existingWorklogs: JiraWorklog[],
+		toleranceMs: number,
+		currentUserAccountId: string | undefined
+	): JiraWorklog | undefined {
+		const entryStarted = Date.parse(entry.started)
+		if (Number.isNaN(entryStarted)) {
+			return undefined
+		}
+
+		for (const worklog of existingWorklogs) {
+			const worklogStarted = Date.parse(worklog.started)
+			if (Number.isNaN(worklogStarted)) {
+				continue
+			}
+
+			// Check started time within tolerance
+			const timeDiff = Math.abs(entryStarted - worklogStarted)
+			if (timeDiff > toleranceMs) {
+				continue
+			}
+
+			// If currentUserAccountId is provided, also match by author
+			if (
+				currentUserAccountId !== undefined &&
+				worklog.author?.accountId !== currentUserAccountId
+			) {
+				continue
+			}
+
+			// Found a match
+			return worklog
+		}
+
+		return undefined
+	}
+
+	/**
+	 * Formats a date string to the format Jira expects: yyyy-MM-dd'T'HH:mm:ss.SSSZ
+	 * Converts ISO 8601 'Z' suffix to '+0000' timezone offset format using Luxon.
+	 */
+	private formatDateForJira(dateString: string): string {
+		const dt = DateTime.fromISO(dateString, { setZone: true })
+
+		if (!dt.isValid) {
+			// If parsing fails, return the original string
+			return dateString
+		}
+
+		// Format with ZZ token (gives +00:00) and remove the colon from the offset
+		// Jira expects: yyyy-MM-dd'T'HH:mm:ss.SSS+0000 (no colon in offset)
+		const formatted = dt.toFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZZ")
+
+		// Remove the colon from the timezone offset (last 6 chars: +00:00 → +0000)
+		return formatted.replace(/([+-]\d{2}):(\d{2})$/, '$1$2')
+	}
+
+	/**
+	 * Formats a comment into Atlassian Document Format (ADF).
+	 */
+	private formatComment(comment: string | AtlassianDocumentFormat): AtlassianDocumentFormat {
+		if (typeof comment === 'object' && comment.type === 'doc') {
+			return comment
+		}
+
+		return {
+			type: 'doc',
+			version: 1,
+			content: [
+				{
+					type: 'paragraph',
+					content: [
+						{
+							type: 'text',
+							text: String(comment)
+						}
+					]
+				}
+			]
+		}
+	}
+
+	/**
+	 * Maps a Jira worklog API response to our WorklogEntry type.
+	 */
+	private mapJiraWorklogToEntry(payload: JiraWorklogResponse, issueIdOrKey: string): WorklogEntry {
+		return {
+			id: payload.id,
+			issueId: payload.issueId,
+			issueKey: issueIdOrKey,
+			issueSummary: '',
+			timeSpentSeconds: payload.timeSpentSeconds,
+			started: payload.started,
+			created: payload.created,
+			updated: payload.updated,
+			authorAccountId: payload.author?.accountId,
+			authorDisplayName: payload.author?.displayName,
+			comment: payload.comment
+		}
+	}
+
+	/**
+	 * Simple delay utility for rate limiting.
+	 */
+	private delay(ms: number): Promise<void> {
+		return new Promise(resolve => setTimeout(resolve, ms))
 	}
 }

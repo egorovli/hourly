@@ -1,5 +1,6 @@
 import type { Route } from './+types/api.worklog.entries.ts'
 import type { AccessibleResource, Project } from '~/lib/atlassian/index.ts'
+import type { SaveWorklogEntriesResult, WorklogEntryInput } from '~/lib/atlassian/client.ts'
 
 import { DateTime } from 'luxon'
 import { z } from 'zod'
@@ -44,6 +45,22 @@ const schema = {
 
 			'filter[from]': z.iso.datetime().optional(),
 			'filter[to]': z.iso.datetime().optional()
+		})
+	},
+
+	action: {
+		body: z.object({
+			entries: z
+				.object({
+					worklogId: z.string().optional(),
+					issueIdOrKey: z.string().min(1, 'Issue ID or key is required'),
+					accessibleResourceId: z.string().min(1, 'Accessible resource ID is required'),
+					timeSpentSeconds: z.number().int().positive('Time spent must be greater than 0'),
+					started: z.string().min(1, 'Start time is required'),
+					comment: z.string().optional()
+				})
+				.array()
+				.min(1, 'At least one entry is required')
 		})
 	}
 }
@@ -200,3 +217,146 @@ function ensureProjectsAccessible(params: EnsureProjectsAccessibleParams): Proje
 		.map(projectId => projectsByCompoundId.get(projectId))
 		.filter((project): project is ProjectWithResource => project !== undefined)
 }
+
+/**
+ * Response type for the save worklogs action.
+ */
+export interface SaveWorklogsActionResponse {
+	success: boolean
+	results: SaveWorklogEntriesResult['results']
+	successCount: number
+	failureCount: number
+	totalCount: number
+}
+
+/**
+ * Action handler for saving worklog entries.
+ * Accepts POST requests with JSON body containing entries to save.
+ */
+export const action = withRequestContext(async function action({ request }: Route.ActionArgs) {
+	if (request.method !== 'POST') {
+		throw new Response('Method not allowed', { status: 405 })
+	}
+
+	const { em } = orm
+
+	const sessionStorage = createSessionStorage()
+	const cookieSession = await sessionStorage.getSession(request.headers.get('Cookie'))
+
+	if (!cookieSession || !cookieSession.id) {
+		throw new Response('Unauthorized', { status: 401 })
+	}
+
+	const session = await em.findOne(Session, {
+		id: cookieSession.id
+	})
+
+	if (!session) {
+		throw new Response('Unauthorized', { status: 401 })
+	}
+
+	const connection = await em.findOne(
+		ProfileSessionConnection,
+		{
+			session: {
+				id: session.id
+			},
+			connectionType: ProfileConnectionType.WorklogTarget
+		},
+		{
+			populate: ['profile']
+		}
+	)
+
+	if (!connection) {
+		throw new Response('Unauthorized', { status: 401 })
+	}
+
+	const { profile } = connection
+
+	const token = await em.findOne(Token, {
+		profileId: profile.id,
+		provider: profile.provider
+	})
+
+	if (!token) {
+		throw new Response('Unauthorized', { status: 401 })
+	}
+
+	// Parse and validate request body
+	let body: unknown
+
+	try {
+		body = await request.json()
+	} catch {
+		throw new Response('Invalid JSON body', { status: 400 })
+	}
+
+	const validation = await schema.action.body.safeParseAsync(body)
+
+	if (!validation.success) {
+		return Response.json(
+			{
+				success: false,
+				error: 'Validation failed',
+				issues: validation.error.issues
+			},
+			{ status: 400 }
+		)
+	}
+
+	const { entries } = validation.data
+
+	// Group entries by accessible resource ID
+	const entriesByResource = new Map<string, WorklogEntryInput[]>()
+
+	for (const entry of entries) {
+		const { accessibleResourceId, ...worklogInput } = entry
+		const existingEntries = entriesByResource.get(accessibleResourceId) ?? []
+		existingEntries.push(worklogInput)
+		entriesByResource.set(accessibleResourceId, existingEntries)
+	}
+
+	const client = new AtlassianClient({ accessToken: token.accessToken })
+
+	// Get current user account ID for idempotency matching
+	const getMe = cached(client.getMe.bind(client))
+	const currentUser = await getMe()
+
+	// Save worklogs for each resource
+	const allResults: SaveWorklogEntriesResult['results'] = []
+
+	for (const [resourceId, resourceEntries] of entriesByResource) {
+		// console.log('saving...')
+		// console.log({
+		// 	accessibleResourceId: resourceId,
+		// 	entries: resourceEntries,
+		// 	idempotent: true,
+		// 	currentUserAccountId: currentUser.account_id
+		// })
+		const result = await client.saveWorklogEntries({
+			accessibleResourceId: resourceId,
+			entries: resourceEntries,
+			idempotent: true,
+			currentUserAccountId: currentUser.account_id,
+			signal: request.signal
+		})
+
+		allResults.push(...result.results)
+	}
+
+	const successCount = allResults.filter(r => r.success).length
+	const failureCount = allResults.filter(r => !r.success).length
+
+	const response: SaveWorklogsActionResponse = {
+		success: failureCount === 0,
+		results: allResults,
+		successCount,
+		failureCount,
+		totalCount: allResults.length
+	}
+
+	return Response.json(response, {
+		status: failureCount === 0 ? 200 : 207 // 207 Multi-Status for partial success
+	})
+})

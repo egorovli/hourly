@@ -13,10 +13,12 @@ import type { MetaDescriptor } from 'react-router'
 import type { AccessibleResource, JiraUser, Project, WorklogEntry } from '~/lib/atlassian/index.ts'
 import type { Route } from './+types/__._index.ts'
 import type { Route as LayoutRoute } from './+types/__.ts'
+import type { SaveWorklogsActionResponse } from './api.worklog.entries.tsx'
 
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouteLoaderData } from 'react-router'
+import { toast } from 'sonner'
 import { Virtuoso } from 'react-virtuoso'
 import { nanoid } from 'nanoid'
 
@@ -32,6 +34,7 @@ import {
 	EyeIcon,
 	LayersIcon,
 	LightbulbIcon,
+	Loader2Icon,
 	PencilIcon,
 	RocketIcon,
 	SaveIcon,
@@ -206,6 +209,19 @@ interface PendingChange {
 	type: PendingChangeType
 	event: CalendarEvent
 	originalEvent?: CalendarEvent
+}
+
+/**
+ * Represents a worklog entry to be saved via the API.
+ * Used when submitting pending changes to the server.
+ */
+interface WorklogSaveEntry {
+	worklogId?: string
+	issueIdOrKey: string
+	accessibleResourceId: string
+	timeSpentSeconds: number
+	started: string
+	comment?: string
 }
 
 // function renderWorklogEventContent(eventInfo: EventContentArg): React.ReactNode {
@@ -1182,6 +1198,74 @@ export default function IndexPage(): React.ReactNode {
 			toDate !== undefined
 	})
 
+	const queryClient = useQueryClient()
+
+	// Mutation for saving worklog entries
+	const saveWorklogsMutation = useMutation({
+		mutationFn: async (entries: WorklogSaveEntry[]) => {
+			const response = await fetch('/api/worklog/entries', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ entries })
+			})
+
+			if (!response.ok) {
+				const errorData = (await response.json().catch(() => ({}))) as { error?: string }
+				throw new Error(errorData.error ?? `Failed to save worklogs: ${response.statusText}`)
+			}
+
+			return response.json() as Promise<SaveWorklogsActionResponse>
+		},
+
+		onSuccess: data => {
+			// Clear loaded events cache to force fresh data
+			loadedEventsRef.current.clear()
+
+			// Invalidate worklog entries query to refetch
+			queryClient.invalidateQueries({ queryKey: ['worklog-entries'] })
+
+			if (data.success) {
+				setPendingChanges(new Map())
+
+				toast.success('Worklogs saved successfully', {
+					description: `${data.successCount} ${data.successCount === 1 ? 'entry' : 'entries'} saved to Jira`
+				})
+			} else {
+				// Partial success: only clear successfully saved entries
+				const failedIssues = data.results
+					.filter(r => !r.success)
+					.map(r => r.input.issueIdOrKey)
+					.slice(0, 3)
+
+				setPendingChanges(prev => {
+					const next = new Map(prev)
+					for (const result of data.results) {
+						if (result.success && result.worklog) {
+							const matchingEntry = [...next.entries()].find(([, change]) => {
+								const issueKey = change.event.extendedProps?.['issueKey']
+								return issueKey === result.input.issueIdOrKey
+							})
+							if (matchingEntry) {
+								next.delete(matchingEntry[0])
+							}
+						}
+					}
+					return next
+				})
+
+				toast.warning('Partial save completed', {
+					description: `${data.successCount} saved, ${data.failureCount} failed: ${failedIssues.join(', ')}${data.failureCount > 3 ? '...' : ''}`
+				})
+			}
+		},
+
+		onError: error => {
+			toast.error('Failed to save worklogs', {
+				description: error instanceof Error ? error.message : 'An unexpected error occurred'
+			})
+		}
+	})
+
 	const users = useMemo(() => usersQuery.data?.pages.flat() ?? [], [usersQuery.data])
 	const projects = useMemo(() => projectsQuery.data ?? [], [projectsQuery.data])
 	const accessibleResources = useMemo(() => resourcesQuery.data ?? [], [resourcesQuery.data])
@@ -1369,6 +1453,69 @@ export default function IndexPage(): React.ReactNode {
 			return next
 		})
 	}, [])
+
+	// Create a map of project key to resource ID for efficient lookup
+	const projectKeyToResourceId = useMemo(() => {
+		const map = new Map<string, string>()
+		for (const projectId of selectedProjectIds) {
+			// Format: "resourceId:projectId"
+			const [resourceId] = projectId.split(':')
+			const project = projects.find(p => projectId === `${resourceId}:${p.id}`)
+			if (project && resourceId) {
+				map.set(project.key, resourceId)
+			}
+		}
+		return map
+	}, [selectedProjectIds, projects])
+
+	// Handler for saving pending changes
+	const handleSaveChanges = useCallback(() => {
+		if (pendingChanges.size === 0 || saveWorklogsMutation.isPending) {
+			return
+		}
+
+		const entries: WorklogSaveEntry[] = []
+
+		for (const [eventId, change] of pendingChanges) {
+			// Skip delete operations for now (would need a separate endpoint)
+			if (change.type === 'delete') {
+				continue
+			}
+
+			const { event } = change
+			const issueKey = event.extendedProps?.['issueKey'] as string | undefined
+			const projectKey = issueKey ? getProjectKeyFromIssueKey(issueKey) : undefined
+			const resourceId = projectKey ? projectKeyToResourceId.get(projectKey) : undefined
+
+			if (!issueKey || !resourceId) {
+				// Can't save without issue key and resource ID
+				continue
+			}
+
+			const timeSpentSeconds = event.extendedProps?.['timeSpentSeconds'] as number | undefined
+			const started = event.extendedProps?.['started'] as string | undefined
+			const worklogId = event.extendedProps?.['worklogEntryId'] as string | undefined
+
+			if (timeSpentSeconds === undefined || timeSpentSeconds <= 0 || !started) {
+				continue
+			}
+
+			// For new events (created via drag), worklogId is a temp nanoid - don't send it
+			const isNewEvent = change.type === 'create' || event.extendedProps?.['isNew'] === true
+
+			entries.push({
+				worklogId: isNewEvent ? undefined : worklogId,
+				issueIdOrKey: issueKey,
+				accessibleResourceId: resourceId,
+				timeSpentSeconds,
+				started
+			})
+		}
+
+		if (entries.length > 0) {
+			saveWorklogsMutation.mutate(entries)
+		}
+	}, [pendingChanges, saveWorklogsMutation, projectKeyToResourceId])
 
 	// Handler for when an event is dragged to a new time/date
 	const handleEventDrop = useCallback(
@@ -1734,18 +1881,26 @@ export default function IndexPage(): React.ReactNode {
 						<div
 							className={cn(
 								'flex h-12 items-center justify-between rounded-lg border px-4 transition-all duration-200',
-								hasPendingChanges
-									? 'border-amber-500/30 bg-amber-500/5'
-									: 'border-transparent bg-muted/30'
+								saveWorklogsMutation.isPending
+									? 'border-primary/30 bg-primary/5'
+									: 'border-amber-500/30 bg-amber-500/5'
 							)}
 						>
 							<div className='flex items-center gap-3'>
-								<div className='flex items-center gap-2 text-amber-600'>
-									<PencilIcon className='size-3.5' />
-									<span className='text-sm font-medium'>
-										{pendingChanges.size} unsaved {pendingChanges.size === 1 ? 'change' : 'changes'}
-									</span>
-								</div>
+								{saveWorklogsMutation.isPending ? (
+									<div className='flex items-center gap-2 text-primary'>
+										<Loader2Icon className='size-3.5 animate-spin' />
+										<span className='text-sm font-medium'>Saving changes...</span>
+									</div>
+								) : (
+									<div className='flex items-center gap-2 text-amber-600'>
+										<PencilIcon className='size-3.5' />
+										<span className='text-sm font-medium'>
+											{pendingChanges.size} unsaved{' '}
+											{pendingChanges.size === 1 ? 'change' : 'changes'}
+										</span>
+									</div>
+								)}
 							</div>
 
 							<div className='flex items-center gap-2'>
@@ -1753,17 +1908,24 @@ export default function IndexPage(): React.ReactNode {
 									variant='ghost'
 									size='sm'
 									onClick={discardPendingChanges}
-									className='h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground'
+									disabled={saveWorklogsMutation.isPending}
+									className='h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50'
 								>
 									<XIcon className='size-3.5' />
 									Discard
 								</Button>
 								<Button
 									size='sm'
+									onClick={handleSaveChanges}
+									disabled={saveWorklogsMutation.isPending}
 									className='h-8 gap-1.5 text-xs'
 								>
-									<SaveIcon className='size-3.5' />
-									Save
+									{saveWorklogsMutation.isPending ? (
+										<Loader2Icon className='size-3.5 animate-spin' />
+									) : (
+										<SaveIcon className='size-3.5' />
+									)}
+									{saveWorklogsMutation.isPending ? 'Saving...' : 'Save'}
 								</Button>
 							</div>
 						</div>
