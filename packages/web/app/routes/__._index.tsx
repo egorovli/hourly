@@ -1763,7 +1763,9 @@ export default function IndexPage(): React.ReactNode {
 	// Handler when user saves an event with a selected issue from the sheet
 	const handleEventSheetSave = useCallback(
 		(eventId: string, issue: JiraIssueSearchResult) => {
-			if (!editingEvent) return
+			if (!editingEvent) {
+				return
+			}
 
 			const projectKey = getProjectKeyFromIssueKey(issue.key)
 			const { backgroundColor, borderColor } = getWorklogColors(currentUserId, projectKey)
