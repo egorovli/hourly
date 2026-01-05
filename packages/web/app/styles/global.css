@@ -152,7 +152,7 @@
 
 		/* Selection highlight more visible */
 		.fc .fc-highlight {
-			background: var(--color-primary) !important;
+			background: var(--color-primary);
 			opacity: 0.15;
 		}
 	}
