@@ -1100,19 +1100,28 @@ export class AtlassianClient {
 		const quoteJqlValue = (value: string) =>
 			`"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
 
-		// Filter by projects (required for meaningful results)
-		if (projectKeys && projectKeys.length > 0) {
+		// Text search takes priority when provided
+		const trimmedQuery = query?.trim()
+
+		// Check if query looks like an issue key (e.g., "PROJ-123")
+		// Issue key pattern: one or more uppercase letters, dash, one or more digits
+		const isIssueKey = trimmedQuery && /^[A-Z]+-\d+$/i.test(trimmedQuery)
+
+		// Determine if we should apply filters or bypass them
+		// When searching by issue key or text, bypass date range and user filters
+		// to allow users to find any issue regardless of current filter state
+		const hasTextSearch = trimmedQuery && trimmedQuery.length > 0
+
+		// Filter by projects (always applied for security/access control)
+		// Exception: when searching by issue key, we don't restrict by project
+		// because the user is explicitly looking for a specific issue
+		if (!isIssueKey && projectKeys && projectKeys.length > 0) {
 			jqlParts.push(`project in (${projectKeys.map(quoteJqlValue).join(',')})`)
 		}
 
-		// Text search takes priority when provided
-		const trimmedQuery = query?.trim()
 		if (trimmedQuery && trimmedQuery.length > 0) {
-			// Check if query looks like an issue key (e.g., "PROJ-123")
-			const isIssueKey = /^[A-Z]+-\d+$/i.test(trimmedQuery)
-
 			if (isIssueKey) {
-				// Direct key match
+				// Direct key match - no project filter needed, key is globally unique
 				jqlParts.push(`key = ${quoteJqlValue(trimmedQuery.toUpperCase())}`)
 			} else {
 				// Full-text search on summary and description
@@ -1124,20 +1133,22 @@ export class AtlassianClient {
 			jqlParts.push(`(assignee in (${userList}) OR reporter in (${userList}))`)
 		}
 
-		// Apply date range filter - find issues with activity in the date range
-		// Uses multiple date fields to catch all relevant issues:
-		// - created: issue was created in the range
-		// - updated: issue had any update in the range
-		// - resolutiondate: issue was resolved in the range
-		// - worklogDate: worklogs were added in the range
-		// - duedate: issue is due in the range
-		if (dateFrom || dateTo) {
+		// Apply date range filter ONLY when not searching by text
+		// When user is actively searching, they want to find issues regardless of date
+		// Date range is only useful for browsing/relevance mode (no query)
+		if (!hasTextSearch && (dateFrom || dateTo)) {
 			const fromDate = dateFrom ? DateTime.fromISO(dateFrom) : undefined
 			const toDate = dateTo ? DateTime.fromISO(dateTo) : undefined
 			const fromStr = fromDate?.isValid ? quoteJqlValue(fromDate.toFormat('yyyy-MM-dd')) : undefined
 			const toStr = toDate?.isValid ? quoteJqlValue(toDate.toFormat('yyyy-MM-dd')) : undefined
 
 			if (fromStr || toStr) {
+				// Uses multiple date fields to catch all relevant issues:
+				// - created: issue was created in the range
+				// - updated: issue had any update in the range
+				// - resolutiondate: issue was resolved in the range
+				// - worklogDate: worklogs were added in the range
+				// - duedate: issue is due in the range
 				const dateFields = ['created', 'updated', 'resolutiondate', 'worklogDate', 'duedate']
 				const orConditions: string[] = []
 
