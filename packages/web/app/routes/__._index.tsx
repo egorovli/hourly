@@ -1,4 +1,5 @@
 import type {
+	DateSelectArg,
 	DatesSetArg,
 	EventContentArg,
 	EventDropArg,
@@ -6,6 +7,8 @@ import type {
 	FormatterInput,
 	PluginDef
 } from '@fullcalendar/core'
+
+import type { EventDetails } from '~/components/event-details-sheet.tsx'
 
 import type {
 	AccessibleResource,
@@ -93,6 +96,9 @@ import {
 } from '~/components/shadcn/ui/command.tsx'
 
 import { CalendarEventContextMenu } from '~/components/calendar-event-context-menu.tsx'
+import { EventDetailsSheet } from '~/components/event-details-sheet.tsx'
+import { SwipeableCalendarWrapper } from '~/components/swipeable-calendar-wrapper.tsx'
+import { useMobileCalendar } from '~/hooks/use-mobile-calendar.ts'
 
 const FullCalendar = lazy(() => import('@fullcalendar/react'))
 
@@ -1091,6 +1097,23 @@ export default function IndexPage(): React.ReactNode {
 		}
 	})
 
+	// Mobile calendar state and helpers
+	const mobileCalendar = useMobileCalendar({
+		calendarApi: calendarRef.current?.getApi(),
+		onViewChange: view => {
+			// Collapse filters on mobile for more space
+			if (view === 'mobile') {
+				setIsFiltersOpen(false)
+			}
+		}
+	})
+
+	// Event details sheet state (for creating/editing events with issue linking)
+	const [eventSheetOpen, setEventSheetOpen] = useState(false)
+	const [editingEvent, setEditingEvent] = useState<EventDetails | undefined>(undefined)
+	const [eventSheetSearchQuery, setEventSheetSearchQuery] = useState('')
+	const deferredEventSheetSearchQuery = useDeferredValue(eventSheetSearchQuery)
+
 	const resourcesQuery = useResourcesQuery({
 		userId: currentUserId
 	})
@@ -1714,6 +1737,122 @@ export default function IndexPage(): React.ReactNode {
 		[currentUserId, updatePendingChange, layoutLoaderData?.user]
 	)
 
+	// Handler for date selection (tap-and-hold or click-and-drag to create events)
+	const handleDateSelect = useCallback((selectInfo: DateSelectArg) => {
+		const { start, end } = selectInfo
+
+		// Generate a temporary ID for the new event
+		const tempId = nanoid()
+
+		// Calculate duration
+		const timeSpentSeconds = Math.round((end.getTime() - start.getTime()) / 1000)
+
+		// Open the event details sheet to let user select an issue
+		setEditingEvent({
+			id: tempId,
+			start,
+			end,
+			isNew: true
+		})
+		setEventSheetOpen(true)
+
+		// Clear the calendar selection
+		calendarRef.current?.getApi().unselect()
+	}, [])
+
+	// Handler when user saves an event with a selected issue from the sheet
+	const handleEventSheetSave = useCallback(
+		(eventId: string, issue: JiraIssueSearchResult) => {
+			if (!editingEvent) return
+
+			const projectKey = getProjectKeyFromIssueKey(issue.key)
+			const { backgroundColor, borderColor } = getWorklogColors(currentUserId, projectKey)
+			const timeSpentSeconds = Math.round(
+				(editingEvent.end.getTime() - editingEvent.start.getTime()) / 1000
+			)
+
+			const newEvent: CalendarEvent = {
+				id: eventId,
+				title: `${issue.key} ${issue.fields.summary}`,
+				start: editingEvent.start.toISOString(),
+				end: editingEvent.end,
+				editable: true,
+				startEditable: true,
+				durationEditable: true,
+				classNames: ['worklog-event'],
+				backgroundColor,
+				borderColor,
+				extendedProps: {
+					worklogEntryId: eventId,
+					issueId: issue.id,
+					issueKey: issue.key,
+					issueSummary: issue.fields.summary,
+					authorAccountId: currentUserId,
+					authorDisplayName: layoutLoaderData?.user.name ?? 'You',
+					authorEmail: layoutLoaderData?.user.email,
+					authorAvatarUrl: layoutLoaderData?.user.picture,
+					projectKey,
+					timeSpentSeconds,
+					started: editingEvent.start.toISOString(),
+					isNew: true
+				}
+			}
+
+			updatePendingChange(eventId, newEvent, 'create')
+			setEditingEvent(undefined)
+			setEventSheetSearchQuery('')
+
+			toast.success('Worklog created', {
+				description: `${issue.key}: ${issue.fields.summary}`
+			})
+		},
+		[editingEvent, currentUserId, layoutLoaderData?.user, updatePendingChange]
+	)
+
+	// Handler when user cancels event creation from the sheet
+	const handleEventSheetCancel = useCallback((eventId: string) => {
+		setEditingEvent(undefined)
+		setEventSheetSearchQuery('')
+	}, [])
+
+	// Handler for tapping on an existing event (to change its linked issue)
+	const handleEventClick = useCallback(
+		(info: {
+			event: {
+				id: string
+				start: Date | null
+				end: Date | null
+				extendedProps: Record<string, unknown>
+			}
+		}) => {
+			const { event } = info
+			const authorAccountId = event.extendedProps['authorAccountId'] as string | undefined
+
+			// Only allow editing own events
+			if (authorAccountId !== currentUserId) {
+				return
+			}
+
+			const issueKey = event.extendedProps['issueKey'] as string | undefined
+			const issueSummary = event.extendedProps['issueSummary'] as string | undefined
+
+			if (!event.start || !event.end) {
+				return
+			}
+
+			setEditingEvent({
+				id: event.id,
+				start: event.start,
+				end: event.end,
+				issueKey,
+				issueSummary,
+				isNew: false
+			})
+			setEventSheetOpen(true)
+		},
+		[currentUserId]
+	)
+
 	const resourcesLoading = resourcesQuery.isPending || resourcesQuery.isFetching
 	const projectsLoading = projectsQuery.isPending || projectsQuery.isFetching
 
@@ -1728,7 +1867,8 @@ export default function IndexPage(): React.ReactNode {
 	}
 
 	return (
-		<div className='flex flex-col h-full gap-4 p-4'>
+		<div className='flex flex-col h-full gap-4 p-4 pb-safe'>
+			{/* Filters - collapsible, auto-collapsed on mobile */}
 			<Collapsible
 				open={isFiltersOpen}
 				onOpenChange={setIsFiltersOpen}
@@ -1811,229 +1951,248 @@ export default function IndexPage(): React.ReactNode {
 					</div>
 				</CollapsibleContent>
 			</Collapsible>
-			<div className='flex flex-row gap-4 grow'>
-				<div className='flex w-80 shrink-0 flex-col gap-3 rounded-lg border bg-muted/30 p-3'>
-					{/* Issues Panel Header */}
-					<div className='flex items-center justify-between'>
-						<h2 className='text-lg font-semibold text-foreground'>Issues</h2>
-						<DropdownMenu>
-							<DropdownMenuTrigger asChild>
+			<div className='flex flex-row gap-4 grow min-h-0'>
+				{/* Issues Sidebar - hidden on mobile */}
+				{!mobileCalendar.isMobile && (
+					<div className='flex w-80 shrink-0 flex-col gap-3 rounded-lg border bg-muted/30 p-3'>
+						{/* Issues Panel Header */}
+						<div className='flex items-center justify-between'>
+							<h2 className='text-lg font-semibold text-foreground'>Issues</h2>
+							<DropdownMenu>
+								<DropdownMenuTrigger asChild>
+									<Button
+										variant='ghost'
+										size='icon-sm'
+										className='size-7'
+									>
+										<MoreVerticalIcon className='size-4' />
+										<span className='sr-only'>Options</span>
+									</Button>
+								</DropdownMenuTrigger>
+								<DropdownMenuContent align='end'>
+									<DropdownMenuItem
+										disabled
+										className='gap-2'
+									>
+										<UsersIcon className='size-4' />
+										<span>Prioritize by user</span>
+										<Badge
+											variant='secondary'
+											className='ml-auto text-[10px]'
+										>
+											Soon
+										</Badge>
+									</DropdownMenuItem>
+								</DropdownMenuContent>
+							</DropdownMenu>
+						</div>
+
+						{/* Search Input */}
+						<div className='relative'>
+							<SearchIcon className='absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground' />
+							<Input
+								type='search'
+								placeholder='Search by key or text...'
+								className='pl-8 pr-8'
+								value={issueSearchQuery}
+								onChange={e => setIssueSearchQuery(e.target.value)}
+							/>
+							{issueSearchQuery.length > 0 && (
 								<Button
+									type='button'
 									variant='ghost'
 									size='icon-sm'
-									className='size-7'
+									className='absolute right-1 top-1/2 size-6 -translate-y-1/2'
+									onClick={() => setIssueSearchQuery('')}
 								>
-									<MoreVerticalIcon className='size-4' />
-									<span className='sr-only'>Options</span>
+									<XIcon className='size-3.5' />
+									<span className='sr-only'>Clear search</span>
 								</Button>
-							</DropdownMenuTrigger>
-							<DropdownMenuContent align='end'>
-								<DropdownMenuItem
-									disabled
-									className='gap-2'
-								>
-									<UsersIcon className='size-4' />
-									<span>Prioritize by user</span>
-									<Badge
-										variant='secondary'
-										className='ml-auto text-[10px]'
-									>
-										Soon
-									</Badge>
-								</DropdownMenuItem>
-							</DropdownMenuContent>
-						</DropdownMenu>
-					</div>
+							)}
+						</div>
 
-					{/* Search Input */}
-					<div className='relative'>
-						<SearchIcon className='absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground' />
-						<Input
-							type='search'
-							placeholder='Search by key or text...'
-							className='pl-8 pr-8'
-							value={issueSearchQuery}
-							onChange={e => setIssueSearchQuery(e.target.value)}
-						/>
-						{issueSearchQuery.length > 0 && (
-							<Button
-								type='button'
-								variant='ghost'
-								size='icon-sm'
-								className='absolute right-1 top-1/2 size-6 -translate-y-1/2'
-								onClick={() => setIssueSearchQuery('')}
-							>
-								<XIcon className='size-3.5' />
-								<span className='sr-only'>Clear search</span>
-							</Button>
+						{/* Issues List */}
+						{issuesLoading ? (
+							<div className='flex flex-col gap-2 py-2'>
+								<IssueItemSkeleton />
+								<IssueItemSkeleton />
+								<IssueItemSkeleton />
+								<IssueItemSkeleton />
+								<IssueItemSkeleton />
+							</div>
+						) : issues.length === 0 ? (
+							<div className='flex flex-col items-center justify-center py-12 px-4 text-center'>
+								<div className='mb-3 flex size-12 items-center justify-center rounded-full bg-muted'>
+									<SearchIcon className='size-6 text-muted-foreground' />
+								</div>
+								<p className='mb-1 text-sm font-medium text-foreground'>
+									{issueSearchQuery.length > 0 ? 'No matching issues' : 'No issues found'}
+								</p>
+								<p className='text-xs text-muted-foreground'>
+									{issueSearchQuery.length > 0
+										? 'Try adjusting your search query'
+										: selectedProjectIds.length === 0
+											? 'Select projects to see issues'
+											: selectedUserIds.length === 0
+												? 'Select users to see their issues'
+												: 'No issues match the current filters'}
+								</p>
+							</div>
+						) : (
+							<Virtuoso
+								data={issues}
+								totalCount={issues.length}
+								itemContent={(index, issue) => {
+									invariant(calendar.Draggable, 'Draggable constructor is not defined')
+
+									return (
+										<div className='pb-2'>
+											<IssueItem
+												issue={issue}
+												isDragged={false}
+												components={{
+													Draggable: calendar.Draggable
+												}}
+											/>
+										</div>
+									)
+								}}
+							/>
 						)}
 					</div>
-
-					{/* Issues List */}
-					{issuesLoading ? (
-						<div className='flex flex-col gap-2 py-2'>
-							<IssueItemSkeleton />
-							<IssueItemSkeleton />
-							<IssueItemSkeleton />
-							<IssueItemSkeleton />
-							<IssueItemSkeleton />
-						</div>
-					) : issues.length === 0 ? (
-						<div className='flex flex-col items-center justify-center py-12 px-4 text-center'>
-							<div className='mb-3 flex size-12 items-center justify-center rounded-full bg-muted'>
-								<SearchIcon className='size-6 text-muted-foreground' />
-							</div>
-							<p className='mb-1 text-sm font-medium text-foreground'>
-								{issueSearchQuery.length > 0 ? 'No matching issues' : 'No issues found'}
-							</p>
-							<p className='text-xs text-muted-foreground'>
-								{issueSearchQuery.length > 0
-									? 'Try adjusting your search query'
-									: selectedProjectIds.length === 0
-										? 'Select projects to see issues'
-										: selectedUserIds.length === 0
-											? 'Select users to see their issues'
-											: 'No issues match the current filters'}
-							</p>
-						</div>
-					) : (
-						<Virtuoso
-							data={issues}
-							totalCount={issues.length}
-							itemContent={(index, issue) => {
-								invariant(calendar.Draggable, 'Draggable constructor is not defined')
-
-								return (
-									<div className='pb-2'>
-										<IssueItem
-											issue={issue}
-											isDragged={false}
-											components={{
-												Draggable: calendar.Draggable
-											}}
-										/>
-									</div>
-								)
-							}}
-						/>
-					)}
-				</div>
-				<div className='flex flex-col grow gap-3'>
-					{/* Calendar Navigation */}
-					<div className='flex h-10 items-center justify-between'>
+				)}
+				<div className='flex flex-col grow gap-3 min-h-0'>
+					{/* Calendar Navigation - responsive */}
+					<div className='flex h-12 md:h-10 items-center justify-between'>
 						<div className='flex items-center gap-1'>
 							<Button
 								variant='ghost'
 								size='icon-sm'
-								onClick={() => calendarRef.current?.getApi().prev()}
-								className='size-8'
+								onClick={mobileCalendar.navigatePrev}
+								className='size-10 md:size-8'
 							>
-								<ChevronLeftIcon className='size-4' />
+								<ChevronLeftIcon className='size-5 md:size-4' />
 							</Button>
 							<Button
 								variant='ghost'
 								size='icon-sm'
-								onClick={() => calendarRef.current?.getApi().next()}
-								className='size-8'
+								onClick={mobileCalendar.navigateNext}
+								className='size-10 md:size-8'
 							>
-								<ChevronRightIcon className='size-4' />
+								<ChevronRightIcon className='size-5 md:size-4' />
 							</Button>
 							<Button
 								variant='ghost'
 								size='sm'
-								onClick={() => calendarRef.current?.getApi().today()}
-								className='ml-1 h-8 text-xs'
+								onClick={mobileCalendar.navigateToday}
+								className='ml-1 h-10 md:h-8 text-sm md:text-xs px-4 md:px-3'
 							>
 								Today
 							</Button>
 						</div>
-						<span className='text-sm font-medium text-foreground'>{calendarTitle}</span>
-						<div className='flex w-32 items-center justify-end'>
+						<span className='text-base md:text-sm font-medium text-foreground'>
+							{mobileCalendar.isMobile ? mobileCalendar.formattedDate : calendarTitle}
+						</span>
+						<div className='flex w-10 md:w-32 items-center justify-end'>
 							{entriesLoading && (
 								<Loader2Icon className='size-4 animate-spin text-muted-foreground' />
 							)}
 						</div>
 					</div>
 
-					<Suspense fallback={<div>Loading...</div>}>
-						<FullCalendar
-							ref={calendarRef}
-							plugins={calendar.plugins}
-							initialView='timeGridWeek'
-							headerToolbar={false}
-							height='100%'
-							dayHeaderFormat={dayHeaderFormat}
-							events={displayEvents}
-							eventTimeFormat={{
-								hour: '2-digit',
-								minute: '2-digit',
-								hour12: false
-							}}
-							eventContent={content => (
-								<CalendarEventContent
-									{...content}
-									currentUserId={currentUserId}
-									onDelete={markEventAsDeleted}
-									getJiraBaseUrl={getJiraBaseUrl}
-								/>
-							)}
-							datesSet={(args: DatesSetArg) => {
-								setFromDate(args.view.currentStart)
-								setToDate(args.view.currentEnd)
-								setCalendarTitle(args.view.title)
-							}}
-							firstDay={1}
-							allDaySlot={false}
-							nowIndicator
-							editable
-							droppable
-							// TODO: only enable when "edit" mode is enabled
-							// selectable
-							// selectMirror
-							eventAdd={info => {
-								// console.log('Event add', info)
-							}}
-							eventChange={info => {
-								// console.log('Event change', info)
-							}}
-							eventRemove={info => {
-								// console.log('Event remove', info)
-							}}
-							eventsSet={events => {
-								// console.log('Events set', events)
-							}}
-							eventClick={info => {
-								// console.log('Event click', info)
-							}}
-							eventMouseEnter={info => {
-								// console.log('Event mouse enter', info)
-							}}
-							eventMouseLeave={info => {
-								// console.log('Event mouse leave', info)
-							}}
-							eventDragStart={info => {
-								// console.log('Event drag start', info)
-							}}
-							eventDragStop={info => {
-								// console.log('Event drag stop', info)
-							}}
-							eventDrop={handleEventDrop}
-							drop={info => {
-								// console.log('Drop', info)
-							}}
-							eventReceive={handleEventReceive}
-							eventLeave={info => {
-								// console.log('Event leave', info)
-							}}
-							eventResizeStart={info => {
-								// console.log('Event resize start', info)
-							}}
-							eventResizeStop={info => {
-								// console.log('Event resize stop', info)
-							}}
-							eventResize={handleEventResize}
-						/>
-					</Suspense>
+					{/* Calendar with swipe support on mobile */}
+					<SwipeableCalendarWrapper
+						enabled={mobileCalendar.isMobile}
+						onSwipePrev={mobileCalendar.navigatePrev}
+						onSwipeNext={mobileCalendar.navigateNext}
+						swipeDirection={mobileCalendar.swipeDirection}
+						onSwipeDirectionChange={mobileCalendar.setSwipeDirection}
+						isAnimating={mobileCalendar.isAnimating}
+						onAnimatingChange={mobileCalendar.setIsAnimating}
+						className='flex-1 min-h-0'
+					>
+						<Suspense fallback={<div>Loading...</div>}>
+							<FullCalendar
+								ref={calendarRef}
+								plugins={calendar.plugins}
+								initialView={mobileCalendar.calendarOptions.initialView}
+								headerToolbar={false}
+								height='100%'
+								dayHeaderFormat={dayHeaderFormat}
+								events={displayEvents}
+								eventTimeFormat={{
+									hour: '2-digit',
+									minute: '2-digit',
+									hour12: false
+								}}
+								eventContent={content => (
+									<CalendarEventContent
+										{...content}
+										currentUserId={currentUserId}
+										onDelete={markEventAsDeleted}
+										getJiraBaseUrl={getJiraBaseUrl}
+									/>
+								)}
+								datesSet={(args: DatesSetArg) => {
+									setFromDate(args.view.currentStart)
+									setToDate(args.view.currentEnd)
+									setCalendarTitle(args.view.title)
+								}}
+								firstDay={1}
+								allDaySlot={false}
+								nowIndicator
+								editable
+								droppable
+								selectable={mobileCalendar.calendarOptions.selectable}
+								selectMirror={mobileCalendar.calendarOptions.selectMirror}
+								selectLongPressDelay={mobileCalendar.calendarOptions.selectLongPressDelay}
+								eventLongPressDelay={mobileCalendar.calendarOptions.eventLongPressDelay}
+								longPressDelay={mobileCalendar.calendarOptions.longPressDelay}
+								select={handleDateSelect}
+								// selectMirror
+								eventAdd={info => {
+									// console.log('Event add', info)
+								}}
+								eventChange={info => {
+									// console.log('Event change', info)
+								}}
+								eventRemove={info => {
+									// console.log('Event remove', info)
+								}}
+								eventsSet={events => {
+									// console.log('Events set', events)
+								}}
+								eventClick={handleEventClick}
+								eventMouseEnter={info => {
+									// console.log('Event mouse enter', info)
+								}}
+								eventMouseLeave={info => {
+									// console.log('Event mouse leave', info)
+								}}
+								eventDragStart={info => {
+									// console.log('Event drag start', info)
+								}}
+								eventDragStop={info => {
+									// console.log('Event drag stop', info)
+								}}
+								eventDrop={handleEventDrop}
+								drop={info => {
+									// console.log('Drop', info)
+								}}
+								eventReceive={handleEventReceive}
+								eventLeave={info => {
+									// console.log('Event leave', info)
+								}}
+								eventResizeStart={info => {
+									// console.log('Event resize start', info)
+								}}
+								eventResizeStop={info => {
+									// console.log('Event resize stop', info)
+								}}
+								eventResize={handleEventResize}
+							/>
+						</Suspense>
+					</SwipeableCalendarWrapper>
 
 					{/* Calendar Toolbar */}
 					{hasPendingChanges && (
@@ -2091,6 +2250,20 @@ export default function IndexPage(): React.ReactNode {
 					)}
 				</div>
 			</div>
+
+			{/* Event Details Sheet for creating/editing events */}
+			<EventDetailsSheet
+				open={eventSheetOpen}
+				onOpenChange={setEventSheetOpen}
+				event={editingEvent}
+				issues={issues}
+				isLoadingIssues={issuesLoading}
+				searchQuery={eventSheetSearchQuery}
+				onSearchQueryChange={setEventSheetSearchQuery}
+				onSave={handleEventSheetSave}
+				onCancel={handleEventSheetCancel}
+				isMobile={mobileCalendar.isMobile}
+			/>
 		</div>
 	)
 }
