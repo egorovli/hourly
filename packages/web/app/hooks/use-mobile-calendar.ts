@@ -27,8 +27,6 @@ export interface MobileCalendarOptions {
 	longPressDelay: number
 }
 
-export type SwipeDirection = 'left' | 'right' | undefined
-
 export interface UseMobileCalendarResult {
 	isMobile: boolean
 	currentView: 'timeGridDay' | 'timeGridWeek'
@@ -37,10 +35,6 @@ export interface UseMobileCalendarResult {
 	navigateToday: () => void
 	currentDate: Date | undefined
 	calendarOptions: MobileCalendarOptions
-	swipeDirection: SwipeDirection
-	setSwipeDirection: (direction: SwipeDirection) => void
-	isAnimating: boolean
-	setIsAnimating: (animating: boolean) => void
 	formattedDate: string
 }
 
@@ -55,8 +49,6 @@ export function useMobileCalendar(options: UseMobileCalendarOptions): UseMobileC
 	const isMobile = useIsMobile()
 
 	const [currentDate, setCurrentDate] = useState<Date | undefined>(undefined)
-	const [swipeDirection, setSwipeDirection] = useState<SwipeDirection>(undefined)
-	const [isAnimating, setIsAnimating] = useState(false)
 
 	const currentView = useMemo(() => {
 		return isMobile ? MOBILE_CALENDAR_VIEW : DESKTOP_CALENDAR_VIEW
@@ -98,31 +90,28 @@ export function useMobileCalendar(options: UseMobileCalendarOptions): UseMobileC
 	}, [calendarApi])
 
 	const navigatePrev = useCallback(() => {
-		if (calendarApi === undefined || isAnimating) {
+		if (calendarApi === undefined) {
 			return
 		}
-		setSwipeDirection('right')
 		calendarApi.prev()
 		setCurrentDate(calendarApi.getDate())
-	}, [calendarApi, isAnimating])
+	}, [calendarApi])
 
 	const navigateNext = useCallback(() => {
-		if (calendarApi === undefined || isAnimating) {
+		if (calendarApi === undefined) {
 			return
 		}
-		setSwipeDirection('left')
 		calendarApi.next()
 		setCurrentDate(calendarApi.getDate())
-	}, [calendarApi, isAnimating])
+	}, [calendarApi])
 
 	const navigateToday = useCallback(() => {
-		if (calendarApi === undefined || isAnimating) {
+		if (calendarApi === undefined) {
 			return
 		}
 		calendarApi.today()
 		setCurrentDate(calendarApi.getDate())
-		setSwipeDirection(undefined)
-	}, [calendarApi, isAnimating])
+	}, [calendarApi])
 
 	const formattedDate = useMemo(() => {
 		if (currentDate === undefined) {
@@ -161,10 +150,6 @@ export function useMobileCalendar(options: UseMobileCalendarOptions): UseMobileC
 		navigateToday,
 		currentDate,
 		calendarOptions,
-		swipeDirection,
-		setSwipeDirection,
-		isAnimating,
-		setIsAnimating,
 		formattedDate
 	}
 }

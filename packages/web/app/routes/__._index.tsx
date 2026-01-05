@@ -2102,15 +2102,9 @@ export default function IndexPage(): React.ReactNode {
 						</div>
 					</div>
 
-					{/* Calendar with swipe support on mobile */}
+					{/* Calendar wrapper with proper touch handling */}
 					<SwipeableCalendarWrapper
 						enabled={mobileCalendar.isMobile}
-						onSwipePrev={mobileCalendar.navigatePrev}
-						onSwipeNext={mobileCalendar.navigateNext}
-						swipeDirection={mobileCalendar.swipeDirection}
-						onSwipeDirectionChange={mobileCalendar.setSwipeDirection}
-						isAnimating={mobileCalendar.isAnimating}
-						onAnimatingChange={mobileCalendar.setIsAnimating}
 						className='flex-1 min-h-0'
 					>
 						<Suspense fallback={<div>Loading...</div>}>
@@ -2145,6 +2139,7 @@ export default function IndexPage(): React.ReactNode {
 								nowIndicator
 								editable
 								droppable
+								dragScroll={false}
 								selectable={mobileCalendar.calendarOptions.selectable}
 								selectMirror={mobileCalendar.calendarOptions.selectMirror}
 								selectLongPressDelay={mobileCalendar.calendarOptions.selectLongPressDelay}
