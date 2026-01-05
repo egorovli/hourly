@@ -433,6 +433,8 @@ export class AtlassianClient {
 					'Accept': 'application/json',
 					'Authorization': `Bearer ${this.accessToken}`,
 					'User-Agent': this.userAgent,
+					'Cache-Control': 'no-cache, no-store, must-revalidate',
+					'Pragma': 'no-cache',
 					...(headers ?? {})
 				}
 			})
@@ -481,6 +483,8 @@ export class AtlassianClient {
 						'Authorization': `Bearer ${this.accessToken}`,
 						'Content-Type': 'application/json',
 						'User-Agent': this.userAgent,
+						'Cache-Control': 'no-cache, no-store, must-revalidate',
+						'Pragma': 'no-cache',
 						...(headers ?? {})
 					},
 					body: JSON.stringify({
@@ -566,6 +570,8 @@ export class AtlassianClient {
 						'Authorization': `Bearer ${this.accessToken}`,
 						'Content-Type': 'application/json',
 						'User-Agent': this.userAgent,
+						'Cache-Control': 'no-cache, no-store, must-revalidate',
+						'Pragma': 'no-cache',
 						...(headers ?? {})
 					},
 					body: JSON.stringify({

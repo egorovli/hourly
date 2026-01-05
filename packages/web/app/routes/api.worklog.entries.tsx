@@ -194,7 +194,14 @@ export const loader = withRequestContext(async function loader({ request }: Rout
 
 	const worklogEntries = worklogPages.flatMap(page => page.entries)
 
-	return worklogEntries
+	// Return with no-cache headers to prevent stale data
+	return Response.json(worklogEntries, {
+		headers: {
+			'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
+			'Pragma': 'no-cache',
+			'Expires': '0'
+		}
+	})
 })
 
 interface EnsureProjectsAccessibleParams {
