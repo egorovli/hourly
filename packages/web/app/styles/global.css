@@ -5,7 +5,7 @@
 @import "./shadcn.css";
 @import "./inter.css";
 
-/* @import "./fullcalendar.css"; */
+@import "./fullcalendar.css";
 
 @plugin "@tailwindcss/forms" {
 	strategy: "class";
@@ -105,105 +105,6 @@
 
 			font-optical-sizing: auto;
 		}
-	}
-}
-
-/* FullCalendar Mobile Styles */
-@layer components {
-	/* Mobile-optimized calendar event sizing */
-	@media (max-width: 767px) {
-		/* Larger time slots for easier touch interaction */
-		.fc .fc-timegrid-slot {
-			height: 3rem; /* 48px - touch-friendly */
-		}
-
-		/* Larger event content for readability */
-		.fc .fc-timegrid-event {
-			min-height: 2.5rem;
-		}
-
-		/* Larger event text */
-		.fc .fc-event-title {
-			font-size: 0.875rem;
-			line-height: 1.25;
-		}
-
-		/* Hide day header abbreviated text, show full on mobile */
-		.fc .fc-col-header-cell-cushion {
-			font-size: 0.875rem;
-			font-weight: 600;
-			padding: 0.75rem 0.25rem;
-		}
-
-		/* Time column smaller on mobile */
-		.fc .fc-timegrid-axis {
-			width: 3rem;
-		}
-
-		.fc .fc-timegrid-axis-cushion {
-			font-size: 0.625rem;
-		}
-
-		/* Better scrolling behavior on touch */
-		.fc .fc-scroller {
-			-webkit-overflow-scrolling: touch;
-			overscroll-behavior: contain;
-		}
-
-		/* Selection highlight more visible */
-		.fc .fc-highlight {
-			background: var(--color-primary);
-			opacity: 0.15;
-		}
-	}
-
-	/* Desktop calendar refinements */
-	@media (min-width: 768px) {
-		.fc .fc-timegrid-slot {
-			height: 2rem;
-		}
-	}
-
-	/* Worklog event styles */
-	.fc .worklog-event {
-		border-radius: 0.375rem;
-		border-width: 2px;
-		transition:
-			transform 0.1s ease,
-			box-shadow 0.1s ease;
-	}
-
-	.fc .worklog-event:hover {
-		transform: scale(1.01);
-		box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.1);
-	}
-
-	.fc .worklog-event--readonly {
-		opacity: 0.75;
-		cursor: default;
-	}
-
-	/* Touch feedback for events */
-	.fc .worklog-event:active {
-		transform: scale(0.98);
-	}
-
-	/* Selection mirror styling */
-	.fc .fc-event-mirror {
-		opacity: 0.6;
-		border-style: dashed;
-	}
-
-	/* Now indicator styling */
-	.fc .fc-timegrid-now-indicator-line {
-		border-color: var(--color-primary);
-		border-width: 2px;
-	}
-
-	.fc .fc-timegrid-now-indicator-arrow {
-		border-color: var(--color-primary);
-		border-top-color: transparent;
-		border-bottom-color: transparent;
 	}
 }
 
