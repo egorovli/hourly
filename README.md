@@ -1,5 +1,9 @@
 # Hourly
 
+[![Build](https://github.com/egorovli/hourly/actions/workflows/build.yml/badge.svg)](https://github.com/egorovli/hourly/actions/workflows/build.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+
 Reconcile GitLab commits with Jira worklogs. Drag-and-drop calendar for time tracking.
 
 **[Live Demo](https://hourly.egorov.io)**
@@ -14,6 +18,20 @@ Reconcile GitLab commits with Jira worklogs. Drag-and-drop calendar for time tra
 ## Stack
 
 Bun · React Router v7 · React 19 · TanStack Query · PostgreSQL · MikroORM · Tailwind · shadcn/ui
+
+## Project Structure
+
+```
+packages/
+├── web/           # Main React application
+│   ├── app/
+│   │   ├── components/   # UI components (shadcn/ui)
+│   │   ├── domain/       # Domain types and enums
+│   │   ├── lib/          # Core libraries (auth, clients, ORM)
+│   │   └── routes/       # React Router file-based routes
+│   └── db/migrations/    # Database migrations
+└── workers/       # Background workers (Go/Temporal)
+```
 
 ## Setup
 
@@ -51,6 +69,15 @@ bun run --filter @hourly/web build        # Production build
 bun run --filter @hourly/web types:check  # Type check
 bun run --filter @hourly/web lint:fix     # Lint + format
 ```
+
+## Contributing
+
+Contributions are welcome. Please read the [Contributing Guide](CONTRIBUTING.md) and follow our [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Community
+
+- [GitHub Issues](https://github.com/egorovli/hourly/issues) — bug reports, feature requests
+- [GitHub Discussions](https://github.com/egorovli/hourly/discussions) — questions, ideas, show & tell
 
 ## License
 
