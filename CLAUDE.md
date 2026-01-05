@@ -8,62 +8,64 @@ Guidance for Claude Code when working in this repo.
 
 ## Project
 - Purpose: reconcile GitLab commits ↔ Jira issues → monthly hours
-- Stack: Bun, React Router v7 (SSR), React 19, Tailwind 4, shadcn/ui, Radix, TanStack Query v5, SQLite + MikroORM 6, Remix Auth (Atlassian+GitLab), Zod, Conform, Jest/Testing Library/Playwright
-- **Troubleshooting**: If encountering errors, consult `TROUBLESHOOTING.md` for common issues and solutions
+- Stack: Bun, React Router v7 (SSR), React 19, Tailwind 4, shadcn/ui, Radix, TanStack Query v5, PostgreSQL + MikroORM 6, Remix Auth (Atlassian+GitLab), Zod, Jest/Testing Library
 
 ## Serena MCP Project Activation (Mandatory)
 - **Always activate Serena MCP project at the start of new agent interactions** (if not already activated)
-- Use `mcp_serena_activate_project` with project name `'egorovli/hourly'` or project path
+- Use `mcp_serena_activate_project` with project name `'hourly'`
 - Check activation status with `mcp_serena_get_current_config` if unsure
 - Serena provides semantic coding tools for efficient code exploration and editing
 
 ## Doc Search (Mandatory)
-Use all three before new/unknown APIs; cross‑check findings:
-1) Context7: resolve library → get docs (topic optional)
-2) DDG Search: articles/guides/StackOverflow
-3) Perplexity: AI w/ recency filter
-Example: infinite scroll → Context7 "useInfiniteQuery", DDG "React Router v7 infinite scroll", Perplexity recency="week".
+Use Context7 MCP before new/unknown APIs:
+- Context7: resolve library → get docs (topic optional)
+- Example: infinite scroll → Context7 "useInfiniteQuery"
 
 ## Commands
 ```bash
 bun install
 bun run --filter @hourly/web dev
 bun run --filter @hourly/web types:check
-bun run lint && bun run lint:fix
+bun run --filter @hourly/web lint
+bun run --filter @hourly/web lint:fix
 # DB (dbmate)
 cd packages/web && bun run db:migrate|db:rollback|db:new <name>|db:status
 # Build/Start
 bun run --filter @hourly/web build
 bun run --filter @hourly/web start
-# Tests
+# Tests (infrastructure ready, no tests yet)
 bun run --filter @hourly/web test
 ```
-## Architecture (FSD)
-- Layers: app → pages → widgets → features → entities → shared
-- Rules: only import downward; use barrel `index.ts` APIs; shared utils in `shared`
+
+## Architecture
+- `app/routes/` - React Router v7 file routes
+- `app/components/` - Shared UI components (includes `shadcn/ui` and `shadcn/blocks`)
+- `app/lib/` - Utilities, API clients, auth, ORM setup
+- `app/domain/` - Domain types, enums, schemas
+- `app/hooks/` - Custom React hooks
+- `app/styles/` - Global CSS files
 
 ## Key Patterns
 - Auth: dual OAuth (Atlassian, GitLab); merged DB session; routes `auth.$provider.*`
-- Data loading: resource routes return JSON for Query; handle auth, clients, pagination
-- Infinite queries: `useAutoLoadInfiniteQuery`, `AutoLoadProgress`, `getNextPageParam`
-- Worklog sync: idempotent sync strategy (delete existing, create new) in `jira.worklog.entries.tsx` action
-- Commit reconciliation: `calculate-worklogs-from-commits` groups commits by day/issue, splits workday
-- DB: MikroORM entities (Session, Token, Profile), `orm.em.fork()`, migrations in `db/migrations/`
+- Data loading: resource routes (`api.*.tsx`) return JSON for TanStack Query
+- Infinite queries: standard `useInfiniteQuery` with `getNextPageParam` option
+- Worklog sync: idempotent sync strategy (delete existing, create new) in `api.worklog.entries.tsx` action
+- DB: MikroORM entities (Session, Token, Profile, ProfileSessionConnection), `orm.em.fork()`, migrations in `db/migrations/`
 - API clients: `lib/atlassian/client.ts`, `lib/gitlab/client.ts` with token refresh
 
 ## Code Style (Biome)
-- Ignore formatting; run `bun run lint:fix` (or `bunx --bun biome check . --write --unsafe`)
+- Ignore formatting; run `bun run --filter @hourly/web lint:fix` (or `bunx --bun biome check . --write --unsafe`)
 - Conventions: no default exports (except routes/config/tests), single quotes, tabs (vw=2), 100 cols, import extensions, kebab-case, `~/` alias
 - TS strict; explicit return types for shared utils; domain types/schemas in `app/domain`
-- Prefer `undefined` over `null` for “no value” semantics
+- Prefer `undefined` over `null` for "no value" semantics
 - Avoid using the `Boolean(...)` constructor for casting; use explicit comparisons instead (e.g. `typeof name === 'string' && name.length > 0`)
 
 ## Import Ordering (Required)
 Follow eslint-plugin-import order rules. Group imports in this order, separated by blank lines:
 1. **Type imports** (`import type { ... } from ...`) - ALL type-only imports first
 2. **Node/Bun built-ins** - Built-in modules (e.g., `fs`, `path`)
-3. **External modules** - Dependencies from `node_modules` (e.g., `inversify`, `elysia`)
-4. **Local imports** - Relative imports from the project (e.g., `../domain/...`)
+3. **External modules** - Dependencies from `node_modules` (e.g., `react-router`, `@tanstack/react-query`)
+4. **Local imports** - Relative imports from the project (e.g., `~/lib/...`)
 
 **Rules:**
 - Always use `import type { ... }` syntax, NOT `import { type ... }`
@@ -74,46 +76,59 @@ Follow eslint-plugin-import order rules. Group imports in this order, separated 
 
 **Example:**
 ```ts
-import type { Project } from '../../domain/entities/project.js'
-import type { ProjectRepository } from '../../domain/repositories/project-repository.js'
+import type { JiraIssueSearchResult } from '~/lib/atlassian/issue.ts'
+import type { LoaderFunctionArgs } from 'react-router'
 
-import { injectable, inject } from 'inversify'
+import { useQuery } from '@tanstack/react-query'
 
-import { ValidationError } from '../../../core/errors/validation-error.js'
-import { ListProjectsUseCase } from '../use-cases/list-projects-use-case.js'
+import { AtlassianClient } from '~/lib/atlassian/client.ts'
 ```
 
 ### Dev-safe singleton
 ```ts
-export let connection: ConnectionType
+// Example from lib/redis/client.ts
+export let redis: Redis
 
-declare const global: { __connection?: typeof connection }
-function createConnection(): typeof connection { return new Connection(process.env.CONNECTION_URL ?? '') }
-if (process.env.NODE_ENV === 'development') { global.__connection ??= createConnection(); connection = global.__connection }
-if (process.env.NODE_ENV !== 'development') { connection = createConnection() }
+declare global {
+  var __redis: Redis | undefined
+}
+
+function createRedis(): Redis {
+  return new Redis(process.env.REDIS_URL)
+}
+
+if (process.env.NODE_ENV === 'development') {
+  global.__redis ??= createRedis()
+  redis = global.__redis
+} else {
+  redis = createRedis()
+}
 ```
+
 ## shadcn/ui
 ```bash
 cd packages/web
 bunx --bun shadcn@latest add <component>
 ```
-Post‑gen fixes: files in `app/shared/ui/shadcn/ui` (blocks in `app/shared/ui/shadcn/blocks`); replace `@/lib/utils` → `~/lib/util/index.ts`; ensure named exports; remove `@/` imports.
+Post‑gen fixes: files in `app/components/shadcn/ui` (blocks in `app/components/shadcn/blocks`); replace `@/lib/utils` → `~/lib/util/index.ts`; ensure named exports; remove `@/` imports.
 
 ## Env (.env in packages/web)
-- Atlassian: `ATLASSIAN_CLIENT_ID`, `ATLASSIAN_CLIENT_SECRET`, `ATLASSIAN_CALLBACK_URL`
-- GitLab: `GITLAB_APPLICATION_ID`, `GITLAB_APPLICATION_SECRET`, `GITLAB_CALLBACK_URL`, `GITLAB_BASE_URL`
-- Session: `SESSION_SECRET`
+- Database: `DATABASE_URL`
+- Redis: `REDIS_URL`
+- Atlassian: `OAUTH_ATLASSIAN_CLIENT_ID`, `OAUTH_ATLASSIAN_CLIENT_SECRET`, `OAUTH_ATLASSIAN_CALLBACK_URL`
+- GitLab: `OAUTH_GITLAB_CLIENT_ID`, `OAUTH_GITLAB_CLIENT_SECRET`, `OAUTH_GITLAB_CALLBACK_URL`, `OAUTH_GITLAB_BASE_URL` (optional)
+- Session: `SESSION_SECRET_{n}` (multiple secrets with numbered suffixes), `SESSION_SECURE` (`'true'` or `'false'`)
 
 ## Testing patterns
-- Co‑located tests; Testing Library queries over snapshots; React 19 globals OK
+- Infrastructure ready (Jest + Testing Library); no tests written yet
+- Co‑locate `*.test.tsx` files; use Testing Library queries over snapshots
 - Jest config: `jest.config.ts`; run with `bun run --filter @hourly/web test`
 
 ## Notes
 - Route naming: `__.tsx` root layout; `__._index.tsx` nested index; `$provider` params
-- Calendar: Uses `react-big-calendar` with drag-and-drop addon; Luxon localizer; custom toolbar/event components
+- Calendar: Uses `@fullcalendar/react` v6 with timegrid/interaction plugins; lazy-loaded; custom toolbar/event components
 - Sessions: DB‑backed `createSessionStorage` with expiration/cleanup
 - OAuth refresh: automatic; refresh tokens in DB; check expiry
-- Pagination: cursor/offset; `PAGE_SIZE=100`; infinite queries can auto‑load
 - Worklog sync: Idempotent delete/create strategy ensures calendar matches Jira after save
 
 ## README

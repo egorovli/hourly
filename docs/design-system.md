@@ -543,7 +543,7 @@ packages/web/app/
 ├── styles/
 │   ├── global.css          # Main theme configuration
 │   ├── shadcn.css          # shadcn/ui component styles
-│   ├── react-big-calendar.css
+│   ├── (fullcalendar.css)     # Optional: FullCalendar customizations
 │   └── fonts/
 │       └── inter.css       # Inter font definitions
 └── components/
