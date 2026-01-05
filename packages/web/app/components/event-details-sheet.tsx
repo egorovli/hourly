@@ -1,7 +1,7 @@
 import type { JiraIssueSearchResult } from '~/lib/atlassian/issue.ts'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CalendarIcon, ClockIcon, LinkIcon, SearchIcon, XIcon } from 'lucide-react'
+import { CalendarIcon, CheckIcon, ClockIcon, LinkIcon, SearchIcon, XIcon } from 'lucide-react'
 
 import { Button } from '~/components/shadcn/ui/button.tsx'
 import { Input } from '~/components/shadcn/ui/input.tsx'
@@ -18,86 +18,24 @@ import { Skeleton } from '~/components/shadcn/ui/skeleton.tsx'
 import { cn } from '~/lib/util/index.ts'
 
 export interface EventDetails {
-	/**
-	 * Unique ID for the event (temporary for new events)
-	 */
 	id: string
-
-	/**
-	 * Event start time
-	 */
 	start: Date
-
-	/**
-	 * Event end time
-	 */
 	end: Date
-
-	/**
-	 * Currently linked issue key (if any)
-	 */
 	issueKey?: string
-
-	/**
-	 * Currently linked issue summary (if any)
-	 */
 	issueSummary?: string
-
-	/**
-	 * Whether this is a new event being created
-	 */
 	isNew: boolean
 }
 
 export interface EventDetailsSheetProps {
-	/**
-	 * Whether the sheet is open
-	 */
 	open: boolean
-
-	/**
-	 * Callback when open state changes
-	 */
 	onOpenChange: (open: boolean) => void
-
-	/**
-	 * The event being edited/created
-	 */
 	event: EventDetails | undefined
-
-	/**
-	 * Available issues to select from
-	 */
 	issues: JiraIssueSearchResult[]
-
-	/**
-	 * Whether issues are loading
-	 */
 	isLoadingIssues: boolean
-
-	/**
-	 * Current search query
-	 */
 	searchQuery: string
-
-	/**
-	 * Callback when search query changes
-	 */
 	onSearchQueryChange: (query: string) => void
-
-	/**
-	 * Callback when an issue is selected and event should be saved
-	 */
 	onSave: (eventId: string, issue: JiraIssueSearchResult) => void
-
-	/**
-	 * Callback when the event should be cancelled/deleted
-	 */
 	onCancel: (eventId: string) => void
-
-	/**
-	 * Whether we're on mobile (affects sheet side)
-	 */
 	isMobile: boolean
 }
 
@@ -121,10 +59,8 @@ export function EventDetailsSheet(props: EventDetailsSheetProps): React.ReactNod
 
 	const [selectedIssue, setSelectedIssue] = useState<JiraIssueSearchResult | undefined>(undefined)
 
-	// Reset selected issue when event changes
 	useEffect(() => {
 		if (event?.issueKey) {
-			// Find the issue that matches the current event
 			const matchingIssue = issues.find(i => i.key === event.issueKey)
 			setSelectedIssue(matchingIssue)
 		} else {
@@ -150,9 +86,10 @@ export function EventDetailsSheet(props: EventDetailsSheetProps): React.ReactNod
 		setSelectedIssue(issue)
 	}, [])
 
-	// Format time display
 	const timeDisplay = useMemo(() => {
-		if (!event) return ''
+		if (!event) {
+			return ''
+		}
 
 		const startTime = event.start.toLocaleTimeString('en-US', {
 			hour: '2-digit',
@@ -168,9 +105,10 @@ export function EventDetailsSheet(props: EventDetailsSheetProps): React.ReactNod
 		return `${startTime} – ${endTime}`
 	}, [event])
 
-	// Format date display
 	const dateDisplay = useMemo(() => {
-		if (!event) return ''
+		if (!event) {
+			return ''
+		}
 
 		return event.start.toLocaleDateString('en-US', {
 			weekday: 'long',
@@ -179,9 +117,10 @@ export function EventDetailsSheet(props: EventDetailsSheetProps): React.ReactNod
 		})
 	}, [event])
 
-	// Calculate duration
 	const durationDisplay = useMemo(() => {
-		if (!event) return ''
+		if (!event) {
+			return ''
+		}
 
 		const durationMs = event.end.getTime() - event.start.getTime()
 		const hours = Math.floor(durationMs / (1000 * 60 * 60))
@@ -220,7 +159,6 @@ export function EventDetailsSheet(props: EventDetailsSheetProps): React.ReactNod
 				</SheetHeader>
 
 				<div className='flex flex-col gap-4 flex-1 overflow-hidden px-4'>
-					{/* Time and Date Display */}
 					<div className='flex flex-wrap gap-3'>
 						<div className='flex items-center gap-2 text-sm text-muted-foreground'>
 							<CalendarIcon className='size-4' />
@@ -233,7 +171,6 @@ export function EventDetailsSheet(props: EventDetailsSheetProps): React.ReactNod
 						</div>
 					</div>
 
-					{/* Currently Selected Issue */}
 					{selectedIssue && (
 						<div className='flex items-center gap-2 p-3 rounded-lg border bg-primary/5 border-primary/20'>
 							<LinkIcon className='size-4 text-primary shrink-0' />
@@ -249,14 +186,15 @@ export function EventDetailsSheet(props: EventDetailsSheetProps): React.ReactNod
 								variant='ghost'
 								size='icon-sm'
 								className='shrink-0'
-								onClick={() => setSelectedIssue(undefined)}
+								onClick={() => {
+									setSelectedIssue(undefined)
+								}}
 							>
 								<XIcon className='size-4' />
 							</Button>
 						</div>
 					)}
 
-					{/* Search Input */}
 					<div className='relative'>
 						<SearchIcon className='absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground' />
 						<Input
@@ -264,11 +202,12 @@ export function EventDetailsSheet(props: EventDetailsSheetProps): React.ReactNod
 							placeholder='Search issues by key or text...'
 							className='pl-9 h-11'
 							value={searchQuery}
-							onChange={e => onSearchQueryChange(e.target.value)}
+							onChange={e => {
+								onSearchQueryChange(e.target.value)
+							}}
 						/>
 					</div>
 
-					{/* Issues List */}
 					<ScrollArea className='flex-1 -mx-4 px-4'>
 						<div className='flex flex-col gap-1 pb-4'>
 							{isLoadingIssues ? (
@@ -288,14 +227,16 @@ export function EventDetailsSheet(props: EventDetailsSheetProps): React.ReactNod
 									</p>
 								</div>
 							) : (
-								issues.map(issue => (
-									<IssueListItem
-										key={issue.id}
-										issue={issue}
-										isSelected={selectedIssue?.key === issue.key}
-										onSelect={handleIssueSelect}
-									/>
-								))
+								issues.map(issue => {
+									return (
+										<IssueListItem
+											key={issue.id}
+											issue={issue}
+											isSelected={selectedIssue?.key === issue.key}
+											onSelect={handleIssueSelect}
+										/>
+									)
+								})
 							)}
 						</div>
 					</ScrollArea>
@@ -341,9 +282,10 @@ function IssueListItem({ issue, isSelected, onSelect }: IssueListItemProps): Rea
 					? 'bg-primary/10 border border-primary/30'
 					: 'hover:bg-muted/50 border border-transparent'
 			)}
-			onClick={() => onSelect(issue)}
+			onClick={() => {
+				onSelect(issue)
+			}}
 		>
-			{/* Issue Type Icon */}
 			{issue.fields.issuetype?.iconUrl && (
 				<img
 					src={issue.fields.issuetype.iconUrl}
@@ -366,22 +308,9 @@ function IssueListItem({ issue, isSelected, onSelect }: IssueListItemProps): Rea
 				<p className='text-sm text-muted-foreground line-clamp-2'>{issue.fields.summary}</p>
 			</div>
 
-			{/* Selection indicator */}
 			{isSelected && (
 				<div className='size-5 rounded-full bg-primary flex items-center justify-center shrink-0 mt-0.5'>
-					<svg
-						className='size-3 text-primary-foreground'
-						viewBox='0 0 24 24'
-						fill='none'
-					>
-						<path
-							d='M5 13l4 4L19 7'
-							stroke='currentColor'
-							strokeWidth={3}
-							strokeLinecap='round'
-							strokeLinejoin='round'
-						/>
-					</svg>
+					<CheckIcon className='size-3 text-primary-foreground' />
 				</div>
 			)}
 		</button>

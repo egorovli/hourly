@@ -168,7 +168,9 @@
 	.fc .worklog-event {
 		border-radius: 0.375rem;
 		border-width: 2px;
-		transition: transform 0.1s ease, box-shadow 0.1s ease;
+		transition:
+			transform 0.1s ease,
+			box-shadow 0.1s ease;
 	}
 
 	.fc .worklog-event:hover {
