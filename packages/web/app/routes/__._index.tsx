@@ -91,6 +91,8 @@ import {
 	CommandList
 } from '~/components/shadcn/ui/command.tsx'
 
+import { CalendarEventContextMenu } from '~/components/calendar-event-context-menu.tsx'
+
 const FullCalendar = lazy(() => import('@fullcalendar/react'))
 
 interface ProjectsByResource {
@@ -1386,6 +1388,38 @@ export default function IndexPage(): React.ReactNode {
 		})
 	}, [])
 
+	// Helper function to mark an event as deleted
+	const markEventAsDeleted = useCallback((eventId: string) => {
+		const originalEvent = loadedEventsRef.current.get(eventId)
+
+		if (!originalEvent) {
+			// Event might be a newly created one that hasn't been saved yet
+			// In this case, just remove it from pending changes
+			setPendingChanges(prev => {
+				const next = new Map(prev)
+				const existing = next.get(eventId)
+
+				if (existing?.type === 'create') {
+					// Remove the unsaved new event entirely
+					next.delete(eventId)
+				}
+				return next
+			})
+			return
+		}
+
+		// For existing events, mark as delete pending change
+		setPendingChanges(prev => {
+			const next = new Map(prev)
+			next.set(eventId, {
+				type: 'delete',
+				event: originalEvent,
+				originalEvent
+			})
+			return next
+		})
+	}, [])
+
 	// Create a map of project key to resource ID for efficient lookup
 	const projectKeyToResourceId = useMemo(() => {
 		const map = new Map<string, string>()
@@ -1399,6 +1433,22 @@ export default function IndexPage(): React.ReactNode {
 		}
 		return map
 	}, [selectedProjectIds, projects])
+
+	// Helper function to get Jira base URL for an issue
+	const getJiraBaseUrl = useCallback(
+		(projectKey: string | undefined): string | undefined => {
+			if (!projectKey) {
+				return undefined
+			}
+			const resourceId = projectKeyToResourceId.get(projectKey)
+			if (!resourceId) {
+				return undefined
+			}
+			const resource = accessibleResources.find(r => r.id === resourceId)
+			return resource?.url
+		},
+		[projectKeyToResourceId, accessibleResources]
+	)
 
 	// Handler for saving pending changes
 	const handleSaveChanges = useCallback(() => {
@@ -1832,7 +1882,14 @@ export default function IndexPage(): React.ReactNode {
 								minute: '2-digit',
 								hour12: false
 							}}
-							eventContent={content => <CalendarEventContent {...content} />}
+							eventContent={content => (
+								<CalendarEventContent
+									{...content}
+									currentUserId={currentUserId}
+									onDelete={markEventAsDeleted}
+									getJiraBaseUrl={getJiraBaseUrl}
+								/>
+							)}
 							datesSet={(args: DatesSetArg) => {
 								setFromDate(args.view.currentStart)
 								setToDate(args.view.currentEnd)
@@ -2121,18 +2178,26 @@ function IssueItemSkeleton(): React.ReactNode {
 	)
 }
 
-interface CalendarEventContentProps extends EventContentArg {}
+interface CalendarEventContentProps extends EventContentArg {
+	currentUserId?: string
+	onDelete: (eventId: string) => void
+	getJiraBaseUrl: (projectKey: string | undefined) => string | undefined
+}
 
 function CalendarEventContent(props: CalendarEventContentProps): React.ReactNode {
-	const { event, timeText } = props
+	const { event, timeText, currentUserId, onDelete, getJiraBaseUrl } = props
 
 	// Extract data from event extendedProps
 	const issueKey = event.extendedProps['issueKey'] as string | undefined
 	const issueSummary = event.extendedProps['issueSummary'] as string | undefined
+	const authorAccountId = event.extendedProps['authorAccountId'] as string | undefined
 	const authorDisplayName = event.extendedProps['authorDisplayName'] as string | undefined
 	const authorAvatarUrl = event.extendedProps['authorAvatarUrl'] as string | undefined
 	const projectKey = event.extendedProps['projectKey'] as string | undefined
 	const isModified = event.extendedProps['isModified'] === true
+
+	// Determine if the current user can edit this event
+	const isEditable = authorAccountId === currentUserId
 
 	// Fallback parsing from title if extendedProps are missing
 	const titleParts = event.title?.split(' ') ?? []
@@ -2166,66 +2231,76 @@ function CalendarEventContent(props: CalendarEventContentProps): React.ReactNode
 		</Badge>
 	)
 
+	// Get Jira base URL for this event's project
+	const jiraBaseUrl = getJiraBaseUrl(parsedProjectKey)
+
 	return (
-		<div className='relative flex h-full flex-col gap-1.5 overflow-hidden p-1.5'>
-			{/* Time and Issue Key Row */}
-			<div className='flex w-full items-baseline justify-between gap-2'>
-				{isModified ? (
-					<Tooltip>
-						<TooltipTrigger asChild>{issueKeyBadge}</TooltipTrigger>
-						<TooltipContent side='top'>
-							<span className='text-xs'>Unsaved changes</span>
-						</TooltipContent>
-					</Tooltip>
-				) : (
-					issueKeyBadge
-				)}
+		<CalendarEventContextMenu
+			event={event}
+			isEditable={isEditable}
+			onDelete={onDelete}
+			jiraBaseUrl={jiraBaseUrl}
+		>
+			<div className='relative flex h-full flex-col gap-1.5 overflow-hidden p-1.5'>
+				{/* Time and Issue Key Row */}
+				<div className='flex w-full items-baseline justify-between gap-2'>
+					{isModified ? (
+						<Tooltip>
+							<TooltipTrigger asChild>{issueKeyBadge}</TooltipTrigger>
+							<TooltipContent side='top'>
+								<span className='text-xs'>Unsaved changes</span>
+							</TooltipContent>
+						</Tooltip>
+					) : (
+						issueKeyBadge
+					)}
 
-				{displayTime ? (
-					<Badge
-						variant='outline'
-						className='h-4 shrink-0 border-border/50 bg-background/60 px-1.5 py-0 text-[10px] font-semibold leading-none text-foreground shadow-xs backdrop-blur-sm'
-					>
-						{displayTime}
-					</Badge>
-				) : null}
-			</div>
+					{displayTime ? (
+						<Badge
+							variant='outline'
+							className='h-4 shrink-0 border-border/50 bg-background/60 px-1.5 py-0 text-[10px] font-semibold leading-none text-foreground shadow-xs backdrop-blur-sm'
+						>
+							{displayTime}
+						</Badge>
+					) : null}
+				</div>
 
-			{/* Issue Summary */}
-			<div className='line-clamp-3 min-h-8 text-[11px] font-medium //leading-tight text-foreground'>
-				{displayIssueSummary}
-			</div>
+				{/* Issue Summary */}
+				<div className='line-clamp-3 min-h-8 text-[11px] font-medium //leading-tight text-foreground'>
+					{displayIssueSummary}
+				</div>
 
-			{/* Author and Project Row */}
-			<div className='mt-auto flex items-center gap-1.5'>
-				{displayAuthor ? (
-					<div className='flex items-center gap-1 overflow-hidden'>
-						<Avatar className='size-5 shrink-0 border border-border/30 shadow-xs'>
-							{displayAuthorAvatarUrl ? (
-								<AvatarImage
-									src={displayAuthorAvatarUrl}
-									alt={displayAuthor}
-								/>
-							) : null}
-							<AvatarFallback className='bg-background/60 text-[9px] font-semibold leading-none text-foreground/70'>
-								{getInitialsFromLabel(displayAuthor)}
-							</AvatarFallback>
-						</Avatar>
-						<span className='truncate text-[10px] font-medium leading-none text-foreground'>
-							{displayAuthor}
-						</span>
-					</div>
-				) : null}
-				{displayProject ? (
-					<Badge
-						variant='outline'
-						className='ml-auto h-4 shrink-0 border-border/50 bg-background/60 px-1.5 py-0 text-[10px] font-semibold leading-none text-foreground shadow-xs backdrop-blur-sm'
-					>
-						{displayProject}
-					</Badge>
-				) : null}
+				{/* Author and Project Row */}
+				<div className='mt-auto flex items-center gap-1.5'>
+					{displayAuthor ? (
+						<div className='flex items-center gap-1 overflow-hidden'>
+							<Avatar className='size-5 shrink-0 border border-border/30 shadow-xs'>
+								{displayAuthorAvatarUrl ? (
+									<AvatarImage
+										src={displayAuthorAvatarUrl}
+										alt={displayAuthor}
+									/>
+								) : null}
+								<AvatarFallback className='bg-background/60 text-[9px] font-semibold leading-none text-foreground/70'>
+									{getInitialsFromLabel(displayAuthor)}
+								</AvatarFallback>
+							</Avatar>
+							<span className='truncate text-[10px] font-medium leading-none text-foreground'>
+								{displayAuthor}
+							</span>
+						</div>
+					) : null}
+					{displayProject ? (
+						<Badge
+							variant='outline'
+							className='ml-auto h-4 shrink-0 border-border/50 bg-background/60 px-1.5 py-0 text-[10px] font-semibold leading-none text-foreground shadow-xs backdrop-blur-sm'
+						>
+							{displayProject}
+						</Badge>
+					) : null}
+				</div>
 			</div>
-		</div>
+		</CalendarEventContextMenu>
 	)
 }
 
