@@ -1,0 +1,14 @@
+# Default owner for everything
+* @egorovli
+
+# Web package
+/packages/web/ @egorovli
+
+# Workers (Go)
+/packages/workers/ @egorovli
+
+# Infrastructure
+/Dockerfile @egorovli
+/compose.yml @egorovli
+/.github/ @egorovli
+

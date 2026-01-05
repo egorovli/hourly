@@ -1,0 +1,9 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions & Discussions
+    url: https://github.com/egorovli/hourly/discussions
+    about: Ask questions and share ideas
+  - name: Security Vulnerability
+    url: https://github.com/egorovli/hourly/blob/main/SECURITY.md
+    about: Report security issues privately
+
