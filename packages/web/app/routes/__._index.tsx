@@ -51,6 +51,7 @@ import {
 	SaveIcon,
 	SearchIcon,
 	SlidersHorizontalIcon,
+	SparklesIcon,
 	UsersIcon,
 	XIcon
 } from 'lucide-react'
@@ -1081,6 +1082,9 @@ export default function IndexPage(): React.ReactNode {
 
 	const [isFiltersOpen, setIsFiltersOpen] = useState(true)
 
+	// Track when "My Work" preset is being applied (to auto-select current user after users load)
+	const [pendingMyWorkPreset, setPendingMyWorkPreset] = useState(false)
+
 	const calendar = useFullCalendar({
 		onSuccess: () => {
 			// Calendar is ready
@@ -1204,6 +1208,30 @@ export default function IndexPage(): React.ReactNode {
 	const accessibleResources = useMemo(() => resourcesQuery.data ?? [], [resourcesQuery.data])
 	const worklogEntries = useMemo(() => worklogEntriesQuery.data ?? [], [worklogEntriesQuery.data])
 	const issues = useMemo(() => issuesQuery.data?.issues ?? [], [issuesQuery.data])
+
+	// Auto-select current user when "My Work" preset is pending and users have loaded
+	// We check !usersQuery.isFetching to ensure we're using fresh data after project change
+	useEffect(() => {
+		const handle = setTimeout(() => {
+			if (
+				pendingMyWorkPreset &&
+				usersQuery.isSuccess &&
+				!usersQuery.isFetching &&
+				users.length > 0 &&
+				currentUserId
+			) {
+				const currentUserExists = users.some(user => user.accountId === currentUserId)
+				if (currentUserExists) {
+					setSelectedUserIds([currentUserId])
+				}
+				setPendingMyWorkPreset(false)
+			}
+		}, 666)
+
+		return () => {
+			clearTimeout(handle)
+		}
+	}, [pendingMyWorkPreset, usersQuery.isSuccess, usersQuery.isFetching, users, currentUserId])
 
 	// Create lookup maps for efficient data access
 	const usersByAccountId = useMemo(() => {
@@ -1387,6 +1415,34 @@ export default function IndexPage(): React.ReactNode {
 			return next
 		})
 	}, [])
+
+	// Apply "My Work" preset: select all projects and current user
+	const applyMyWorkPreset = useCallback(() => {
+		if (projects.length === 0 || accessibleResources.length === 0) {
+			return
+		}
+
+		// Build project IDs in the format "resourceId:projectId"
+		const allProjectIds = projects
+			.filter(project => !(project.archived ?? false))
+			.flatMap(project => {
+				// Extract resource ID from project's self URL
+				try {
+					const projectUrl = new URL(project.self)
+					const pathMatch = projectUrl.pathname.match(/^\/ex\/jira\/([^/]+)\//)
+					if (pathMatch?.[1]) {
+						return [`${pathMatch[1]}:${project.id}`]
+					}
+				} catch {
+					// Invalid URL, skip
+				}
+				return []
+			})
+
+		setSelectedProjectIds(allProjectIds)
+		// Mark that we're waiting for users to load so we can auto-select current user
+		setPendingMyWorkPreset(true)
+	}, [projects, accessibleResources])
 
 	// Helper function to mark an event as deleted
 	const markEventAsDeleted = useCallback((eventId: string) => {
@@ -1688,24 +1744,55 @@ export default function IndexPage(): React.ReactNode {
 							<p className='text-xs text-muted-foreground'>Shape what shows on the calendar</p>
 						</div>
 					</div>
-					<CollapsibleTrigger asChild>
-						<Button
-							variant='ghost'
-							size='sm'
-							className='group gap-1 rounded-full border border-transparent px-3 text-xs hover:border-border'
-						>
-							{isFiltersOpen ? 'Hide' : 'Show'}
-							<ChevronDownIcon
-								className={cn(
-									'size-4 transition-transform duration-200',
-									isFiltersOpen ? 'rotate-180' : ''
-								)}
-							/>
-						</Button>
-					</CollapsibleTrigger>
+					<div className='flex items-center gap-2'>
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<Button
+									variant='ghost'
+									size='icon-sm'
+									className='size-8'
+								>
+									<MoreVerticalIcon className='size-4' />
+									<span className='sr-only'>Filter options</span>
+								</Button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align='end'>
+								<Tooltip>
+									<TooltipTrigger asChild>
+										<DropdownMenuItem
+											onClick={applyMyWorkPreset}
+											disabled={resourcesLoading || projectsLoading || projects.length === 0}
+											className='gap-2'
+										>
+											<SparklesIcon className='size-4' />
+											<span>My Work</span>
+										</DropdownMenuItem>
+									</TooltipTrigger>
+									<TooltipContent side='left'>
+										<p>Select all projects and show only your worklogs</p>
+									</TooltipContent>
+								</Tooltip>
+							</DropdownMenuContent>
+						</DropdownMenu>
+						<CollapsibleTrigger asChild>
+							<Button
+								variant='ghost'
+								size='sm'
+								className='group gap-1 rounded-full border border-transparent px-3 text-xs hover:border-border'
+							>
+								{isFiltersOpen ? 'Hide' : 'Show'}
+								<ChevronDownIcon
+									className={cn(
+										'size-4 transition-transform duration-200',
+										isFiltersOpen ? 'rotate-180' : ''
+									)}
+								/>
+							</Button>
+						</CollapsibleTrigger>
+					</div>
 				</div>
 				<CollapsibleContent className='border-t px-4 pb-4 pt-3'>
-					<div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-3'>
+					<div className='grid gap-3 sm:grid-cols-2'>
 						<ProjectsFilter
 							projects={projects}
 							accessibleResources={accessibleResources}
