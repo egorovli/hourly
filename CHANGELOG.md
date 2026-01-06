@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.4](https://github.com/egorovli/hourly/compare/1.1.2...1.1.4) (2026-01-06)
+
+
+### Features
+
+* **test:** a test feature ([e1576c4](https://github.com/egorovli/hourly/commit/e1576c47444ec3cf5c050105e9ecc6d821b4c9f2))
+
+
+### Miscellaneous Chores
+
+* **main:** release 1.1.4 ([e32d0ac](https://github.com/egorovli/hourly/commit/e32d0ac2aa6930f06a9bc4fcd825eb571c2d593a))
+
 ## [1.1.2](https://github.com/egorovli/hourly/compare/1.1.1...1.1.2) (2026-01-06)
 
 
