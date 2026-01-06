@@ -21,6 +21,9 @@ on:
       - main
   workflow_dispatch:
 
+env:
+  CONCURRENCY_GROUP: release-${{ github.ref }}
+
 jobs:
   release:
     name: Release
@@ -31,7 +34,7 @@ jobs:
       - name: Concurrency Group
         run: |
           echo "### ⚙️ Workflow Info" >> $GITHUB_STEP_SUMMARY
-          echo "**Concurrency Group:** \`release-${{ github.ref }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Concurrency Group:** \`$CONCURRENCY_GROUP\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Run Release Please
         id: release
