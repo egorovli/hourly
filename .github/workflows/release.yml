@@ -1,0 +1,79 @@
+name: Release
+
+# Automates releases using conventional commits via release-please.
+# - On pushes to main: creates/updates a release PR with changelog
+# - When release PR merges: creates a GitHub release and tags
+# See: https://github.com/googleapis/release-please-action
+#
+# IMPORTANT: Events created with GITHUB_TOKEN don't trigger other workflows.
+# This workflow uses workflow_call to explicitly trigger the Build workflow
+# after a release is created, ensuring Docker images are built with semver tags.
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+# Prevent concurrent release operations
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      major: ${{ steps.release.outputs.major }}
+      minor: ${{ steps.release.outputs.minor }}
+      patch: ${{ steps.release.outputs.patch }}
+      sha: ${{ steps.release.outputs.sha }}
+      pr: ${{ steps.release.outputs.pr }}
+
+    steps:
+      - name: Run Release Please
+        id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          # Uses manifest config from release-please-config.json
+          # and version tracking from .release-please-manifest.json
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release Summary
+        if: ${{ steps.release.outputs.release_created }}
+        run: |
+          echo "## 🚀 Release Created" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** \`${{ steps.release.outputs.tag_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** \`${{ steps.release.outputs.major }}.${{ steps.release.outputs.minor }}.${{ steps.release.outputs.patch }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**SHA:** \`${{ steps.release.outputs.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Build workflow will be triggered to create Docker images with version tags." >> $GITHUB_STEP_SUMMARY
+
+      - name: PR Summary
+        if: ${{ steps.release.outputs.pr && !steps.release.outputs.release_created }}
+        run: |
+          echo "## 📝 Release PR Updated" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "A release PR has been created or updated." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Review and merge when ready to create a release." >> $GITHUB_STEP_SUMMARY
+
+  # Trigger build workflow when a release is created
+  # This is necessary because GITHUB_TOKEN events don't cascade to other workflows
+  build-on-release:
+    name: Build Release
+    needs: release
+    if: ${{ needs.release.outputs.release_created == 'true' }}
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
+
