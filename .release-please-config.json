@@ -1,0 +1,14 @@
+{
+	"$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+	"release-type": "node",
+	"repo-url": "egorovli/hourly",
+	"packages": {
+		".": {
+			"changelog-path": "CHANGELOG.md",
+			"extra-files": [
+        "packages/*/package.json",
+        "packages/workers/*/package.json"
+      ]
+		}
+	}
+}
