@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.6](https://github.com/egorovli/hourly/compare/1.1.5...1.1.6) (2026-01-06)
+
+
+### Miscellaneous Chores
+
+* **main:** release 1.1.6 ([acebfef](https://github.com/egorovli/hourly/commit/acebfef520700d695167ce52b560e175522bcaf9))
+
 ## [1.1.5](https://github.com/egorovli/hourly/compare/1.1.4...1.1.5) (2026-01-06)
 
 
