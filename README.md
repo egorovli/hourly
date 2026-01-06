@@ -1,6 +1,7 @@
 # Hourly
 
 [![Build](https://github.com/egorovli/hourly/actions/workflows/build.yml/badge.svg)](https://github.com/egorovli/hourly/actions/workflows/build.yml)
+[![Deploy](https://github.com/egorovli/hourly/actions/workflows/deploy.yml/badge.svg)](https://github.com/egorovli/hourly/actions/workflows/deploy.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
