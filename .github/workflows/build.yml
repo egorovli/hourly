@@ -21,20 +21,6 @@ on:
     types:
       - published
   workflow_dispatch:
-  workflow_call:
-    outputs:
-      image_version:
-        description: "Docker image version/tag"
-        value: ${{ jobs.build-and-push-web.outputs.image_version }}
-      image_tags:
-        description: "All Docker image tags generated"
-        value: ${{ jobs.build-and-push-web.outputs.image_tags }}
-      image_digest:
-        description: "Docker image digest"
-        value: ${{ jobs.build-and-push-web.outputs.image_digest }}
-      build_sha:
-        description: "Commit SHA of the build"
-        value: ${{ jobs.build-and-push-web.outputs.build_sha }}
 
 env:
   REGISTRY: ghcr.io
