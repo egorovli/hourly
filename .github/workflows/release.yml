@@ -28,6 +28,11 @@ jobs:
     timeout-minutes: 10
 
     steps:
+      - name: Concurrency Group
+        run: |
+          echo "### ⚙️ Workflow Info" >> $GITHUB_STEP_SUMMARY
+          echo "**Concurrency Group:** \`release-${{ github.ref }}\`" >> $GITHUB_STEP_SUMMARY
+
       - name: Run Release Please
         id: release
         uses: googleapis/release-please-action@v4

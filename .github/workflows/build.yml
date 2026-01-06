@@ -37,6 +37,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Concurrency Group
+        run: |
+          echo "### ⚙️ Workflow Info" >> $GITHUB_STEP_SUMMARY
+          echo "**Concurrency Group:** \`${{ github.event_name == 'release' && format('build-release-{0}', github.event.release.tag_name) || format('build-{0}', github.ref_name) }}\`" >> $GITHUB_STEP_SUMMARY
+
       - name: Checkout repository
         uses: actions/checkout@v5
 

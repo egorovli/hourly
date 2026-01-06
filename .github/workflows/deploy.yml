@@ -66,6 +66,11 @@ jobs:
       IMAGE_TAG: ${{ github.event.inputs.image_tag || github.event.workflow_run.head_branch || 'latest' }}
       ENVIRONMENT: ${{ github.event.inputs.environment || 'production' }}
     steps:
+      - name: Concurrency Group
+        run: |
+          echo "### ⚙️ Workflow Info" >> $GITHUB_STEP_SUMMARY
+          echo "**Concurrency Group:** \`deploy-${{ inputs.environment }}-${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+
       - name: Checkout repository
         uses: actions/checkout@v5
 
