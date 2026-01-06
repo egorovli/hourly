@@ -9,7 +9,7 @@ permissions:
 
 # Concurrency: Prevent multiple builds for the same ref
 concurrency:
-  group: build-${{ github.ref_name }}
+  group: ${{ github.event_name == 'release' && format('build-release-{0}', github.event.release.tag_name) || format('build-{0}', github.ref_name) }}
   cancel-in-progress: true
 
 on:
