@@ -13,6 +13,10 @@ permissions:
   contents: write
   pull-requests: write
   actions: write
+  # Required for build.yml workflow_call
+  packages: write
+  security-events: write
+  id-token: write
 
 # Prevent concurrent release operations
 concurrency:
