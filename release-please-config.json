@@ -5,10 +5,11 @@
 	"packages": {
 		".": {
 			"changelog-path": "CHANGELOG.md",
-			"extra-files": [
-        "packages/*/package.json",
-        "packages/workers/*/package.json"
-      ]
+			"bump-minor-pre-major": false,
+			"bump-patch-for-minor-pre-major": false,
+			"draft": false,
+			"prerelease": false,
+			"extra-files": ["packages/*/package.json", "packages/workers/*/package.json"]
 		}
 	}
 }
