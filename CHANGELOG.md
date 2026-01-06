@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.1.1](https://github.com/egorovli/hourly/compare/1.1.0...1.1.1) (2026-01-06)
+
+
+### Bug Fixes
+
+* **ci:** add missing permissions for build workflow_call ([323f9bd](https://github.com/egorovli/hourly/commit/323f9bdad4247fcb282f592d2c7c0d594498cbb1))
+* **web:** ensure minimum bottom padding on calendar page ([89e4e5c](https://github.com/egorovli/hourly/commit/89e4e5ca4d306920ff8e3c30fdcca1abf2a04c24)), closes [#89](https://github.com/egorovli/hourly/issues/89)
+
+
+### Miscellaneous Chores
+
+* **main:** release 1.1.1 ([e09dd3a](https://github.com/egorovli/hourly/commit/e09dd3ae3f85fc673f09b4096a012b4b2e121b70))
+* **main:** release 1.1.1 ([822e47a](https://github.com/egorovli/hourly/commit/822e47af0dc82adba8ce60337c3fdfbabbe5d51b))
+
 ## [1.1.0](https://github.com/egorovli/hourly/compare/hourly-v1.0.0...hourly-v1.1.0) (2026-01-06)
 
 
