@@ -27,11 +27,12 @@ on:
         options:
           - staging
           - production
-  release:
+  workflow_run:
+    workflows: ["Build and Push"]
     types:
-      - published
+      - completed
 
-run-name: "deploy: ${{ github.event.inputs.environment || 'production' }} (${{ github.event.inputs.image_tag || github.event.release.tag_name || 'latest' }}) by @${{ github.actor }}"
+run-name: "deploy: ${{ github.event.inputs.environment || 'production' }} (${{ github.event.inputs.image_tag || github.event.workflow_run.head_branch || 'latest' }}) by @${{ github.actor }}"
 
 env:
   REGISTRY: ghcr.io
@@ -46,6 +47,13 @@ jobs:
     name: Verify and Deploy
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Only deploy if:
+    # - Manual dispatch, OR
+    # - Build succeeded AND was triggered by a release
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'release')
     environment:
       name: ${{ github.event.inputs.environment || 'production' }}
     outputs:
@@ -55,7 +63,7 @@ jobs:
     env:
       REGISTRY: ghcr.io
       IMAGE_NAME: ${{ github.repository }}/web
-      IMAGE_TAG: ${{ github.event.inputs.image_tag || github.event.release.tag_name || 'latest' }}
+      IMAGE_TAG: ${{ github.event.inputs.image_tag || github.event.workflow_run.head_branch || 'latest' }}
       ENVIRONMENT: ${{ github.event.inputs.environment || 'production' }}
     steps:
       - name: Checkout repository
@@ -72,10 +80,11 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             IMAGE_TAG="${IMAGE_TAG}"
             echo "Using manually specified tag: ${IMAGE_TAG}"
-          # If triggered from a release, use the release tag
-          elif [[ "${{ github.event_name }}" == "release" ]]; then
-            IMAGE_TAG="${{ github.event.release.tag_name }}"
-            echo "🚀 Release published, using release tag: ${IMAGE_TAG}"
+          # If triggered from workflow_run (after build completes)
+          elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            # Get the tag from the build workflow's head branch (release tag)
+            IMAGE_TAG="${{ github.event.workflow_run.head_branch }}"
+            echo "🚀 Build completed, using tag: ${IMAGE_TAG}"
           else
             IMAGE_TAG="latest"
             echo "Defaulting to 'latest' tag"
@@ -87,9 +96,9 @@ jobs:
           if [[ "${IMAGE_TAG}" =~ ^[0-9a-f]{7,}$ ]]; then
             RESOLVED_SHA="${IMAGE_TAG}"
             echo "✅ Tag is commit SHA: ${RESOLVED_SHA}"
-          elif [[ "${{ github.event_name }}" == "release" ]]; then
-            RESOLVED_SHA="${{ github.event.release.target_commitish }}"
-            echo "✅ Resolved release tag '${IMAGE_TAG}' to ref: ${RESOLVED_SHA}"
+          elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            RESOLVED_SHA="${{ github.event.workflow_run.head_sha }}"
+            echo "✅ Resolved to build commit SHA: ${RESOLVED_SHA}"
           else
             echo "⚠️  Could not resolve SHA for tag ${IMAGE_TAG}, using tag as-is"
             RESOLVED_SHA="${IMAGE_TAG}"
@@ -195,9 +204,9 @@ jobs:
           echo "- **Triggered By:** \`${{ github.actor }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Branch:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit SHA:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
-          if [[ "${{ github.event_name }}" == "release" ]]; then
-            echo "- **Release:** \`${{ github.event.release.tag_name }}\`" >> $GITHUB_STEP_SUMMARY
-            echo "- **Release URL:** ${{ github.event.release.html_url }}" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            echo "- **Build Workflow:** \`${{ github.event.workflow_run.name }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **Build Run:** [${{ github.event.workflow_run.id }}](${{ github.event.workflow_run.html_url }})" >> $GITHUB_STEP_SUMMARY
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
 
@@ -222,9 +231,9 @@ jobs:
           echo "  Triggered By:    ${{ github.actor }}"
           echo "  Branch:          ${{ github.ref_name }}"
           echo "  Commit SHA:      ${{ github.sha }}"
-          if [[ "${{ github.event_name }}" == "release" ]]; then
-            echo "  Release:         ${{ github.event.release.tag_name }}"
-            echo "  Release URL:     ${{ github.event.release.html_url }}"
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            echo "  Build Workflow:  ${{ github.event.workflow_run.name }}"
+            echo "  Build Run ID:    ${{ github.event.workflow_run.id }}"
           fi
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
