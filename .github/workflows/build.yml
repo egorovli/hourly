@@ -8,9 +8,10 @@ permissions:
   id-token: write
 
 # Concurrency: Prevent multiple builds for the same ref
+# Release builds use separate group to avoid cancellation by push builds
 concurrency:
   group: ${{ github.event_name == 'release' && format('build-release-{0}', github.event.release.tag_name) || format('build-{0}', github.ref_name) }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name != 'release' }}
 
 on:
   push:
@@ -311,19 +312,22 @@ jobs:
       - name: Extract version
         id: version
         run: |
-          # If it's a release with a tag, use the tag name
+          # If it's a release event, use the release tag
           if [[ "${{ github.event_name }}" == "release" && -n "${{ github.event.release.tag_name }}" ]]; then
             VERSION="${{ github.event.release.tag_name }}"
             # Remove 'v' prefix if present
             VERSION="${VERSION#v}"
+            echo "📦 Using release tag: ${VERSION}"
           # If it's a tag push, use the tag name
           elif [[ "${{ github.ref_type }}" == "tag" ]]; then
             VERSION="${{ github.ref_name }}"
             VERSION="${VERSION#v}"
+            echo "🏷️ Using git tag: ${VERSION}"
           else
             # Otherwise use short commit SHA
             VERSION="${{ github.sha }}"
             VERSION="${VERSION:0:7}"
+            echo "🔨 Using commit SHA: ${VERSION}"
           fi
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Building version: ${VERSION}"

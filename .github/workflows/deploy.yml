@@ -9,7 +9,7 @@ permissions:
 
 # Concurrency: Prevent multiple deployments for the same target
 concurrency:
-  group: deploy-${{ inputs.environment }}-${{ github.ref_name }}
+  group: deploy-${{ inputs.environment || 'production' }}-${{ github.event.workflow_run.head_branch || inputs.image_tag || github.ref_name }}
   cancel-in-progress: false
 
 on:
@@ -32,10 +32,8 @@ on:
     types:
       - completed
 
-run-name: "deploy: ${{ github.event.inputs.environment || 'production' }} (${{ github.event.inputs.image_tag || github.event.workflow_run.head_branch || 'latest' }}) by @${{ github.actor }}"
-
 env:
-  CONCURRENCY_GROUP: deploy-${{ inputs.environment }}-${{ github.ref_name }}
+  CONCURRENCY_GROUP: deploy-${{ inputs.environment || 'production' }}-${{ github.event.workflow_run.head_branch || inputs.image_tag || github.ref_name }}
   REGISTRY: ghcr.io
   IMAGE_NAME_WEB: ${{ github.repository }}/web
 
@@ -56,7 +54,7 @@ jobs:
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.event == 'release')
     environment:
-      name: ${{ github.event.inputs.environment || 'production' }}
+      name: ${{ inputs.environment || 'production' }}
     outputs:
       build_sha: ${{ steps.resolve-tag.outputs.resolved_sha }}
       image_tag: ${{ steps.resolve-tag.outputs.resolved_tag }}
@@ -64,8 +62,8 @@ jobs:
     env:
       REGISTRY: ghcr.io
       IMAGE_NAME: ${{ github.repository }}/web
-      IMAGE_TAG: ${{ github.event.inputs.image_tag || github.event.workflow_run.head_branch || 'latest' }}
-      ENVIRONMENT: ${{ github.event.inputs.environment || 'production' }}
+      IMAGE_TAG: ${{ inputs.image_tag || github.event.workflow_run.head_branch || 'latest' }}
+      ENVIRONMENT: ${{ inputs.environment || 'production' }}
     steps:
       - name: Concurrency Group
         run: |
@@ -75,7 +73,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Determine image tag from workflow run
+      - name: Resolve image tag
         id: resolve-tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -85,7 +83,7 @@ jobs:
           # If triggered manually, use the provided tag
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             IMAGE_TAG="${IMAGE_TAG}"
-            echo "Using manually specified tag: ${IMAGE_TAG}"
+            echo "📦 Using manually specified tag: ${IMAGE_TAG}"
           # If triggered from workflow_run (after build completes)
           elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
             # Get the tag from the build workflow's head branch (release tag)
@@ -93,7 +91,7 @@ jobs:
             echo "🚀 Build completed, using tag: ${IMAGE_TAG}"
           else
             IMAGE_TAG="latest"
-            echo "Defaulting to 'latest' tag"
+            echo "⚠️ Defaulting to 'latest' tag"
           fi
 
           FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
@@ -208,8 +206,6 @@ jobs:
           echo "### Deployment Configuration" >> $GITHUB_STEP_SUMMARY
           echo "- **Environment:** \`${ENVIRONMENT}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Triggered By:** \`${{ github.actor }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Branch:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Commit SHA:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
           if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
             echo "- **Build Workflow:** \`${{ github.event.workflow_run.name }}\`" >> $GITHUB_STEP_SUMMARY
             echo "- **Build Run:** [${{ github.event.workflow_run.id }}](${{ github.event.workflow_run.html_url }})" >> $GITHUB_STEP_SUMMARY
@@ -235,8 +231,6 @@ jobs:
           echo "Deployment Configuration:"
           echo "  Environment:     ${ENVIRONMENT}"
           echo "  Triggered By:    ${{ github.actor }}"
-          echo "  Branch:          ${{ github.ref_name }}"
-          echo "  Commit SHA:      ${{ github.sha }}"
           if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
             echo "  Build Workflow:  ${{ github.event.workflow_run.name }}"
             echo "  Build Run ID:    ${{ github.event.workflow_run.id }}"
