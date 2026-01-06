@@ -1869,7 +1869,7 @@ export default function IndexPage(): React.ReactNode {
 	}
 
 	return (
-		<div className='flex flex-col h-full gap-4 p-4 pb-safe'>
+		<div className='flex flex-col h-full gap-4 p-4 pb-safe-or-4'>
 			{/* Filters - collapsible, auto-collapsed on mobile */}
 			<Collapsible
 				open={isFiltersOpen}
