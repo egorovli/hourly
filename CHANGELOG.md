@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.5](https://github.com/egorovli/hourly/compare/1.1.4...1.1.5) (2026-01-06)
+
+
+### Bug Fixes
+
+* **ci:** use release tag in build concurrency group ([28cc794](https://github.com/egorovli/hourly/commit/28cc7947db766b567c8baf572eb1b06464a54d12))
+
+
+### Miscellaneous Chores
+
+* **main:** release 1.1.5 ([a356ae1](https://github.com/egorovli/hourly/commit/a356ae180562fda8bd10bb1914a6e76cccee7e1a))
+
 ## [1.1.4](https://github.com/egorovli/hourly/compare/1.1.2...1.1.4) (2026-01-06)
 
 
