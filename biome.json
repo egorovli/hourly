@@ -182,8 +182,7 @@
 		{
 			"includes": [
 				"packages/web/**/*.test.{ts,tsx}",
-				"packages/web/.jest/setup.ts",
-				"packages/web/jest.config.ts"
+				"packages/web/.test/**/*.ts"
 			],
 			"javascript": {
 				"globals": [
@@ -195,22 +194,15 @@
 					"afterEach",
 					"beforeAll",
 					"afterAll",
-					"jest"
+					"mock",
+					"spyOn"
 				]
-			},
-			"linter": {
-				"rules": {
-					"style": {
-						"noDefaultExport": "off"
-					}
-				}
 			}
 		},
 		{
 			"includes": [
 				"packages/web/postcss.config.mjs",
 				"packages/web/react-router.config.ts",
-				"packages/web/jest.config.ts",
 				"packages/web/vite.config.ts",
 				"packages/web/vite.storybook.config.ts",
 				"packages/web/app/root.tsx",

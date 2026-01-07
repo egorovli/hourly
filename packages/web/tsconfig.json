@@ -16,9 +16,5 @@
 				"name": "typescript-plugin-css-modules"
 			}
 		]
-	},
-	"ts-node": {
-		"esm": true,
-		"transpileOnly": true
 	}
 }
