@@ -297,10 +297,7 @@ jobs:
       - name: Run tests with coverage
         id: tests
         working-directory: packages/web
-        run: |
-          mkdir -p test-results coverage
-          bun test --coverage --coverage-reporter=lcov --reporter=junit --reporter-outfile=./test-results/junit.xml 2>&1 | tee test-output.txt
-          exit ${PIPESTATUS[0]}
+        run: bun test --coverage --rerun-each=3
 
       - name: Upload test results artifact
         uses: actions/upload-artifact@v6
