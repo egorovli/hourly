@@ -180,10 +180,7 @@
 			}
 		},
 		{
-			"includes": [
-				"packages/web/**/*.test.{ts,tsx}",
-				"packages/web/.test/**/*.ts"
-			],
+			"includes": ["packages/web/**/*.test.{ts,tsx}", "packages/web/.test/**/*.ts"],
 			"javascript": {
 				"globals": [
 					"test",
