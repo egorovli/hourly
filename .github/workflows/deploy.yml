@@ -1,11 +1,16 @@
 name: Deploy
 
 # Dynamic run name showing: trigger type, version, environment, actor
+# Adds (skipped) suffix when triggered by non-release builds
 run-name: >-
   ${{ github.event_name == 'workflow_dispatch' && 'manual' || 'auto' }}:
   ${{ inputs.image_tag || github.event.workflow_run.head_branch || 'latest' }}
   → ${{ inputs.environment || 'production' }}
-  by @${{ github.actor }}
+  by @${{ github.actor }}${{
+    github.event_name == 'workflow_run' &&
+    (github.event.workflow_run.conclusion != 'success' || github.event.workflow_run.event != 'release')
+    && ' (skipped)' || ''
+  }}
 
 # Security: Explicit permissions for GITHUB_TOKEN
 permissions:
