@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.1.8](https://github.com/egorovli/hourly/compare/1.1.6...1.1.8) (2026-01-07)
+
+
+### Features
+
+* **test:** a test feature ([35d166c](https://github.com/egorovli/hourly/commit/35d166c2525868be686599b1dd0ec6c5289da9aa))
+
+
+### Bug Fixes
+
+* **ci:** use PAT for release event cascading and proper concurrency groups ([5466db1](https://github.com/egorovli/hourly/commit/5466db19c6a59ffdad63798c8f662d5e270e1869))
+
+
+### Miscellaneous Chores
+
+* **main:** release 1.1.7 ([b2dd9d2](https://github.com/egorovli/hourly/commit/b2dd9d215e4249560779a0e9a831faea9c004cdb))
+* **main:** release 1.1.8 ([56776bb](https://github.com/egorovli/hourly/commit/56776bb17e9a939a4d8384ea4a804195859227a8))
+
 ## [1.1.6](https://github.com/egorovli/hourly/compare/1.1.5...1.1.6) (2026-01-06)
 
 
