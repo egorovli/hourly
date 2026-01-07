@@ -107,7 +107,7 @@ jobs:
 
   # Lint root (parallel with lint-web and type-check-web)
   lint-root:
-    name: "[/] Lint"
+    name: "[root] Lint"
     needs:
       - install-deps
     runs-on: ubuntu-latest
@@ -472,6 +472,8 @@ jobs:
       - lint-web
       - type-check-web
       - test-web
+      - bundle-size
+      - license-check
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
@@ -595,6 +597,8 @@ jobs:
       - lint-web
       - type-check-web
       - test-web
+      - bundle-size
+      - license-check
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
