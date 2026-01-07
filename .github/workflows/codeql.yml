@@ -1,0 +1,73 @@
+name: CodeQL
+
+on:
+  push:
+    branches: ['**']
+  schedule:
+    # Daily at 23:00 UTC = 00:00 Europe/Warsaw (CET, winter)
+    # During CEST (summer), this runs at 01:00 local time
+    - cron: '0 23 * * *'
+
+# Explicit permissions for GITHUB_TOKEN
+permissions:
+  security-events: write
+  contents: read
+  packages: read
+  actions: read
+
+# Prevent duplicate runs for the same branch
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: javascript-typescript
+            build-mode: none
+          - language: go
+            build-mode: autobuild
+          - language: actions
+            build-mode: none
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Go setup required for autobuild
+      - name: Setup Go
+        if: matrix.language == 'go'
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: packages/workers/reporter/go.mod
+          cache-dependency-path: packages/workers/reporter/go.sum
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          # Extended security queries for comprehensive coverage
+          queries: security-extended
+
+      # Manual build step placeholder (currently unused)
+      - name: Run manual build steps
+        if: matrix.build-mode == 'manual'
+        shell: bash
+        run: |
+          echo 'Manual build mode requires custom build commands.'
+          echo 'Add your build commands here if needed.'
+          exit 1
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{ matrix.language }}"
+
