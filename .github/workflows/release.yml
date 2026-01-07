@@ -30,17 +30,32 @@ env:
   CONCURRENCY_GROUP: release-${{ github.ref }}
 
 jobs:
+  # Workflow metadata (runs first)
+  meta:
+    name: Workflow info
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Output workflow metadata
+        run: |
+          echo "### ⚙️ Workflow Info" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Concurrency Group** | \`$CONCURRENCY_GROUP\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Event** | \`${{ github.event_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Ref** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **SHA** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Actor** | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+
   release:
     name: Release
+    needs:
+      - meta
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
-      - name: Concurrency Group
-        run: |
-          echo "### ⚙️ Workflow Info" >> $GITHUB_STEP_SUMMARY
-          echo "**Concurrency Group:** \`$CONCURRENCY_GROUP\`" >> $GITHUB_STEP_SUMMARY
-
       - name: Run Release Please
         id: release
         uses: googleapis/release-please-action@v4

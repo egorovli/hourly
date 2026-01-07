@@ -1,5 +1,12 @@
 name: Deploy
 
+# Dynamic run name showing: trigger type, version, environment, actor
+run-name: >-
+  ${{ github.event_name == 'workflow_dispatch' && 'manual' || 'auto' }}:
+  ${{ inputs.image_tag || github.event.workflow_run.head_branch || 'latest' }}
+  → ${{ inputs.environment || 'production' }}
+  by @${{ github.actor }}
+
 # Security: Explicit permissions for GITHUB_TOKEN
 permissions:
   contents: read
@@ -42,8 +49,37 @@ defaults:
     shell: bash
 
 jobs:
+  # Workflow metadata (runs first, always)
+  meta:
+    name: Workflow info
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Output workflow metadata
+        run: |
+          echo "### ⚙️ Workflow Info" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Concurrency Group** | \`$CONCURRENCY_GROUP\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Event** | \`${{ github.event_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Image Tag** | \`${{ inputs.image_tag || github.event.workflow_run.head_branch || 'latest' }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | \`${{ inputs.environment || 'production' }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Actor** | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Build Info" >> $GITHUB_STEP_SUMMARY
+            echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+            echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| **Build Event** | \`${{ github.event.workflow_run.event }}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Build Conclusion** | \`${{ github.event.workflow_run.conclusion }}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Build Run** | [#${{ github.event.workflow_run.run_number }}](${{ github.event.workflow_run.html_url }}) |" >> $GITHUB_STEP_SUMMARY
+          fi
+
   verify-and-deploy:
-    name: Verify and Deploy
+    name: Verify and deploy
+    needs:
+      - meta
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # Only deploy if:
@@ -65,11 +101,6 @@ jobs:
       IMAGE_TAG: ${{ inputs.image_tag || github.event.workflow_run.head_branch || 'latest' }}
       ENVIRONMENT: ${{ inputs.environment || 'production' }}
     steps:
-      - name: Concurrency Group
-        run: |
-          echo "### ⚙️ Workflow Info" >> $GITHUB_STEP_SUMMARY
-          echo "**Concurrency Group:** \`$CONCURRENCY_GROUP\`" >> $GITHUB_STEP_SUMMARY
-
       - name: Checkout repository
         uses: actions/checkout@v6
 
