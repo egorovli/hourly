@@ -57,7 +57,7 @@ jobs:
 
   # Install dependencies with caching
   install-deps:
-    name: Install dependencies
+    name: "Install dependencies"
     needs:
       - meta
     runs-on: ubuntu-latest
@@ -106,7 +106,7 @@ jobs:
 
   # Lint root (parallel with lint-web and type-check-web)
   lint-root:
-    name: Lint root
+    name: "[/] Lint"
     needs:
       - install-deps
     runs-on: ubuntu-latest
@@ -154,7 +154,7 @@ jobs:
 
   # Lint web (parallel with lint-root and type-check-web)
   lint-web:
-    name: Lint web
+    name: "[web] Lint"
     needs:
       - install-deps
     runs-on: ubuntu-latest
@@ -202,7 +202,7 @@ jobs:
 
   # Type check (parallel with lint-root and lint-web)
   type-check-web:
-    name: Type check web
+    name: "[web] Type check"
     needs:
       - install-deps
     runs-on: ubuntu-latest
@@ -250,7 +250,7 @@ jobs:
 
   # Test web (parallel with lint-root, lint-web, type-check-web)
   test-web:
-    name: Test web
+    name: "[web] Test"
     needs:
       - install-deps
     runs-on: ubuntu-latest
@@ -306,7 +306,7 @@ jobs:
 
   # Bundle size analysis (PR only)
   bundle-size:
-    name: Bundle size
+    name: "[web] Bundle size"
     if: github.event_name == 'pull_request'
     needs:
       - install-deps
@@ -379,9 +379,8 @@ jobs:
 
   # Security scan (parallel with push-web)
   scan-web:
-    name: Scan for vulnerabilities
+    name: "[web] Scan for vulnerabilities"
     needs:
-      - lint-root
       - lint-web
       - type-check-web
       - test-web
@@ -503,9 +502,8 @@ jobs:
 
   # Build and push to registry (parallel with scan-web)
   push-web:
-    name: Build and push to registry
+    name: "[web] Build and push to registry"
     needs:
-      - lint-root
       - lint-web
       - type-check-web
       - test-web
