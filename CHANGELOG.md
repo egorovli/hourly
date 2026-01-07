@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.2.2](https://github.com/egorovli/hourly/compare/1.2.1...1.2.2) (2026-01-07)
+
+
+### Bug Fixes
+
+* **ci:** add bundle-size and license-check as dependencies ([f196811](https://github.com/egorovli/hourly/commit/f196811bd28c7532609b08e5698371d5b22ae80b)), closes [#101](https://github.com/egorovli/hourly/issues/101)
+* **ci:** correct bundle size workflow to compare PR vs main branches ([a242bcd](https://github.com/egorovli/hourly/commit/a242bcd56971b82acdea555e4d1f11429ca7d2e4)), closes [#101](https://github.com/egorovli/hourly/issues/101)
+* **ci:** remove bundle-size and license-check from scan/push dependencies ([d698692](https://github.com/egorovli/hourly/commit/d6986929994534552dbcf307e0fdb24a9937b8a8)), closes [#101](https://github.com/egorovli/hourly/issues/101)
+* **ci:** resolve test flakiness and workflow permissions ([9139419](https://github.com/egorovli/hourly/commit/9139419280c43673a346b36d4cda0aa6bee7fdcf)), closes [#101](https://github.com/egorovli/hourly/issues/101)
+* **ci:** split test runs for coverage and junit reporter ([031617f](https://github.com/egorovli/hourly/commit/031617ff5466098b3317a595361f4aab031b1cf4)), closes [#101](https://github.com/egorovli/hourly/issues/101)
+
 ## [1.2.1](https://github.com/egorovli/hourly/compare/1.2.0...1.2.1) (2026-01-07)
 
 
