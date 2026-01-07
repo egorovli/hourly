@@ -1,15 +1,7 @@
 [test]
-# Test discovery
 root = "./app"
-
-# Preload test setup (happy-dom + testing-library matchers)
 preload = ["./.test/setup.ts"]
 
-# Coverage configuration (enabled via CLI in CI: --coverage)
 coverageReporter = ["text", "lcov"]
 coverageDir = "./coverage"
 coverageSkipTestFiles = true
-
-# JUnit reporter for CI integration (enabled via CLI: --reporter=junit)
-[test.reporter]
-junit = "./test-results/junit.xml"
