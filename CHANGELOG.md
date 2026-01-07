@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.1](https://github.com/egorovli/hourly/compare/1.2.0...1.2.1) (2026-01-07)
+
+
+### Bug Fixes
+
+* **ci:** add DATABASE_URL for bundle size build job ([717271b](https://github.com/egorovli/hourly/commit/717271b428732763f24528934c1b520419086e9a))
+* **ci:** replace Jest with Bun test runner, enhance CI coverage reporting ([c0465e8](https://github.com/egorovli/hourly/commit/c0465e8fc0f2d811b60d553d46aa8da0b7714434))
+
 ## [1.2.0](https://github.com/egorovli/hourly/compare/1.1.8...1.2.0) (2026-01-07)
 
 
