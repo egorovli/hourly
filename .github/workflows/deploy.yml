@@ -35,7 +35,8 @@ on:
           - staging
           - production
   workflow_run:
-    workflows: ["Build and Push"]
+    workflows:
+      - Build
     types:
       - completed
 

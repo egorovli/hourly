@@ -4,6 +4,7 @@ name: Build
 permissions:
   contents: read
   packages: write
+  pull-requests: write
   security-events: write
   id-token: write
 
@@ -18,6 +19,9 @@ on:
     branches:
       - main
       - feat/*
+  pull_request:
+    branches:
+      - main
   release:
     types:
       - published
@@ -244,6 +248,135 @@ jobs:
       - name: Type check web package
         run: bun run --filter "@hourly/web" types:check
 
+  # Test web (parallel with lint-root, lint-web, type-check-web)
+  test-web:
+    name: Test web
+    needs:
+      - install-deps
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.23
+
+      - name: Get Bun install cache path
+        id: bun-cache-path
+        run: echo "cache-path=$(bun pm cache)" >> $GITHUB_OUTPUT
+
+      - name: Cache Bun install cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ steps.bun-cache-path.outputs.cache-path }}
+          key: bun-install-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-install-${{ runner.os }}-
+
+      - name: Cache node_modules
+        uses: actions/cache@v5
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            node-modules-${{ runner.os }}-
+
+      - name: Restore node_modules from artifact
+        uses: actions/download-artifact@v6
+        with:
+          name: node_modules
+          path: node_modules
+
+      - name: Verify dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Run tests
+        run: bun run --filter "@hourly/web" test -- --coverage --passWithNoTests
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v5
+        if: always()
+        with:
+          files: ./packages/web/coverage/lcov.info
+          flags: web
+          fail_ci_if_error: false
+
+  # Bundle size analysis (PR only)
+  bundle-size:
+    name: Bundle size
+    if: github.event_name == 'pull_request'
+    needs:
+      - install-deps
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.23
+
+      - name: Get Bun install cache path
+        id: bun-cache-path
+        run: echo "cache-path=$(bun pm cache)" >> $GITHUB_OUTPUT
+
+      - name: Cache Bun install cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ steps.bun-cache-path.outputs.cache-path }}
+          key: bun-install-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-install-${{ runner.os }}-
+
+      - name: Cache node_modules
+        uses: actions/cache@v5
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            node-modules-${{ runner.os }}-
+
+      - name: Restore node_modules from artifact
+        uses: actions/download-artifact@v6
+        with:
+          name: node_modules
+          path: node_modules
+
+      - name: Verify dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Build for size analysis
+        run: bun run --filter "@hourly/web" build
+
+      - name: Analyze bundle size
+        uses: preactjs/compressed-size-action@v2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          pattern: "./packages/web/build/client/assets/**/*.{js,css}"
+          build-script: "echo 'Already built'"
+
+  # License compliance (PR only)
+  license-check:
+    name: License compliance
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Check licenses
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: critical
+          deny-licenses: GPL-2.0, GPL-3.0, LGPL-2.0, LGPL-2.1, LGPL-3.0, AGPL-3.0
+          comment-summary-in-pr: always
+
   # Security scan (parallel with push-web)
   scan-web:
     name: Scan for vulnerabilities
@@ -251,6 +384,7 @@ jobs:
       - lint-root
       - lint-web
       - type-check-web
+      - test-web
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
@@ -374,6 +508,7 @@ jobs:
       - lint-root
       - lint-web
       - type-check-web
+      - test-web
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
