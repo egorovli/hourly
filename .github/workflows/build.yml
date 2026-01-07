@@ -7,6 +7,7 @@ permissions:
   pull-requests: write
   security-events: write
   id-token: write
+  checks: write
 
 # Concurrency: Prevent multiple builds for the same ref
 # Release builds use separate group to avoid cancellation by push builds
