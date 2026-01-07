@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.2.0](https://github.com/egorovli/hourly/compare/1.1.8...1.2.0) (2026-01-07)
+
+
+### Features
+
+* **test:** a test feature ([b0eb232](https://github.com/egorovli/hourly/commit/b0eb2320dd7084790c93f5150d697225363ebb25))
+* **test:** another test feature ([56fc8fd](https://github.com/egorovli/hourly/commit/56fc8fda205c0776f691b8916fa6da1486e564cc))
+
+
+### Miscellaneous Chores
+
+* **main:** release 1.2.0 ([3c2bc99](https://github.com/egorovli/hourly/commit/3c2bc994681659e1e509ac931f6092ddcc25ced9))
+
 ## [1.1.8](https://github.com/egorovli/hourly/compare/1.1.6...1.1.8) (2026-01-07)
 
 
