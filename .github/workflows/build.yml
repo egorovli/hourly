@@ -453,7 +453,11 @@ jobs:
         uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: critical
-          deny-licenses: GPL-2.0, GPL-3.0, LGPL-2.0, LGPL-2.1, LGPL-3.0, AGPL-3.0
+          # Using allow-licenses instead of deprecated deny-licenses
+          # See: https://github.com/actions/dependency-review-action/issues/938
+          allow-licenses: >-
+            0BSD, Apache-2.0, BlueOak-1.0.0, BSD-2-Clause, BSD-3-Clause, CC0-1.0,
+            CC-BY-4.0, ISC, MIT, MPL-2.0, Unlicense, Python-2.0, Zlib, WTFPL
           comment-summary-in-pr: always
 
   # Security scan (parallel with push-web)
