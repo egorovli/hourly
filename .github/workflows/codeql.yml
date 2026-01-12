@@ -44,7 +44,7 @@ jobs:
       # Go setup required for autobuild
       - name: Setup Go
         if: matrix.language == 'go'
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: packages/workers/reporter/go.mod
           cache-dependency-path: packages/workers/reporter/go.sum
