@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.3](https://github.com/egorovli/hourly/compare/1.2.2...1.2.3) (2026-01-15)
+
+
+### Bug Fixes
+
+* **web:** resolve critical cache key collision vulnerability ([a94f489](https://github.com/egorovli/hourly/commit/a94f4893908835a8553e906039bd59a77eb59e72)), closes [#111](https://github.com/egorovli/hourly/issues/111)
+
 ## [1.2.2](https://github.com/egorovli/hourly/compare/1.2.1...1.2.2) (2026-01-07)
 
 
