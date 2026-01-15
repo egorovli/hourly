@@ -404,7 +404,7 @@ jobs:
           bun-version: 1.3.5
 
       - name: Analyze bundle size
-        uses: preactjs/compressed-size-action@v2
+        uses: preactjs/compressed-size-action@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           pattern: "./packages/web/build/client/assets/**/*.{js,css}"
