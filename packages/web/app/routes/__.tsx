@@ -154,10 +154,11 @@ export let loader = withRequestContext(async function loader({ request }: Route.
 	}
 
 	const client = new AtlassianClient({ accessToken: token.accessToken })
+	const cacheOpts = { keyPrefix: `profile:${profile.id}` }
 
-	const getMe = cached(client.getMe.bind(client))
-	const getAccessibleResources = cached(client.getAccessibleResources.bind(client))
-	const getProjects = cached(client.getProjects.bind(client))
+	const getMe = cached(client.getMe.bind(client), cacheOpts)
+	const getAccessibleResources = cached(client.getAccessibleResources.bind(client), cacheOpts)
+	const getProjects = cached(client.getProjects.bind(client), cacheOpts)
 
 	const user = await getMe()
 	const accessibleResources = await getAccessibleResources()

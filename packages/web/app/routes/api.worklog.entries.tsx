@@ -114,9 +114,10 @@ export const loader = withRequestContext(async function loader({ request }: Rout
 	}
 
 	const client = new AtlassianClient({ accessToken: token.accessToken })
+	const cacheOpts = { keyPrefix: `profile:${profile.id}` }
 
-	const getAccessibleResources = cached(client.getAccessibleResources.bind(client))
-	const getProjects = cached(client.getProjects.bind(client))
+	const getAccessibleResources = cached(client.getAccessibleResources.bind(client), cacheOpts)
+	const getProjects = cached(client.getProjects.bind(client), cacheOpts)
 
 	const accessibleResources = await getAccessibleResources()
 
@@ -325,9 +326,10 @@ export const action = withRequestContext(async function action({ request }: Rout
 	}
 
 	const client = new AtlassianClient({ accessToken: token.accessToken })
+	const cacheOpts = { keyPrefix: `profile:${profile.id}` }
 
 	// Get current user account ID for idempotency matching
-	const getMe = cached(client.getMe.bind(client))
+	const getMe = cached(client.getMe.bind(client), cacheOpts)
 	const currentUser = await getMe()
 
 	// Save worklogs for each resource

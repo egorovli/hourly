@@ -26,6 +26,7 @@ superjson.registerCustom<Buffer, string>(
 export interface Options {
 	ttl?: number | (() => number)
 	client?: Redis
+	keyPrefix?: string
 }
 
 type CachedFactory = {
@@ -34,7 +35,7 @@ type CachedFactory = {
 		opt?: Options
 	): (...args: TArgs) => Promise<R>
 
-	key: (args: unknown | unknown[], name?: string) => string
+	key: (args: unknown | unknown[], name?: string, prefix?: string) => string
 	has: (key: string, client?: Redis) => Promise<boolean>
 }
 
@@ -42,9 +43,14 @@ function toArgsArray(args: unknown | unknown[]): unknown[] {
 	return Array.isArray(args) ? args : [args]
 }
 
-function getKey(args: unknown | unknown[], name = 'fn'): string {
+function getKey(args: unknown | unknown[], name = 'fn', prefix?: string): string {
 	const hashed = hash(toArgsArray(args), { encoding: 'base64', algorithm: 'sha256' })
-	return ['cache', name, hashed].join('::')
+	const parts = ['cache']
+	if (prefix) {
+		parts.push(prefix)
+	}
+	parts.push(name, hashed)
+	return parts.join('::')
 }
 
 const factory: CachedFactory = Object.assign(
@@ -56,7 +62,7 @@ const factory: CachedFactory = Object.assign(
 
 		return async function cachedFn(...args: T): Promise<R> {
 			const ttl = typeof opt?.ttl === 'function' ? opt.ttl() : (opt?.ttl ?? 3 * 60)
-			const key = getKey(args, fn.name)
+			const key = getKey(args, fn.name, opt?.keyPrefix)
 
 			const cached = await client.get(key)
 
@@ -72,8 +78,8 @@ const factory: CachedFactory = Object.assign(
 	},
 
 	{
-		key(args: unknown | unknown[], name = 'fn') {
-			return getKey(args, name)
+		key(args: unknown | unknown[], name = 'fn', prefix?: string) {
+			return getKey(args, name, prefix)
 		},
 
 		async has(key: string, client?: Redis): Promise<boolean> {

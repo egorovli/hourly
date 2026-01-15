@@ -59,7 +59,8 @@ export const loader = withRequestContext(async function loader({ request }: Rout
 	}
 
 	const client = new AtlassianClient({ accessToken: token.accessToken })
-	const getAccessibleResources = cached(client.getAccessibleResources.bind(client))
+	const cacheOpts = { keyPrefix: `profile:${profile.id}` }
+	const getAccessibleResources = cached(client.getAccessibleResources.bind(client), cacheOpts)
 
 	const resources = await getAccessibleResources()
 	return resources
