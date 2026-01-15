@@ -284,6 +284,6 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           port: ${{ vars.SSH_PORT }}
           script: |
-            cd /srv
+            cd /srv/hourly
             docker compose pull web
             docker compose up -d web
