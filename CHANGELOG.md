@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.3.0](https://github.com/egorovli/hourly/compare/1.2.3...1.3.0) (2026-01-21)
+
+
+### Features
+
+* **admin:** add audit log viewer with multi-select faceted filters ([dd3d25b](https://github.com/egorovli/hourly/commit/dd3d25b5a9a19ce4a5657967b670b4008071c799))
+* **admin:** add expandable rows and detail sheet to audit log viewer ([ca48748](https://github.com/egorovli/hourly/commit/ca48748276824ca1accc91ed22ebbb9d57e2965d)), closes [#116](https://github.com/egorovli/hourly/issues/116)
+* **admin:** enhance audit log viewer with grouping and filters ([5d9a4a0](https://github.com/egorovli/hourly/commit/5d9a4a0ff8c52516797a9f3249e04f040e016a93)), closes [#116](https://github.com/egorovli/hourly/issues/116)
+* **atlassian:** add user lookup and bulk worklog deletion ([68b6c22](https://github.com/egorovli/hourly/commit/68b6c223e179f17e4fe63c5089c78a550626b51c)), closes [#118](https://github.com/egorovli/hourly/issues/118)
+* **audit:** add core audit logging infrastructure ([22a153e](https://github.com/egorovli/hourly/commit/22a153e290e94138c29f56141a0e55f0168712dc)), closes [#116](https://github.com/egorovli/hourly/issues/116)
+* **auth:** add requireAuth helper with audit integration ([4426acf](https://github.com/egorovli/hourly/commit/4426acf2bb3584bbe1cf529f516c730e9333cab3)), closes [#116](https://github.com/egorovli/hourly/issues/116)
+* **worklog:** add delete and sync actions with audit logging ([6a6c9d2](https://github.com/egorovli/hourly/commit/6a6c9d23e1e15c8e8bc8ddf3241eacfec6daa592)), closes [#119](https://github.com/egorovli/hourly/issues/119)
+
+
+### Bug Fixes
+
+* **ci:** correct deployment working directory path ([b536a3f](https://github.com/egorovli/hourly/commit/b536a3fb89fd4eb95884b2d2809df8affde1156e)), closes [#113](https://github.com/egorovli/hourly/issues/113)
+* **mikro-orm:** use nativeEnumName for profile connection type ([ae906b3](https://github.com/egorovli/hourly/commit/ae906b3a8c4013f695762d059877597a99e49d4f))
+
 ## [1.2.3](https://github.com/egorovli/hourly/compare/1.2.2...1.2.3) (2026-01-15)
 
 
