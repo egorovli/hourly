@@ -3,18 +3,9 @@ import type { AccessibleResource, Project } from '~/lib/atlassian/index.ts'
 
 import { z } from 'zod'
 
-import { ProfileConnectionType } from '~/domain/index.ts'
-import { AtlassianClient } from '~/lib/atlassian/index.ts'
+import { auditActions, getAuditLogger, withAuditContext } from '~/lib/audit/index.ts'
+import { requireAuthOrRespond } from '~/lib/auth/index.ts'
 import { cached } from '~/lib/cached/index.ts'
-import { createSessionStorage } from '~/lib/session/index.ts'
-
-import {
-	orm,
-	ProfileSessionConnection,
-	Session,
-	Token,
-	withRequestContext
-} from '~/lib/mikro-orm/index.ts'
 
 const schema = {
 	loader: {
@@ -54,57 +45,16 @@ const schema = {
 
 type ProjectWithResource = Project & { resourceId: AccessibleResource['id'] }
 
-export const loader = withRequestContext(async function loader({ request }: Route.LoaderArgs) {
-	const { em } = orm
+export const loader = withAuditContext(async function loader({ request }: Route.LoaderArgs) {
+	const auth = await requireAuthOrRespond(request)
+	const auditLogger = getAuditLogger()
 
-	const sessionStorage = createSessionStorage()
-	const cookieSession = await sessionStorage.getSession(request.headers.get('Cookie'))
-
-	if (!cookieSession || !cookieSession.id) {
-		throw new Response('Unauthorized', { status: 401 })
-	}
-
-	const session = await em.findOne(Session, {
-		id: cookieSession.id
-	})
-
-	if (!session) {
-		throw new Response('Unauthorized', { status: 401 })
-	}
-
-	const connection = await em.findOne(
-		ProfileSessionConnection,
-		{
-			session: {
-				id: session.id
-			},
-			connectionType: ProfileConnectionType.WorklogTarget
-		},
-		{
-			populate: ['profile']
-		}
+	const cacheOpts = { keyPrefix: `profile:${auth.profile.id}` }
+	const getAccessibleResources = cached(
+		auth.client.getAccessibleResources.bind(auth.client),
+		cacheOpts
 	)
-
-	if (!connection) {
-		throw new Response('Unauthorized', { status: 401 })
-	}
-
-	const { profile } = connection
-
-	const token = await em.findOne(Token, {
-		profileId: profile.id,
-		provider: profile.provider
-	})
-
-	if (!token) {
-		throw new Response('Unauthorized', { status: 401 })
-	}
-
-	const client = new AtlassianClient({ accessToken: token.accessToken })
-	const cacheOpts = { keyPrefix: `profile:${profile.id}` }
-
-	const getAccessibleResources = cached(client.getAccessibleResources.bind(client), cacheOpts)
-	const getProjects = cached(client.getProjects.bind(client), cacheOpts)
+	const getProjects = cached(auth.client.getProjects.bind(auth.client), cacheOpts)
 
 	const accessibleResources = await getAccessibleResources()
 
@@ -166,7 +116,7 @@ export const loader = withRequestContext(async function loader({ request }: Rout
 	// Search issues across all resources in parallel
 	const issueResults = await Promise.all(
 		Array.from(projectsByResource.entries()).map(([resourceId, resourceProjects]) =>
-			client.searchIssues({
+			auth.client.searchIssues({
 				accessibleResourceId: resourceId,
 				projectKeys: resourceProjects.map(project => project.key),
 				userAccountIds: userIds.length > 0 ? userIds : undefined,
@@ -190,8 +140,25 @@ export const loader = withRequestContext(async function loader({ request }: Rout
 		return dateB - dateA
 	})
 
+	const returnedIssues = allIssues.slice(0, pageSize)
+
+	auditLogger?.log(
+		auditActions.dataRead.issues(
+			{
+				projectIds: query['filter[project]'],
+				userIds: query['filter[user]'],
+				from: query['filter[from]'],
+				to: query['filter[to]'],
+				query: query['filter[query]'],
+				page: pageNumber,
+				pageSize
+			},
+			returnedIssues.length
+		)
+	)
+
 	return {
-		issues: allIssues.slice(0, pageSize),
+		issues: returnedIssues,
 		total: totalCount,
 		page: pageNumber,
 		pageSize: pageSize

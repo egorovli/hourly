@@ -23,7 +23,7 @@ import type FullCalendarType from '@fullcalendar/react'
 import type { MetaDescriptor } from 'react-router'
 import type { Route } from './+types/__._index.ts'
 import type { Route as LayoutRoute } from './+types/__.ts'
-import type { SaveWorklogsActionResponse } from './api.worklog.entries.tsx'
+import type { SyncWorklogsActionResponse } from './api.worklog.entries.tsx'
 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouteLoaderData } from 'react-router'
@@ -194,6 +194,16 @@ interface WorklogSaveEntry {
 	timeSpentSeconds: number
 	started: string
 	comment?: string
+}
+
+/**
+ * Represents a worklog entry to be deleted via the API.
+ * Used when submitting delete operations to the server.
+ */
+interface WorklogDeleteEntry {
+	worklogId: string
+	issueIdOrKey: string
+	accessibleResourceId: string
 }
 
 // function renderWorklogEventContent(eventInfo: EventContentArg): React.ReactNode {
@@ -1160,21 +1170,21 @@ export default function IndexPage(): React.ReactNode {
 
 	const queryClient = useQueryClient()
 
-	// Mutation for saving worklog entries
-	const saveWorklogsMutation = useMutation({
-		mutationFn: async (entries: WorklogSaveEntry[]) => {
+	// Unified mutation for syncing worklog entries (both saves and deletes in one request)
+	const syncWorklogsMutation = useMutation({
+		mutationFn: async (params: { saves: WorklogSaveEntry[]; deletes: WorklogDeleteEntry[] }) => {
 			const response = await fetch('/api/worklog/entries', {
-				method: 'POST',
+				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ entries })
+				body: JSON.stringify(params)
 			})
 
-			if (!response.ok) {
+			if (!response.ok && response.status !== 207) {
 				const errorData = (await response.json().catch(() => ({}))) as { error?: string }
-				throw new Error(errorData.error ?? `Failed to save worklogs: ${response.statusText}`)
+				throw new Error(errorData.error ?? `Failed to sync worklogs: ${response.statusText}`)
 			}
 
-			return response.json() as Promise<SaveWorklogsActionResponse>
+			return response.json() as Promise<SyncWorklogsActionResponse>
 		},
 
 		onSuccess: data => {
@@ -1184,22 +1194,22 @@ export default function IndexPage(): React.ReactNode {
 			// Invalidate worklog entries query to refetch
 			queryClient.invalidateQueries({ queryKey: ['worklog-entries'] })
 
-			if (data.success) {
+			if (data.outcome === 'success' || data.outcome === 'empty') {
+				// All operations successful - clear all pending changes
 				setPendingChanges(new Map())
 
-				toast.success('Worklogs saved successfully', {
-					description: `${data.successCount} ${data.successCount === 1 ? 'entry' : 'entries'} saved to Jira`
-				})
-			} else {
-				// Partial success: only clear successfully saved entries
-				const failedIssues = data.results
-					.filter(r => !r.success)
-					.map(r => r.input.issueIdOrKey)
-					.slice(0, 3)
-
+				if (data.outcome === 'success') {
+					toast.success('Changes saved', {
+						description: data.summary.message
+					})
+				}
+			} else if (data.outcome === 'partial') {
+				// Partial success: only clear successfully completed entries
 				setPendingChanges(prev => {
 					const next = new Map(prev)
-					for (const result of data.results) {
+
+					// Clear successful saves
+					for (const result of data.saves.results) {
 						if (result.success && result.worklog) {
 							const matchingEntry = [...next.entries()].find(([, change]) => {
 								const issueKey = change.event.extendedProps?.['issueKey']
@@ -1210,17 +1220,39 @@ export default function IndexPage(): React.ReactNode {
 							}
 						}
 					}
+
+					// Clear successful deletes
+					for (const result of data.deletes.results) {
+						if (result.success) {
+							const matchingEntry = [...next.entries()].find(([, change]) => {
+								if (change.type !== 'delete') {
+									return false
+								}
+								const worklogId = change.event.extendedProps?.['worklogEntryId']
+								return worklogId === result.input.worklogId
+							})
+							if (matchingEntry) {
+								next.delete(matchingEntry[0])
+							}
+						}
+					}
+
 					return next
 				})
 
-				toast.warning('Partial save completed', {
-					description: `${data.successCount} saved, ${data.failureCount} failed: ${failedIssues.join(', ')}${data.failureCount > 3 ? '...' : ''}`
+				toast.warning('Partial sync completed', {
+					description: data.summary.message
+				})
+			} else {
+				// Complete failure
+				toast.error('Sync failed', {
+					description: data.summary.message
 				})
 			}
 		},
 
 		onError: error => {
-			toast.error('Failed to save worklogs', {
+			toast.error('Failed to sync worklogs', {
 				description: error instanceof Error ? error.message : 'An unexpected error occurred'
 			})
 		}
@@ -1529,30 +1561,41 @@ export default function IndexPage(): React.ReactNode {
 		[projectKeyToResourceId, accessibleResources]
 	)
 
-	// Handler for saving pending changes
+	// Handler for saving pending changes (both saves and deletes in a single request)
 	const handleSaveChanges = useCallback(() => {
-		if (pendingChanges.size === 0 || saveWorklogsMutation.isPending) {
+		if (pendingChanges.size === 0 || syncWorklogsMutation.isPending) {
 			return
 		}
 
-		const entries: WorklogSaveEntry[] = []
+		const saveEntries: WorklogSaveEntry[] = []
+		const deleteEntries: WorklogDeleteEntry[] = []
 
-		for (const [eventId, change] of pendingChanges) {
-			// Skip delete operations for now (would need a separate endpoint)
-			if (change.type === 'delete') {
-				continue
-			}
-
+		for (const [, change] of pendingChanges) {
 			const { event } = change
 			const issueKey = event.extendedProps?.['issueKey'] as string | undefined
 			const projectKey = issueKey ? getProjectKeyFromIssueKey(issueKey) : undefined
 			const resourceId = projectKey ? projectKeyToResourceId.get(projectKey) : undefined
 
 			if (!issueKey || !resourceId) {
-				// Can't save without issue key and resource ID
+				// Can't process without issue key and resource ID
 				continue
 			}
 
+			if (change.type === 'delete') {
+				// Handle delete operation
+				const worklogId = event.extendedProps?.['worklogEntryId'] as string | undefined
+
+				if (worklogId) {
+					deleteEntries.push({
+						worklogId,
+						issueIdOrKey: issueKey,
+						accessibleResourceId: resourceId
+					})
+				}
+				continue
+			}
+
+			// Handle create/update operation
 			const timeSpentSeconds = event.extendedProps?.['timeSpentSeconds'] as number | undefined
 			const started = event.extendedProps?.['started'] as string | undefined
 			const worklogId = event.extendedProps?.['worklogEntryId'] as string | undefined
@@ -1564,7 +1607,7 @@ export default function IndexPage(): React.ReactNode {
 			// For new events (created via drag), worklogId is a temp nanoid - don't send it
 			const isNewEvent = change.type === 'create' || event.extendedProps?.['isNew'] === true
 
-			entries.push({
+			saveEntries.push({
 				worklogId: isNewEvent ? undefined : worklogId,
 				issueIdOrKey: issueKey,
 				accessibleResourceId: resourceId,
@@ -1573,10 +1616,9 @@ export default function IndexPage(): React.ReactNode {
 			})
 		}
 
-		if (entries.length > 0) {
-			saveWorklogsMutation.mutate(entries)
-		}
-	}, [pendingChanges, saveWorklogsMutation, projectKeyToResourceId])
+		// Send a single request with both saves and deletes
+		syncWorklogsMutation.mutate({ saves: saveEntries, deletes: deleteEntries })
+	}, [pendingChanges, syncWorklogsMutation, projectKeyToResourceId])
 
 	// Handler for when an event is dragged to a new time/date
 	const handleEventDrop = useCallback(
@@ -1803,10 +1845,6 @@ export default function IndexPage(): React.ReactNode {
 			updatePendingChange(eventId, newEvent, 'create')
 			setEditingEvent(undefined)
 			setEventSheetSearchQuery('')
-
-			toast.success('Worklog created', {
-				description: `${issue.key}: ${issue.fields.summary}`
-			})
 		},
 		[editingEvent, currentUserId, layoutLoaderData?.user, updatePendingChange]
 	)
@@ -2196,16 +2234,16 @@ export default function IndexPage(): React.ReactNode {
 						<div
 							className={cn(
 								'flex h-12 items-center justify-between rounded-lg border px-4 transition-all duration-200',
-								saveWorklogsMutation.isPending
+								syncWorklogsMutation.isPending
 									? 'border-primary/30 bg-primary/5'
 									: 'border-amber-500/30 bg-amber-500/5'
 							)}
 						>
 							<div className='flex items-center gap-3'>
-								{saveWorklogsMutation.isPending ? (
+								{syncWorklogsMutation.isPending ? (
 									<div className='flex items-center gap-2 text-primary'>
 										<Loader2Icon className='size-3.5 animate-spin' />
-										<span className='text-sm font-medium'>Saving changes...</span>
+										<span className='text-sm font-medium'>Syncing...</span>
 									</div>
 								) : (
 									<div className='flex items-center gap-2 text-amber-600'>
@@ -2223,7 +2261,7 @@ export default function IndexPage(): React.ReactNode {
 									variant='ghost'
 									size='sm'
 									onClick={discardPendingChanges}
-									disabled={saveWorklogsMutation.isPending}
+									disabled={syncWorklogsMutation.isPending}
 									className='h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50'
 								>
 									<XIcon className='size-3.5' />
@@ -2232,15 +2270,15 @@ export default function IndexPage(): React.ReactNode {
 								<Button
 									size='sm'
 									onClick={handleSaveChanges}
-									disabled={saveWorklogsMutation.isPending || entriesLoading}
+									disabled={syncWorklogsMutation.isPending || entriesLoading}
 									className='h-8 gap-1.5 text-xs'
 								>
-									{saveWorklogsMutation.isPending ? (
+									{syncWorklogsMutation.isPending ? (
 										<Loader2Icon className='size-3.5 animate-spin' />
 									) : (
 										<SaveIcon className='size-3.5' />
 									)}
-									{saveWorklogsMutation.isPending ? 'Saving...' : 'Save'}
+									{syncWorklogsMutation.isPending ? 'Saving...' : 'Save'}
 								</Button>
 							</div>
 						</div>

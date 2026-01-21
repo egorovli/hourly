@@ -1,15 +1,11 @@
 import type { Route } from './+types/__.ts'
 import type { User } from '~/lib/atlassian/user.ts'
 
-import { Form, Outlet, redirect } from 'react-router'
+import { Form, Outlet } from 'react-router'
 import { LogOutIcon, UserIcon } from 'lucide-react'
 
 import { Logo } from '~/components/logo.tsx'
 import { Avatar, AvatarFallback, AvatarImage } from '~/components/shadcn/ui/avatar.tsx'
-import { createSessionStorage } from '~/lib/session/index.ts'
-import { ProfileConnectionType } from '~/domain/index.ts'
-import { AtlassianClient } from '~/lib/atlassian/index.ts'
-import { cached } from '~/lib/cached/index.ts'
 
 import {
 	DropdownMenu,
@@ -18,13 +14,9 @@ import {
 	DropdownMenuTrigger
 } from '~/components/shadcn/ui/dropdown-menu.tsx'
 
-import {
-	orm,
-	ProfileSessionConnection,
-	Session,
-	Token,
-	withRequestContext
-} from '~/lib/mikro-orm/index.ts'
+import { requireAuthOrRedirect } from '~/lib/auth/index.ts'
+import { cached } from '~/lib/cached/index.ts'
+import { withRequestContext } from '~/lib/mikro-orm/index.ts'
 
 function getInitials(name: string): string {
 	return name
@@ -97,68 +89,16 @@ export default function AuthenticatedLayout({ loaderData }: Route.ComponentProps
 	)
 }
 
-export let loader = withRequestContext(async function loader({ request }: Route.LoaderArgs) {
-	function redirectToSignIn(): never {
-		const url = new URL(request.url)
+export const loader = withRequestContext(async function loader({ request }: Route.LoaderArgs) {
+	const auth = await requireAuthOrRedirect(request)
 
-		const target =
-			url.pathname === '/'
-				? '/auth/sign-in'
-				: `/auth/sign-in?redirected-from=${encodeURIComponent(url.pathname + url.search)}`
-
-		throw redirect(target)
-	}
-
-	const { em } = orm
-	const sessionStorage = createSessionStorage()
-	const cookieSession = await sessionStorage.getSession(request.headers.get('Cookie'))
-
-	if (!cookieSession || !cookieSession.id) {
-		redirectToSignIn()
-	}
-
-	const session = await em.findOne(Session, {
-		id: cookieSession.id
-	})
-
-	if (!session) {
-		redirectToSignIn()
-	}
-
-	const connection = await em.findOne(
-		ProfileSessionConnection,
-		{
-			session: {
-				id: session.id
-			},
-			connectionType: ProfileConnectionType.WorklogTarget
-		},
-		{
-			populate: ['profile']
-		}
+	const cacheOpts = { keyPrefix: `profile:${auth.profile.id}` }
+	const getMe = cached(auth.client.getMe.bind(auth.client), cacheOpts)
+	const getAccessibleResources = cached(
+		auth.client.getAccessibleResources.bind(auth.client),
+		cacheOpts
 	)
-
-	if (!connection) {
-		redirectToSignIn()
-	}
-
-	const { profile } = connection
-
-	const token = await em.findOne(Token, {
-		profileId: profile.id,
-		provider: profile.provider
-	})
-
-	if (!token) {
-		redirectToSignIn()
-	}
-
-	const client = new AtlassianClient({ accessToken: token.accessToken })
-	const cacheOpts = { keyPrefix: `profile:${profile.id}` }
-
-	const getMe = cached(client.getMe.bind(client), cacheOpts)
-	const getAccessibleResources = cached(client.getAccessibleResources.bind(client), cacheOpts)
-	const getProjects = cached(client.getProjects.bind(client), cacheOpts)
+	const getProjects = cached(auth.client.getProjects.bind(auth.client), cacheOpts)
 
 	const user = await getMe()
 	const accessibleResources = await getAccessibleResources()
