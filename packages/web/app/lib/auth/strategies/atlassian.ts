@@ -19,10 +19,39 @@ export class AtlassianStrategy<User> extends OAuth2Strategy<User> {
 	override name = 'atlassian'
 
 	static scopes = [
-		'offline_access',
+		// // User profile (Atlassian platform)
+		// 'read:me',
+
+		// // Projects endpoint
+		// 'read:project:jira',
+		// 'read:project.property:jira',
+		// 'read:issue-type:jira',
+		// 'read:application-role:jira',
+
+		// // User search
+		// 'read:user:jira',
+		// 'read:avatar:jira',
+		// 'read:issue:jira',
+
+		// // Issue search (JQL)
+		// 'read:issue-details:jira',
+		// 'read:issue-meta:jira',
+		// 'read:field-configuration:jira',
+		// 'read:audit-log:jira',
+
+		// // Worklog read
+		// 'read:issue-worklog:jira',
+		// 'read:issue-worklog.property:jira',
+		// 'read:group:jira',
+		// 'read:project-role:jira',
+
+		// // Worklog write
+		// 'write:issue-worklog:jira',
+		// 'write:issue-worklog.property:jira'
+
 		'read:me',
-		'read:jira-work',
 		'read:jira-user',
+		'read:jira-work',
 		'write:jira-work'
 	]
 
