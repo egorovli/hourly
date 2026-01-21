@@ -18,7 +18,7 @@ export class ProfileSessionConnection {
 
 	@Enum({
 		items: () => ProfileConnectionType,
-		nativeEnumName: 'profile_connection_type'
+		enumName: 'profile_connection_type'
 	})
 	connectionType!: ProfileConnectionType
 

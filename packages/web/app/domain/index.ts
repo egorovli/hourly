@@ -1,3 +1,7 @@
+export * from './audit-log-action-type.enum.ts'
+export * from './audit-log-outcome.enum.ts'
+export * from './audit-log-target-resource-type.enum.ts'
+export * from './audit-log.ts'
 export * from './preferences.ts'
 export * from './profile-connection-type.enum.ts'
 export * from './theme.enum.ts'
