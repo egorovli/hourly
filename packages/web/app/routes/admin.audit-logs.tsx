@@ -1,336 +1,432 @@
 import type { Route } from './+types/admin.audit-logs.ts'
 import type {
 	AuditLogEntry,
+	AuditLogGroup,
 	AuditLogLoaderResponse,
-	AuditLogQueryParams,
+	AuditLogViewMode,
 	ResolvedActor
 } from '~/domain/index.ts'
+import type { FilterQuery } from '@mikro-orm/core'
+import type { AbstractSqlConnection } from '@mikro-orm/postgresql'
 
 import { FileTextIcon } from 'lucide-react'
 
 import { AuditLogFilters } from '~/components/admin/audit-log-filters.tsx'
+import { AuditLogGroupedTable } from '~/components/admin/audit-log-grouped-table.tsx'
 import { AuditLogTable } from '~/components/admin/audit-log-table.tsx'
-import { ProfileConnectionType } from '~/domain/index.ts'
-import { AtlassianClient } from '~/lib/atlassian/index.ts'
-import { cached } from '~/lib/cached/index.ts'
-import { createSessionStorage } from '~/lib/session/index.ts'
-
 import {
-	AuditLogActionType,
+	type AuditLogActionType,
 	AuditLogOutcome,
-	AuditLogTargetResourceType,
+	AuditLogSeverity,
+	type AuditLogTargetResourceType,
 	auditLogQuerySchema
 } from '~/domain/index.ts'
+import { auditActions, getAuditLogger, withAuditContext } from '~/lib/audit/index.ts'
+import { requireAdmin } from '~/lib/auth/index.ts'
+import { cached } from '~/lib/cached/index.ts'
+import { AuditLog, orm } from '~/lib/mikro-orm/index.ts'
 
-import {
-	orm,
-	ProfileSessionConnection,
-	Session,
-	Token,
-	withRequestContext
-} from '~/lib/mikro-orm/index.ts'
-
-// Mock data generator for demonstration
-function generateMockEntries(params: AuditLogQueryParams): {
-	entries: AuditLogEntry[]
-	pagination: { page: number; pageSize: number; total: number; totalPages: number }
-} {
-	const allEntries = createMockEntries()
-
-	// Apply filters
-	let filtered = allEntries
-
-	if (params['filter[action-type]'].length > 0) {
-		const actionTypes = new Set(params['filter[action-type]'])
-		filtered = filtered.filter(e => actionTypes.has(e.actionType))
-	}
-
-	if (params['filter[outcome]'].length > 0) {
-		const outcomes = new Set(params['filter[outcome]'])
-		filtered = filtered.filter(e => outcomes.has(e.outcome))
-	}
-
-	if (params['filter[target-resource-type]'].length > 0) {
-		const resourceTypes = new Set(params['filter[target-resource-type]'])
-		filtered = filtered.filter(e => resourceTypes.has(e.targetResourceType))
-	}
-
-	if (params['filter[from]']) {
-		const fromDate = new Date(params['filter[from]'])
-		filtered = filtered.filter(e => new Date(e.occurredAt) >= fromDate)
-	}
-
-	if (params['filter[to]']) {
-		const toDate = new Date(params['filter[to]'])
-		filtered = filtered.filter(e => new Date(e.occurredAt) <= toDate)
-	}
-
-	// Pagination
-	const page = params['page[number]']
-	const pageSize = params['page[size]']
-	const total = filtered.length
-	const totalPages = Math.ceil(total / pageSize)
-	const startIndex = (page - 1) * pageSize
-	const entries = filtered.slice(startIndex, startIndex + pageSize)
-
+/**
+ * Convert AuditLog entity to AuditLogEntry interface for the frontend.
+ */
+function toAuditLogEntry(entity: AuditLog): AuditLogEntry {
 	return {
-		entries,
-		pagination: {
-			page,
-			pageSize,
-			total,
-			totalPages
-		}
+		id: entity.id,
+		actorProfileId: entity.actorProfileId,
+		actorProvider: entity.actorProvider,
+		actionType: entity.actionType,
+		actionDescription: entity.actionDescription,
+		severity: entity.severity,
+		targetResourceType: entity.targetResourceType,
+		targetResourceId: entity.targetResourceId,
+		outcome: entity.outcome,
+		occurredAt: entity.occurredAt.toISOString(),
+		metadata: entity.metadata,
+		correlationId: entity.correlationId,
+		sessionId: entity.sessionId,
+		requestId: entity.requestId,
+		requestPath: entity.requestPath,
+		requestMethod: entity.requestMethod,
+		ipAddress: entity.ipAddress,
+		userAgent: entity.userAgent,
+		durationMs: entity.durationMs,
+		parentEventId: entity.parentEventId,
+		sequenceNumber: entity.sequenceNumber
 	}
 }
 
-function createMockEntries(): AuditLogEntry[] {
-	const now = new Date()
-	const entries: AuditLogEntry[] = []
-
-	// Authentication events
-	entries.push({
-		id: crypto.randomUUID(),
-		actorProfileId: '6242e240699649006ae56ef4',
-		actorProvider: 'atlassian',
-		actionType: AuditLogActionType.Authentication,
-		actionDescription: 'User signed in via Atlassian OAuth',
-		targetResourceType: AuditLogTargetResourceType.Session,
-		targetResourceId: 'sess_abc123',
-		outcome: AuditLogOutcome.Success,
-		occurredAt: new Date(now.getTime() - 5 * 60 * 1000).toISOString()
-	})
-
-	entries.push({
-		id: crypto.randomUUID(),
-		actorProfileId: 'user_xyz789',
-		actorProvider: 'gitlab',
-		actionType: AuditLogActionType.Authentication,
-		actionDescription: 'User signed in via GitLab OAuth',
-		targetResourceType: AuditLogTargetResourceType.Session,
-		targetResourceId: 'sess_def456',
-		outcome: AuditLogOutcome.Success,
-		occurredAt: new Date(now.getTime() - 15 * 60 * 1000).toISOString()
-	})
-
-	entries.push({
-		id: crypto.randomUUID(),
-		actorProfileId: 'unknown',
-		actorProvider: 'atlassian',
-		actionType: AuditLogActionType.Authentication,
-		actionDescription: 'Failed login attempt - invalid credentials',
-		targetResourceType: AuditLogTargetResourceType.Session,
-		outcome: AuditLogOutcome.Failure,
-		occurredAt: new Date(now.getTime() - 30 * 60 * 1000).toISOString()
-	})
-
-	// Authorization events
-	entries.push({
-		id: crypto.randomUUID(),
-		actorProfileId: '6242e240699649006ae56ef4',
-		actorProvider: 'atlassian',
-		actionType: AuditLogActionType.Authorization,
-		actionDescription: 'Admin accessed audit logs',
-		targetResourceType: AuditLogTargetResourceType.AuditLog,
-		outcome: AuditLogOutcome.Success,
-		occurredAt: new Date(now.getTime() - 2 * 60 * 1000).toISOString()
-	})
-
-	entries.push({
-		id: crypto.randomUUID(),
-		actorProfileId: 'user_abc123',
-		actorProvider: 'atlassian',
-		actionType: AuditLogActionType.Authorization,
-		actionDescription: 'Non-admin attempted to access admin panel',
-		targetResourceType: AuditLogTargetResourceType.AuditLog,
-		outcome: AuditLogOutcome.Failure,
-		occurredAt: new Date(now.getTime() - 45 * 60 * 1000).toISOString()
-	})
-
-	// Data modification events
-	entries.push({
-		id: crypto.randomUUID(),
-		actorProfileId: '6242e240699649006ae56ef4',
-		actorProvider: 'atlassian',
-		actionType: AuditLogActionType.DataModification,
-		actionDescription: 'Created worklog entry for PROJ-123',
-		targetResourceType: AuditLogTargetResourceType.Worklog,
-		targetResourceId: 'worklog_789',
-		outcome: AuditLogOutcome.Success,
-		occurredAt: new Date(now.getTime() - 1 * 60 * 60 * 1000).toISOString()
-	})
-
-	entries.push({
-		id: crypto.randomUUID(),
-		actorProfileId: '6242e240699649006ae56ef4',
-		actorProvider: 'atlassian',
-		actionType: AuditLogActionType.DataModification,
-		actionDescription: 'Updated worklog entry for PROJ-456',
-		targetResourceType: AuditLogTargetResourceType.Worklog,
-		targetResourceId: 'worklog_456',
-		outcome: AuditLogOutcome.Success,
-		occurredAt: new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString()
-	})
-
-	entries.push({
-		id: crypto.randomUUID(),
-		actorProfileId: 'user_xyz789',
-		actorProvider: 'gitlab',
-		actionType: AuditLogActionType.DataModification,
-		actionDescription: 'Deleted worklog entry',
-		targetResourceType: AuditLogTargetResourceType.Worklog,
-		targetResourceId: 'worklog_old123',
-		outcome: AuditLogOutcome.Success,
-		occurredAt: new Date(now.getTime() - 3 * 60 * 60 * 1000).toISOString()
-	})
-
-	// Configuration events
-	entries.push({
-		id: crypto.randomUUID(),
-		actorProfileId: '6242e240699649006ae56ef4',
-		actorProvider: 'atlassian',
-		actionType: AuditLogActionType.Configuration,
-		actionDescription: 'Updated user preferences',
-		targetResourceType: AuditLogTargetResourceType.Preferences,
-		targetResourceId: 'pref_user123',
-		outcome: AuditLogOutcome.Success,
-		occurredAt: new Date(now.getTime() - 4 * 60 * 60 * 1000).toISOString()
-	})
-
-	// Integration events
-	entries.push({
-		id: crypto.randomUUID(),
-		actorProfileId: '6242e240699649006ae56ef4',
-		actorProvider: 'atlassian',
-		actionType: AuditLogActionType.Integration,
-		actionDescription: 'Connected GitLab integration',
-		targetResourceType: AuditLogTargetResourceType.Integration,
-		targetResourceId: 'int_gitlab_main',
-		outcome: AuditLogOutcome.Success,
-		occurredAt: new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString()
-	})
-
-	entries.push({
-		id: crypto.randomUUID(),
-		actorProfileId: 'user_xyz789',
-		actorProvider: 'gitlab',
-		actionType: AuditLogActionType.Integration,
-		actionDescription: 'Failed to sync with Jira - API rate limit',
-		targetResourceType: AuditLogTargetResourceType.Integration,
-		outcome: AuditLogOutcome.Failure,
-		occurredAt: new Date(now.getTime() - 6 * 60 * 60 * 1000).toISOString()
-	})
-
-	entries.push({
-		id: crypto.randomUUID(),
-		actorProfileId: 'system',
-		actorProvider: 'internal',
-		actionType: AuditLogActionType.Integration,
-		actionDescription: 'Token refresh in progress',
-		targetResourceType: AuditLogTargetResourceType.Token,
-		targetResourceId: 'token_abc123',
-		outcome: AuditLogOutcome.Pending,
-		occurredAt: new Date(now.getTime() - 10 * 1000).toISOString()
-	})
-
-	// Administration events
-	entries.push({
-		id: crypto.randomUUID(),
-		actorProfileId: '6242e240699649006ae56ef4',
-		actorProvider: 'atlassian',
-		actionType: AuditLogActionType.Administration,
-		actionDescription: 'Viewed system audit logs',
-		targetResourceType: AuditLogTargetResourceType.AuditLog,
-		outcome: AuditLogOutcome.Success,
-		occurredAt: new Date(now.getTime() - 1 * 60 * 1000).toISOString()
-	})
-
-	// Sort by occurredAt descending (most recent first)
-	entries.sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime())
-
-	return entries
+/**
+ * Severity ordering: higher values = more severe
+ */
+const severityOrder: Record<AuditLogSeverity, number> = {
+	[AuditLogSeverity.Debug]: 0,
+	[AuditLogSeverity.Info]: 1,
+	[AuditLogSeverity.Warning]: 2,
+	[AuditLogSeverity.Error]: 3,
+	[AuditLogSeverity.Critical]: 4
 }
 
-export const loader = withRequestContext(async function loader({
+/**
+ * Build AuditLogGroup objects from a list of entries grouped by correlationId.
+ */
+function buildAuditLogGroups(entries: AuditLogEntry[]): AuditLogGroup[] {
+	const groupMap = new Map<string, AuditLogEntry[]>()
+
+	for (const entry of entries) {
+		const existing = groupMap.get(entry.correlationId) ?? []
+		existing.push(entry)
+		groupMap.set(entry.correlationId, existing)
+	}
+
+	const groups: AuditLogGroup[] = []
+
+	for (const [correlationId, events] of groupMap) {
+		// Sort by sequence number, then by occurredAt
+		events.sort((a, b) => {
+			const seqA = a.sequenceNumber ?? 0
+			const seqB = b.sequenceNumber ?? 0
+			if (seqA !== seqB) {
+				return seqA - seqB
+			}
+			return new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime()
+		})
+
+		const primaryEvent = events[0]
+		if (!primaryEvent) {
+			continue
+		}
+
+		const hasFailure = events.some(e => e.outcome === AuditLogOutcome.Failure)
+
+		let highestSeverity = primaryEvent.severity
+		for (const event of events) {
+			if (severityOrder[event.severity] > severityOrder[highestSeverity]) {
+				highestSeverity = event.severity
+			}
+		}
+
+		const timestamps = events.map(e => e.occurredAt)
+		const sortedTimestamps = [...timestamps].sort()
+		const start = sortedTimestamps[0] ?? primaryEvent.occurredAt
+		const end = sortedTimestamps[sortedTimestamps.length - 1] ?? primaryEvent.occurredAt
+
+		groups.push({
+			correlationId,
+			primaryEvent,
+			eventCount: events.length,
+			events,
+			hasFailure,
+			highestSeverity,
+			timeRange: { start, end }
+		})
+	}
+
+	return groups
+}
+
+export const loader = withAuditContext(async function loader({
 	request
 }: Route.LoaderArgs): Promise<AuditLogLoaderResponse> {
+	const auth = await requireAdmin(request)
+	const auditLogger = getAuditLogger()
+
 	const url = new URL(request.url)
 
 	// Parse array params using getAll
 	const rawParams = {
 		'filter[action-type]': url.searchParams.getAll('filter[action-type]'),
 		'filter[outcome]': url.searchParams.getAll('filter[outcome]'),
+		'filter[severity]': url.searchParams.getAll('filter[severity]'),
 		'filter[target-resource-type]': url.searchParams.getAll('filter[target-resource-type]'),
+		'filter[actor]': url.searchParams.getAll('filter[actor]'),
 		'filter[from]': url.searchParams.get('filter[from]') ?? undefined,
 		'filter[to]': url.searchParams.get('filter[to]') ?? undefined,
 		'page[number]': url.searchParams.get('page[number]') ?? undefined,
-		'page[size]': url.searchParams.get('page[size]') ?? undefined
+		'page[size]': url.searchParams.get('page[size]') ?? undefined,
+		'view[mode]': url.searchParams.get('view[mode]') ?? undefined
 	}
 
 	const params = await auditLogQuerySchema.parseAsync(rawParams)
-	const data = generateMockEntries(params)
 
-	// Resolve actor info from session
-	const actors: Record<string, ResolvedActor> = {}
+	// Build query filters
+	const em = orm.em.fork()
+	const where: FilterQuery<AuditLog> = {}
 
-	const { em } = orm
-	const sessionStorage = createSessionStorage()
-	const cookieSession = await sessionStorage.getSession(request.headers.get('Cookie'))
+	if (params['filter[action-type]'].length > 0) {
+		where.actionType = { $in: params['filter[action-type]'] as AuditLogActionType[] }
+	}
 
-	if (cookieSession?.id) {
-		const session = await em.findOne(Session, { id: cookieSession.id })
+	if (params['filter[outcome]'].length > 0) {
+		where.outcome = { $in: params['filter[outcome]'] as AuditLogOutcome[] }
+	}
 
-		if (session) {
-			const connection = await em.findOne(
-				ProfileSessionConnection,
-				{
-					session: { id: session.id },
-					connectionType: ProfileConnectionType.WorklogTarget
-				},
-				{ populate: ['profile'] }
+	if (params['filter[severity]'].length > 0) {
+		where.severity = { $in: params['filter[severity]'] as AuditLogSeverity[] }
+	}
+
+	if (params['filter[target-resource-type]'].length > 0) {
+		where.targetResourceType = {
+			$in: params['filter[target-resource-type]'] as AuditLogTargetResourceType[]
+		}
+	}
+
+	if (params['filter[from]'] || params['filter[to]']) {
+		const occurredAtFilter: { $gte?: Date; $lte?: Date } = {}
+
+		if (params['filter[from]']) {
+			occurredAtFilter.$gte = new Date(params['filter[from]'])
+		}
+
+		if (params['filter[to]']) {
+			// Filter sends end-of-day UTC, so just parse it directly
+			occurredAtFilter.$lte = new Date(params['filter[to]'])
+		}
+
+		where.occurredAt = occurredAtFilter
+	}
+
+	if (params['filter[actor]'].length > 0) {
+		where.$or = params['filter[actor]'].map(actor => {
+			const [provider, ...rest] = actor.split(':')
+			const profileId = rest.join(':') // Handle profileIds with colons
+			return { actorProvider: provider, actorProfileId: profileId }
+		})
+	}
+
+	// Fetch audit logs with pagination
+	const page = params['page[number]']
+	const pageSize = params['page[size]']
+	const viewMode: AuditLogViewMode = params['view[mode]']
+
+	let entries: AuditLogEntry[] = []
+	let groups: AuditLogGroup[] | undefined
+	let total: number
+	let totalPages: number
+
+	if (viewMode === 'grouped') {
+		// Grouped mode: paginate by correlation groups using Knex
+		// This avoids loading all entries into memory for large datasets
+		const connection = em.getConnection() as AbstractSqlConnection
+		const knex = connection.getKnex()
+
+		// Build Knex query builder with filters
+		const buildFilteredQuery = () => {
+			const qb = knex('audit_logs')
+
+			if (params['filter[action-type]'].length > 0) {
+				qb.whereIn('action_type', params['filter[action-type]'])
+			}
+			if (params['filter[outcome]'].length > 0) {
+				qb.whereIn('outcome', params['filter[outcome]'])
+			}
+			if (params['filter[severity]'].length > 0) {
+				qb.whereIn('severity', params['filter[severity]'])
+			}
+			if (params['filter[target-resource-type]'].length > 0) {
+				qb.whereIn('target_resource_type', params['filter[target-resource-type]'])
+			}
+			if (params['filter[from]']) {
+				qb.where('occurred_at', '>=', new Date(params['filter[from]']))
+			}
+			if (params['filter[to]']) {
+				qb.where('occurred_at', '<=', new Date(params['filter[to]']))
+			}
+			if (params['filter[actor]'].length > 0) {
+				qb.where(function () {
+					for (const actor of params['filter[actor]']) {
+						const [provider, ...rest] = actor.split(':')
+						const profileId = rest.join(':')
+						this.orWhere(function () {
+							this.where('actor_provider', provider).where('actor_profile_id', profileId)
+						})
+					}
+				})
+			}
+
+			return qb
+		}
+
+		// Step 1: Count total distinct correlation groups
+		const countResult = await buildFilteredQuery()
+			.countDistinct('correlation_id as count')
+			.first<{ count: string }>()
+		total = Number(countResult?.count ?? 0)
+		totalPages = Math.ceil(total / pageSize)
+
+		// Step 2: Get paginated correlation IDs ordered by first occurrence (newest first)
+		const correlationRows = (await buildFilteredQuery()
+			.select('correlation_id')
+			.min('occurred_at as first_occurred')
+			.groupBy('correlation_id')
+			.orderBy('first_occurred', 'desc')
+			.limit(pageSize)
+			.offset((page - 1) * pageSize)) as { correlation_id: string }[]
+		const paginatedCorrelationIds = correlationRows.map(row => row.correlation_id)
+
+		// Step 3: Fetch only events for paginated correlation IDs
+		if (paginatedCorrelationIds.length > 0) {
+			const paginatedEntities = await em.find(
+				AuditLog,
+				{ correlationId: { $in: paginatedCorrelationIds } },
+				{ orderBy: { occurredAt: 'DESC' } }
 			)
 
-			if (connection) {
-				const { profile } = connection
+			const allEntries = paginatedEntities.map(toAuditLogEntry)
+			groups = buildAuditLogGroups(allEntries)
 
-				const token = await em.findOne(Token, {
-					profileId: profile.id,
-					provider: profile.provider
+			// Sort groups by primary event time (newest first)
+			groups.sort(
+				(a, b) =>
+					new Date(b.primaryEvent.occurredAt).getTime() -
+					new Date(a.primaryEvent.occurredAt).getTime()
+			)
+
+			// Collect all entries from groups for actor resolution
+			entries = allEntries
+		} else {
+			groups = []
+		}
+	} else {
+		// Flat mode: existing pagination logic
+		const [entities, flatTotal] = await em.findAndCount(AuditLog, where, {
+			orderBy: { occurredAt: 'DESC' },
+			limit: pageSize,
+			offset: (page - 1) * pageSize
+		})
+
+		entries = entities.map(toAuditLogEntry)
+		total = flatTotal
+		totalPages = Math.ceil(total / pageSize)
+	}
+
+	// Log this audit log viewing (meta-logging)
+	auditLogger?.log(
+		auditActions.admin.viewedAuditLogs({
+			actionTypes: params['filter[action-type]'],
+			outcomes: params['filter[outcome]'],
+			severities: params['filter[severity]'],
+			targetResourceTypes: params['filter[target-resource-type]'],
+			from: params['filter[from]'],
+			to: params['filter[to]'],
+			page,
+			pageSize,
+			resultCount: entries.length,
+			viewMode
+		})
+	)
+
+	// Resolve actor info by fetching users by their account IDs from the entries
+	const actors: Record<string, ResolvedActor> = {}
+	const allActors: Record<string, ResolvedActor> = {}
+
+	try {
+		const cacheOpts = { keyPrefix: `profile:${auth.profile.id}` }
+		const getMe = cached(auth.client.getMe.bind(auth.client), cacheOpts)
+		const getAccessibleResources = cached(
+			auth.client.getAccessibleResources.bind(auth.client),
+			cacheOpts
+		)
+		const getUsersByAccountIds = cached(
+			auth.client.getUsersByAccountIds.bind(auth.client),
+			cacheOpts
+		)
+
+		// First, add the current user to actors
+		const currentUser = await getMe()
+		const currentUserKey = `atlassian:${currentUser.account_id}`
+		const currentUserActor: ResolvedActor = {
+			profileId: currentUser.account_id,
+			provider: 'atlassian',
+			displayName: currentUser.name,
+			email: currentUser.email,
+			avatarUrl: currentUser.picture
+		}
+		actors[currentUserKey] = currentUserActor
+		allActors[currentUserKey] = currentUserActor
+
+		// Fetch ALL distinct actors from audit_logs for filter dropdown
+		const distinctActorRows: { actor_profile_id: string; actor_provider: string }[] = await em
+			.getConnection()
+			.execute(
+				`SELECT DISTINCT actor_profile_id, actor_provider
+				 FROM audit_logs
+				 WHERE actor_profile_id IS NOT NULL AND actor_provider IS NOT NULL`
+			)
+
+		// Get all Atlassian actor IDs (from all logs, not just current page)
+		const allAtlassianActorIds = distinctActorRows
+			.filter(row => row.actor_provider === 'atlassian')
+			.map(row => row.actor_profile_id)
+			.filter(id => id !== currentUser.account_id)
+
+		// Extract unique Atlassian actor profile IDs from current page entries
+		const pageAtlassianActorIds = [
+			...new Set(
+				entries
+					.filter(entry => entry.actorProvider === 'atlassian' && entry.actorProfileId)
+					.map(entry => entry.actorProfileId as string)
+					.filter(id => id !== currentUser.account_id)
+			)
+		]
+
+		// Combine all unique actor IDs for resolution
+		const allUniqueActorIds = [...new Set([...allAtlassianActorIds, ...pageAtlassianActorIds])]
+
+		// Fetch user details if there are any Atlassian actors to resolve
+		if (allUniqueActorIds.length > 0) {
+			const accessibleResources = await getAccessibleResources()
+			const firstResource = accessibleResources[0]
+
+			if (firstResource) {
+				const users = await getUsersByAccountIds({
+					accessibleResourceId: firstResource.id,
+					accountIds: allUniqueActorIds
 				})
 
-				if (token && profile.provider === 'atlassian') {
-					try {
-						const client = new AtlassianClient({ accessToken: token.accessToken })
-						const cacheOpts = { keyPrefix: `profile:${profile.id}` }
-						const getMe = cached(client.getMe.bind(client), cacheOpts)
-						const user = await getMe()
+				for (const user of users) {
+					const actorKey = `atlassian:${user.accountId}`
+					const resolvedActor: ResolvedActor = {
+						profileId: user.accountId,
+						provider: 'atlassian',
+						displayName: user.displayName,
+						email: user.emailAddress,
+						avatarUrl: user.avatarUrls?.['48x48']
+					}
 
-						// Create actor key for current user
-						const actorKey = `${profile.provider}:${profile.id}`
-						actors[actorKey] = {
-							profileId: profile.id,
-							provider: profile.provider,
-							displayName: user.name,
-							avatarUrl: user.picture
-						}
-					} catch {
-						// Silently fail - we'll just show the profile ID
+					// Add to allActors for filter dropdown
+					allActors[actorKey] = resolvedActor
+
+					// Add to actors only if this user is on the current page
+					if (pageAtlassianActorIds.includes(user.accountId)) {
+						actors[actorKey] = resolvedActor
 					}
 				}
 			}
 		}
+	} catch (error) {
+		// Log error but continue - we'll fall back to showing profile IDs
+		// biome-ignore lint/suspicious/noConsole: Server-side error logging for debugging
+		console.error('[AuditLogs] Failed to resolve actors:', error)
 	}
 
 	return {
-		entries: data.entries,
-		pagination: data.pagination,
+		entries: viewMode === 'flat' ? entries : undefined,
+		groups: viewMode === 'grouped' ? groups : undefined,
+		pagination: {
+			page,
+			pageSize,
+			total,
+			totalPages
+		},
 		params,
-		actors
+		actors,
+		allActors,
+		viewMode
 	}
 })
 
 export default function AuditLogsPage({ loaderData }: Route.ComponentProps): React.ReactNode {
-	const { params, actors, ...data } = loaderData
+	const { params, actors, allActors, entries, groups, pagination, viewMode } = loaderData
 
 	return (
 		<div className='flex flex-col gap-6 p-6'>
@@ -346,13 +442,25 @@ export default function AuditLogsPage({ loaderData }: Route.ComponentProps): Rea
 			</div>
 
 			{/* Filters */}
-			<AuditLogFilters params={params} />
+			<AuditLogFilters
+				params={params}
+				viewMode={viewMode}
+				allActors={allActors}
+			/>
 
 			{/* Table */}
-			<AuditLogTable
-				data={data}
-				actors={actors}
-			/>
+			{viewMode === 'grouped' && groups ? (
+				<AuditLogGroupedTable
+					groups={groups}
+					pagination={pagination}
+					actors={actors}
+				/>
+			) : (
+				<AuditLogTable
+					data={{ entries: entries ?? [], pagination }}
+					actors={actors}
+				/>
+			)}
 		</div>
 	)
 }

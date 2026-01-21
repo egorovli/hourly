@@ -1,73 +1,19 @@
 import type { AuditLogEntry, AuditLogListResponse, ResolvedActor } from '~/domain/index.ts'
 
+import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react'
 import { useSearchParams } from 'react-router'
+
 import {
-	AlertCircleIcon,
-	CheckCircle2Icon,
-	ChevronLeftIcon,
-	ChevronRightIcon,
-	ClockIcon
-} from 'lucide-react'
-
-import { Badge } from '~/components/shadcn/ui/badge.tsx'
+	ActionTypeBadge,
+	formatDate,
+	formatRelativeTime,
+	getInitials,
+	OutcomeIcon,
+	ProviderBadge,
+	SeverityBadge
+} from '~/components/admin/audit-log-utils.tsx'
+import { Avatar, AvatarFallback, AvatarImage } from '~/components/shadcn/ui/avatar.tsx'
 import { Button } from '~/components/shadcn/ui/button.tsx'
-import { AuditLogOutcome } from '~/domain/index.ts'
-
-function formatTimestamp(isoString: string): string {
-	const date = new Date(isoString)
-
-	return date.toLocaleString('en-US', {
-		year: 'numeric',
-		month: 'short',
-		day: '2-digit',
-		hour: '2-digit',
-		minute: '2-digit',
-		second: '2-digit',
-		hour12: false
-	})
-}
-
-function OutcomeIcon({ outcome }: { outcome: AuditLogOutcome }): React.ReactNode {
-	switch (outcome) {
-		case AuditLogOutcome.Success:
-			return <CheckCircle2Icon className='size-4 text-green-600' />
-		case AuditLogOutcome.Failure:
-			return <AlertCircleIcon className='size-4 text-destructive' />
-		case AuditLogOutcome.Pending:
-			return <ClockIcon className='size-4 text-amber-500' />
-		default:
-			return null
-	}
-}
-
-function ActionTypeBadge({ actionType }: { actionType: string }): React.ReactNode {
-	const label = actionType
-		.split('-')
-		.map(word => word.charAt(0).toUpperCase() + word.slice(1))
-		.join(' ')
-
-	return (
-		<Badge
-			variant='secondary'
-			className='font-normal'
-		>
-			{label}
-		</Badge>
-	)
-}
-
-function ProviderBadge({ provider }: { provider: string }): React.ReactNode {
-	const variant = provider === 'atlassian' ? 'default' : 'secondary'
-
-	return (
-		<Badge
-			variant={variant}
-			className='font-normal text-[10px] px-1 py-0'
-		>
-			{provider}
-		</Badge>
-	)
-}
 
 export interface AuditLogTableProps {
 	data: AuditLogListResponse
@@ -97,23 +43,44 @@ export function AuditLogTable({ data, actors }: AuditLogTableProps): React.React
 
 	return (
 		<div className='space-y-4'>
-			<div className='overflow-hidden rounded-lg border'>
+			<div className='overflow-x-auto rounded-lg border'>
 				<table className='w-full'>
 					<thead className='bg-muted/50'>
 						<tr>
-							<th className='px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground'>
+							<th
+								scope='col'
+								className='px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground'
+							>
 								Timestamp
 							</th>
-							<th className='px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground'>
+							<th
+								scope='col'
+								className='px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground'
+							>
 								Actor
 							</th>
-							<th className='px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground'>
+							<th
+								scope='col'
+								className='px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground'
+							>
 								Action
 							</th>
-							<th className='px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground'>
+							<th
+								scope='col'
+								className='px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground'
+							>
+								Severity
+							</th>
+							<th
+								scope='col'
+								className='px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground'
+							>
 								Target
 							</th>
-							<th className='px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground'>
+							<th
+								scope='col'
+								className='px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground'
+							>
 								Outcome
 							</th>
 						</tr>
@@ -174,33 +141,47 @@ interface AuditLogRowProps {
 }
 
 function AuditLogRow({ entry, actors }: AuditLogRowProps): React.ReactNode {
-	// Look up resolved actor info
-	const actorKey = `${entry.actorProvider}:${entry.actorProfileId}`
-	const resolvedActor = actors?.[actorKey]
+	// Look up resolved actor info (only if we have both provider and profileId)
+	const actorKey =
+		entry.actorProvider && entry.actorProfileId
+			? `${entry.actorProvider}:${entry.actorProfileId}`
+			: undefined
+	const resolvedActor = actorKey ? actors?.[actorKey] : undefined
+
+	// Determine display text: prefer displayName, then email, then profileId, then 'Anonymous'
+	const displayName =
+		resolvedActor?.displayName ?? resolvedActor?.email ?? entry.actorProfileId ?? 'Anonymous'
+	const showEmail = resolvedActor?.displayName && resolvedActor?.email
+	const initials = getInitials(resolvedActor?.displayName, resolvedActor?.email)
 
 	return (
 		<tr className='hover:bg-muted/30'>
-			<td className='whitespace-nowrap px-4 py-3 text-sm'>{formatTimestamp(entry.occurredAt)}</td>
 			<td className='px-4 py-3 text-sm'>
-				<div className='flex flex-col gap-1'>
-					<div className='flex items-center gap-2'>
-						{resolvedActor?.displayName ? (
-							<>
-								<span className='font-medium'>{resolvedActor.displayName}</span>
-								<ProviderBadge provider={entry.actorProvider} />
-							</>
-						) : (
-							<>
-								<span className='font-mono text-xs'>{entry.actorProfileId}</span>
-								<ProviderBadge provider={entry.actorProvider} />
-							</>
+				<div className='flex flex-col'>
+					<span>{formatDate(entry.occurredAt)}</span>
+					<span className='text-xs text-muted-foreground'>
+						{formatRelativeTime(entry.occurredAt)}
+					</span>
+				</div>
+			</td>
+			<td className='px-4 py-3 text-sm'>
+				<div className='flex items-center gap-3'>
+					<Avatar className='size-8'>
+						<AvatarImage
+							src={resolvedActor?.avatarUrl}
+							alt={displayName}
+						/>
+						<AvatarFallback className='text-xs'>{initials}</AvatarFallback>
+					</Avatar>
+					<div className='flex flex-col'>
+						<div className='flex items-center gap-2'>
+							<span className='font-medium'>{displayName}</span>
+							<ProviderBadge provider={entry.actorProvider} />
+						</div>
+						{showEmail && (
+							<span className='text-xs text-muted-foreground'>{resolvedActor.email}</span>
 						)}
 					</div>
-					{resolvedActor?.displayName && (
-						<span className='font-mono text-xs text-muted-foreground truncate max-w-[150px]'>
-							({entry.actorProfileId})
-						</span>
-					)}
 				</div>
 			</td>
 			<td className='px-4 py-3 text-sm'>
@@ -208,6 +189,9 @@ function AuditLogRow({ entry, actors }: AuditLogRowProps): React.ReactNode {
 					<ActionTypeBadge actionType={entry.actionType} />
 					<span className='text-xs text-muted-foreground'>{entry.actionDescription}</span>
 				</div>
+			</td>
+			<td className='px-4 py-3 text-sm'>
+				<SeverityBadge severity={entry.severity} />
 			</td>
 			<td className='px-4 py-3 text-sm'>
 				<div className='flex flex-col'>
