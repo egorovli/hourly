@@ -87,6 +87,15 @@ export const auditActions = {
 			outcome: AuditLogOutcome.Failure,
 			severity: AuditLogSeverity.Warning,
 			metadata: { profileId }
+		}),
+
+		tokenExpired: (profileId: string, provider: string): CreateAuditLogInput => ({
+			actionType: AuditLogActionType.Authentication,
+			actionDescription: 'Authentication failed: token expired',
+			targetResourceType: AuditLogTargetResourceType.Token,
+			outcome: AuditLogOutcome.Failure,
+			severity: AuditLogSeverity.Warning,
+			metadata: { profileId, provider }
 		})
 	},
 

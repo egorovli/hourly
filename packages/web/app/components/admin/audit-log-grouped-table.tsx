@@ -5,13 +5,21 @@ import type {
 	ResolvedActor
 } from '~/domain/index.ts'
 
-import { AlertCircleIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon } from 'lucide-react'
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import {
+	AlertCircleIcon,
+	ChevronDownIcon,
+	ChevronLeftIcon,
+	ChevronRightIcon,
+	EyeIcon
+} from 'lucide-react'
 import { useSearchParams } from 'react-router'
 
+import { AuditLogDetailSheet } from '~/components/admin/audit-log-detail-sheet.tsx'
 import {
 	ActionTypeBadge,
 	AUDIT_LOG_MAX_VISIBLE_EVENTS,
+	DurationBadge,
 	formatDate,
 	formatRelativeTime,
 	formatTime,
@@ -43,14 +51,40 @@ export function AuditLogGroupedTable({
 }: AuditLogGroupedTableProps): React.ReactNode {
 	const [searchParams, setSearchParams] = useSearchParams()
 
+	// Sheet state for full detail view
+	const [sheetEntry, setSheetEntry] = useState<AuditLogEntry | undefined>(undefined)
+	const [sheetOpen, setSheetOpen] = useState(false)
+
+	// Responsive detection for sheet side
+	const [isMobile, setIsMobile] = useState(false)
+
+	useEffect(() => {
+		const checkMobile = () => setIsMobile(window.innerWidth < 768)
+		checkMobile()
+		window.addEventListener('resize', checkMobile)
+		return () => window.removeEventListener('resize', checkMobile)
+	}, [])
+
 	function goToPage(page: number): void {
 		const newParams = new URLSearchParams(searchParams)
 		newParams.set('page[number]', page.toString())
 		setSearchParams(newParams)
 	}
 
+	const openDetailSheet = useCallback((entry: AuditLogEntry) => {
+		setSheetEntry(entry)
+		setSheetOpen(true)
+	}, [])
+
 	const canGoPrev = pagination.page > 1
 	const canGoNext = pagination.page < pagination.totalPages
+
+	// Get actor for sheet
+	const sheetActorKey =
+		sheetEntry?.actorProvider && sheetEntry?.actorProfileId
+			? `${sheetEntry.actorProvider}:${sheetEntry.actorProfileId}`
+			: undefined
+	const sheetActor = sheetActorKey ? actors?.[sheetActorKey] : undefined
 
 	if (groups.length === 0) {
 		return (
@@ -61,61 +95,78 @@ export function AuditLogGroupedTable({
 	}
 
 	return (
-		<div className='space-y-4'>
-			<div className='space-y-2'>
-				{groups.map(group => (
-					<AuditLogGroupRow
-						key={group.correlationId}
-						group={group}
-						actors={actors}
-					/>
-				))}
-			</div>
+		<>
+			<div className='space-y-4'>
+				<div className='space-y-2'>
+					{groups.map(group => (
+						<AuditLogGroupRow
+							key={group.correlationId}
+							group={group}
+							actors={actors}
+							onViewDetails={openDetailSheet}
+						/>
+					))}
+				</div>
 
-			{/* Pagination */}
-			<div className='flex items-center justify-between'>
-				<p className='text-sm text-muted-foreground'>
-					Showing {(pagination.page - 1) * pagination.pageSize + 1} to{' '}
-					{Math.min(pagination.page * pagination.pageSize, pagination.total)} of {pagination.total}{' '}
-					groups
-				</p>
+				{/* Pagination */}
+				<div className='flex items-center justify-between'>
+					<p className='text-sm text-muted-foreground'>
+						Showing {(pagination.page - 1) * pagination.pageSize + 1} to{' '}
+						{Math.min(pagination.page * pagination.pageSize, pagination.total)} of{' '}
+						{pagination.total} groups
+					</p>
 
-				<div className='flex items-center gap-2'>
-					<Button
-						variant='outline'
-						size='sm'
-						onClick={() => goToPage(pagination.page - 1)}
-						disabled={!canGoPrev}
-					>
-						<ChevronLeftIcon className='mr-1 size-4' />
-						Previous
-					</Button>
+					<div className='flex items-center gap-2'>
+						<Button
+							variant='outline'
+							size='sm'
+							onClick={() => goToPage(pagination.page - 1)}
+							disabled={!canGoPrev}
+						>
+							<ChevronLeftIcon className='mr-1 size-4' />
+							Previous
+						</Button>
 
-					<span className='text-sm text-muted-foreground'>
-						Page {pagination.page} of {pagination.totalPages}
-					</span>
+						<span className='text-sm text-muted-foreground'>
+							Page {pagination.page} of {pagination.totalPages}
+						</span>
 
-					<Button
-						variant='outline'
-						size='sm'
-						onClick={() => goToPage(pagination.page + 1)}
-						disabled={!canGoNext}
-					>
-						Next
-						<ChevronRightIcon className='ml-1 size-4' />
-					</Button>
+						<Button
+							variant='outline'
+							size='sm'
+							onClick={() => goToPage(pagination.page + 1)}
+							disabled={!canGoNext}
+						>
+							Next
+							<ChevronRightIcon className='ml-1 size-4' />
+						</Button>
+					</div>
 				</div>
 			</div>
-		</div>
+
+			{/* Detail Sheet */}
+			<AuditLogDetailSheet
+				open={sheetOpen}
+				onOpenChange={setSheetOpen}
+				entry={sheetEntry}
+				actor={sheetActor}
+				isMobile={isMobile}
+			/>
+		</>
 	)
 }
 
 interface AuditLogGroupRowProps {
 	group: AuditLogGroup
 	actors?: Record<string, ResolvedActor>
+	onViewDetails: (entry: AuditLogEntry) => void
 }
 
-function AuditLogGroupRow({ group, actors }: AuditLogGroupRowProps): React.ReactNode {
+function AuditLogGroupRow({
+	group,
+	actors,
+	onViewDetails
+}: AuditLogGroupRowProps): React.ReactNode {
 	const [isOpen, setIsOpen] = useState(false)
 	const [showAllEvents, setShowAllEvents] = useState(false)
 	const { primaryEvent, events, eventCount, hasFailure, highestSeverity } = group
@@ -243,9 +294,21 @@ function AuditLogGroupRow({ group, actors }: AuditLogGroupRowProps): React.React
 									</th>
 									<th
 										scope='col'
-										className='text-left py-2 font-medium'
+										className='text-left py-2 pr-4 font-medium'
+									>
+										Duration
+									</th>
+									<th
+										scope='col'
+										className='text-left py-2 pr-4 font-medium'
 									>
 										Outcome
+									</th>
+									<th
+										scope='col'
+										className='text-left py-2 font-medium w-8'
+									>
+										<span className='sr-only'>Actions</span>
 									</th>
 								</tr>
 							</thead>
@@ -255,6 +318,7 @@ function AuditLogGroupRow({ group, actors }: AuditLogGroupRowProps): React.React
 										key={event.id}
 										event={event}
 										sequenceIndex={index + 1}
+										onViewDetails={() => onViewDetails(event)}
 									/>
 								))}
 							</tbody>
@@ -286,11 +350,16 @@ function AuditLogGroupRow({ group, actors }: AuditLogGroupRowProps): React.React
 interface GroupedEventRowProps {
 	event: AuditLogEntry
 	sequenceIndex: number
+	onViewDetails: () => void
 }
 
-function GroupedEventRow({ event, sequenceIndex }: GroupedEventRowProps): React.ReactNode {
+function GroupedEventRow({
+	event,
+	sequenceIndex,
+	onViewDetails
+}: GroupedEventRowProps): React.ReactNode {
 	return (
-		<tr className='text-sm'>
+		<tr className='text-sm hover:bg-muted/30 transition-colors'>
 			<td className='py-2 pr-4 text-muted-foreground'>{sequenceIndex}</td>
 			<td className='py-2 pr-4'>
 				<span className='text-xs'>{formatTime(event.occurredAt)}</span>
@@ -311,11 +380,28 @@ function GroupedEventRow({ event, sequenceIndex }: GroupedEventRowProps): React.
 					)}
 				</div>
 			</td>
-			<td className='py-2'>
+			<td className='py-2 pr-4'>
+				<DurationBadge ms={event.durationMs} />
+			</td>
+			<td className='py-2 pr-4'>
 				<div className='flex items-center gap-1.5'>
 					<OutcomeIcon outcome={event.outcome} />
 					<span className='capitalize text-xs'>{event.outcome}</span>
 				</div>
+			</td>
+			<td className='py-2'>
+				<Button
+					variant='ghost'
+					size='icon'
+					className='size-6'
+					onClick={e => {
+						e.stopPropagation()
+						onViewDetails()
+					}}
+				>
+					<EyeIcon className='size-3.5' />
+					<span className='sr-only'>View details</span>
+				</Button>
 			</td>
 		</tr>
 	)

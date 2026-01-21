@@ -59,6 +59,12 @@ export async function requireAuth(request: Request): Promise<AuthContext> {
 		throw AuthError.unauthenticated()
 	}
 
+	// Check if token has expired
+	if (token.expiresAt && token.expiresAt <= new Date()) {
+		auditLogger?.log(auditActions.auth.tokenExpired(profile.id, profile.provider))
+		throw AuthError.unauthenticated('Token has expired')
+	}
+
 	// Set actor for subsequent audit logs
 	auditLogger?.setActor(profile.id, profile.provider)
 
@@ -127,4 +133,37 @@ export async function requireAdmin(request: Request): Promise<AuthContext> {
 	auditLogger?.log(auditActions.authz.adminAccessGranted())
 
 	return auth
+}
+
+/**
+ * For admin page routes: returns AuthContext or redirects to sign-in.
+ * Checks both authentication and admin permission.
+ * Logs authorization attempts to the audit log.
+ */
+export async function requireAdminOrRedirect(request: Request): Promise<AuthContext> {
+	const auditLogger = getAuditLogger()
+
+	try {
+		const auth = await requireAuth(request)
+
+		if (!auth.isAdmin) {
+			auditLogger?.log(
+				auditActions.authz.adminAccessDenied(
+					auth.profile.id,
+					auth.profile.provider,
+					'User is not an admin'
+				)
+			)
+			throw AuthError.forbidden('Admin access required')
+		}
+
+		auditLogger?.log(auditActions.authz.adminAccessGranted())
+		return auth
+	} catch (error) {
+		if (error instanceof AuthError && error.code === 'UNAUTHENTICATED') {
+			const url = new URL(request.url)
+			throw redirect(`/auth/sign-in?redirected-from=${encodeURIComponent(url.pathname)}`)
+		}
+		throw error
+	}
 }
