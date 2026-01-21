@@ -40,6 +40,17 @@ export interface GetUsersForProjectsParams extends AtlassianClientRequestOptions
 	username?: string
 }
 
+export interface GetUsersByAccountIdsParams extends AtlassianClientRequestOptions {
+	/**
+	 * The ID of the accessible resource (Jira site)
+	 */
+	accessibleResourceId: AccessibleResource['id']
+	/**
+	 * Array of account IDs to look up (max 200 per request)
+	 */
+	accountIds: string[]
+}
+
 export interface GetWorklogEntriesParams extends AtlassianClientRequestOptions, PaginationParams {
 	accessibleResourceId: AccessibleResource['id']
 	projectKeys?: Project['key'][]
@@ -91,6 +102,45 @@ export interface SaveWorklogEntriesResult {
 	successCount: number
 	failureCount: number
 	totalCount: number
+}
+
+/**
+ * Input for deleting a worklog entry.
+ */
+export interface WorklogDeleteInput {
+	worklogId: string
+	issueIdOrKey: string
+}
+
+/**
+ * Result of a single worklog deletion operation.
+ */
+export interface WorklogDeleteResult {
+	input: WorklogDeleteInput
+	success: boolean
+	error?: string
+	statusCode?: number
+}
+
+/**
+ * Aggregated results from batch worklog deletion.
+ */
+export interface DeleteWorklogEntriesResult {
+	results: WorklogDeleteResult[]
+	successCount: number
+	failureCount: number
+	totalCount: number
+}
+
+/**
+ * Parameters for batch deleting worklog entries.
+ */
+export interface DeleteWorklogEntriesParams extends AtlassianClientRequestOptions {
+	accessibleResourceId: AccessibleResource['id']
+	entries: WorklogDeleteInput[]
+	concurrency?: number
+	batchDelayMs?: number
+	stopOnError?: boolean
 }
 
 /**
@@ -382,6 +432,66 @@ export class AtlassianClient {
 			} else {
 				startAt += page.length
 			}
+		}
+
+		return allUsers
+	}
+
+	/**
+	 * Retrieves users by their account IDs using the Jira bulk user endpoint.
+	 * This method can look up any user, including deactivated users and those
+	 * not assignable to projects. Useful for resolving actor information in audit logs.
+	 *
+	 * @param params - The parameters for the request
+	 * @returns Array of JiraUser objects (may be fewer than requested if some IDs are invalid)
+	 *
+	 * @example
+	 * ```ts
+	 * const users = await client.getUsersByAccountIds({
+	 *   accessibleResourceId: 'resource-id',
+	 *   accountIds: ['5b10a2844c20165700ede21g', '5b10ac8d82e05b22cc7d4ef5']
+	 * })
+	 * ```
+	 */
+	async getUsersByAccountIds(params: GetUsersByAccountIdsParams): Promise<JiraUser[]> {
+		const { accessibleResourceId, accountIds, signal, headers } = params
+
+		if (accountIds.length === 0) {
+			return []
+		}
+
+		// Jira bulk endpoint has a limit of 200 account IDs per request
+		const maxBatchSize = 200
+		const allUsers: JiraUser[] = []
+
+		for (let i = 0; i < accountIds.length; i += maxBatchSize) {
+			const batch = accountIds.slice(i, i + maxBatchSize)
+
+			const searchParams = new URLSearchParams()
+			for (const id of batch) {
+				searchParams.append('accountId', id)
+			}
+
+			const url = `${this.baseUrl}/ex/jira/${accessibleResourceId}/rest/api/3/user/bulk?${searchParams}`
+
+			const response = await fetch(url, {
+				method: 'GET',
+				signal,
+				headers: {
+					'Accept': 'application/json',
+					'Authorization': `Bearer ${this.accessToken}`,
+					'User-Agent': this.userAgent,
+					...(headers ?? {})
+				}
+			})
+
+			if (!response.ok) {
+				const errorText = await response.text().catch(() => response.statusText)
+				throw new Error(`Failed to fetch users by account IDs: ${response.status} ${errorText}`)
+			}
+
+			const result = (await response.json()) as { values: JiraUser[] }
+			allUsers.push(...result.values)
 		}
 
 		return allUsers
@@ -791,6 +901,233 @@ export class AtlassianClient {
 			successCount,
 			failureCount,
 			totalCount: results.length
+		}
+	}
+
+	/**
+	 * Deletes multiple worklog entries in batches with controlled concurrency.
+	 *
+	 * This method efficiently processes worklog delete operations by:
+	 * - Running multiple requests concurrently (controlled by `concurrency` param)
+	 * - Handling partial failures gracefully (returns detailed results for each entry)
+	 * - Adding delays between batches to avoid rate limiting
+	 * - Treating 404 responses as success (worklog already deleted - idempotent behavior)
+	 *
+	 * @param params - Parameters including accessibleResourceId, entries, and concurrency options
+	 * @returns Promise resolving to aggregated results with success/failure counts
+	 *
+	 * @example
+	 * ```ts
+	 * const result = await client.deleteWorklogEntries({
+	 *   accessibleResourceId: 'resource-id',
+	 *   entries: [
+	 *     { worklogId: '12345', issueIdOrKey: 'PROJ-123' },
+	 *     { worklogId: '67890', issueIdOrKey: 'PROJ-456' }
+	 *   ],
+	 *   concurrency: 5
+	 * })
+	 *
+	 * console.log(`Deleted ${result.successCount}/${result.totalCount} worklogs`)
+	 * ```
+	 */
+	async deleteWorklogEntries(
+		params: DeleteWorklogEntriesParams
+	): Promise<DeleteWorklogEntriesResult> {
+		const {
+			accessibleResourceId,
+			entries,
+			concurrency = 5,
+			batchDelayMs = 100,
+			stopOnError = false,
+			signal,
+			headers
+		} = params
+
+		if (entries.length === 0) {
+			return {
+				results: [],
+				successCount: 0,
+				failureCount: 0,
+				totalCount: 0
+			}
+		}
+
+		const results: WorklogDeleteResult[] = []
+		const normalizedConcurrency = Math.max(1, Math.min(concurrency, 20))
+
+		for (let batchStart = 0; batchStart < entries.length; batchStart += normalizedConcurrency) {
+			if (signal?.aborted) {
+				const remainingEntries = entries.slice(batchStart)
+				for (const input of remainingEntries) {
+					results.push({
+						input,
+						success: false,
+						error: 'Operation aborted'
+					})
+				}
+				break
+			}
+
+			const batch = entries.slice(batchStart, batchStart + normalizedConcurrency)
+
+			const batchPromises = batch.map(input =>
+				this.deleteSingleWorklogEntry(accessibleResourceId, input, signal, headers)
+			)
+
+			const batchResults = await Promise.allSettled(batchPromises)
+
+			let batchIndex = 0
+			let shouldBreak = false
+
+			for (const settledResult of batchResults) {
+				const input = batch[batchIndex]
+				batchIndex++
+
+				if (input === undefined) {
+					continue
+				}
+
+				if (settledResult.status === 'fulfilled') {
+					results.push(settledResult.value)
+
+					if (stopOnError && !settledResult.value.success) {
+						const remainingEntries = entries.slice(batchStart + batchIndex)
+						for (const remainingInput of remainingEntries) {
+							results.push({
+								input: remainingInput,
+								success: false,
+								error: 'Stopped due to previous error'
+							})
+						}
+						shouldBreak = true
+						break
+					}
+				} else {
+					results.push({
+						input,
+						success: false,
+						error:
+							settledResult.reason instanceof Error
+								? settledResult.reason.message
+								: String(settledResult.reason)
+					})
+
+					if (stopOnError) {
+						const remainingEntries = entries.slice(batchStart + batchIndex)
+						for (const remainingInput of remainingEntries) {
+							results.push({
+								input: remainingInput,
+								success: false,
+								error: 'Stopped due to previous error'
+							})
+						}
+						shouldBreak = true
+						break
+					}
+				}
+			}
+
+			if (shouldBreak) {
+				break
+			}
+
+			if (batchStart + normalizedConcurrency < entries.length && batchDelayMs > 0) {
+				await this.delay(batchDelayMs)
+			}
+		}
+
+		const successCount = results.filter(r => r.success).length
+		const failureCount = results.filter(r => !r.success).length
+
+		return {
+			results,
+			successCount,
+			failureCount,
+			totalCount: results.length
+		}
+	}
+
+	/**
+	 * Deletes a single worklog entry.
+	 * Treats 404 as success (worklog already deleted - idempotent behavior).
+	 */
+	private async deleteSingleWorklogEntry(
+		accessibleResourceId: string,
+		input: WorklogDeleteInput,
+		signal?: AbortSignal,
+		headers?: HeadersInit
+	): Promise<WorklogDeleteResult> {
+		const { worklogId, issueIdOrKey } = input
+
+		if (worklogId.trim().length === 0) {
+			return {
+				input,
+				success: false,
+				error: 'worklogId is required'
+			}
+		}
+
+		if (issueIdOrKey.trim().length === 0) {
+			return {
+				input,
+				success: false,
+				error: 'issueIdOrKey is required'
+			}
+		}
+
+		const url = `${this.baseUrl}/ex/jira/${accessibleResourceId}/rest/api/3/issue/${issueIdOrKey}/worklog/${worklogId}`
+
+		try {
+			const response = await fetch(url, {
+				method: 'DELETE',
+				signal,
+				headers: {
+					'Accept': 'application/json',
+					'Authorization': `Bearer ${this.accessToken}`,
+					'User-Agent': this.userAgent,
+					...(headers ?? {})
+				}
+			})
+
+			// 204 No Content = successful deletion
+			// 404 Not Found = worklog already deleted (treat as success for idempotency)
+			if (response.status === 204 || response.status === 404) {
+				return {
+					input,
+					success: true,
+					statusCode: response.status
+				}
+			}
+
+			if (!response.ok) {
+				const errorText = await response.text().catch(() => response.statusText)
+				return {
+					input,
+					success: false,
+					error: `Delete failed: ${response.status} ${errorText}`,
+					statusCode: response.status
+				}
+			}
+
+			return {
+				input,
+				success: true,
+				statusCode: response.status
+			}
+		} catch (error) {
+			if (error instanceof Error && error.name === 'AbortError') {
+				return {
+					input,
+					success: false,
+					error: 'Request aborted'
+				}
+			}
+
+			return {
+				input,
+				success: false,
+				error: error instanceof Error ? error.message : String(error)
+			}
 		}
 	}
 
