@@ -10,6 +10,8 @@ export function createCompoundProfileId(profileId: string, provider: string): st
  * Expected format: comma-separated compound IDs (e.g., "id1@atlassian,id2@gitlab")
  */
 export function parseAdminProfileIds(): Set<string> {
+	// TODO
+	// biome-ignore lint/style/noProcessEnv: It's okay for now
 	const envValue = process.env['ADMIN_PROFILE_IDS']
 
 	if (typeof envValue !== 'string' || envValue.trim() === '') {
