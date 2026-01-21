@@ -1,5 +1,6 @@
 export * from './audit-log-action-type.enum.ts'
 export * from './audit-log-outcome.enum.ts'
+export * from './audit-log-severity.enum.ts'
 export * from './audit-log-target-resource-type.enum.ts'
 export * from './audit-log.ts'
 export * from './preferences.ts'
