@@ -43,6 +43,7 @@
         "@react-router/node": "^7.11.0",
         "@react-router/serve": "^7.11.0",
         "@tanstack/react-query": "^5.90.16",
+        "@vvo/tzdb": "^6.198.0",
         "arctic": "^3.7.0",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
@@ -693,6 +694,8 @@
     "@types/yargs": ["@types/yargs@16.0.11", "", { "dependencies": { "@types/yargs-parser": "*" } }, "sha512-sbtvk8wDN+JvEdabmZExoW/HNr1cB7D/j4LT08rMiuikfA7m/JNJg7ATQcgzs34zHnoScDkY0ZRSl29Fkmk36g=="],
 
     "@types/yargs-parser": ["@types/yargs-parser@21.0.3", "", {}, "sha512-I4q9QU9MQv4oEOz4tAHJtNz1cwuLxn2F3xcc2iV5WdqLPpUnj30aUuxt1mAxYTG+oe8CZMV/+6rU4S4gRDzqtQ=="],
+
+    "@vvo/tzdb": ["@vvo/tzdb@6.198.0", "", {}, "sha512-bNRWBhWYl0edVgyX6AYbhoCM2tk2lXJjGCyO2VDc2xn6Dw8dLd7WGj2DDXkVOkmOIQTNjEAcxrEpIzz5pWVwFg=="],
 
     "@xmldom/xmldom": ["@xmldom/xmldom@0.8.11", "", {}, "sha512-cQzWCtO6C8TQiYl1ruKNn2U6Ao4o4WBBcbL61yJl84x+j5sOWWFU9X7DpND8XZG3daDppSsigMdfAIl2upQBRw=="],
 

@@ -152,6 +152,7 @@ export const loader = withAuditContext(async function loader({ request }: Route.
 	}
 
 	const fromDateTime = DateTime.fromISO(fromDate)
+
 	const toDateTime = DateTime.fromISO(toDate)
 
 	if (!fromDateTime.isValid || !toDateTime.isValid) {
@@ -172,8 +173,8 @@ export const loader = withAuditContext(async function loader({ request }: Route.
 	}
 
 	const worklogPages = await Promise.all(
-		Array.from(projectsByResource.entries()).map(([resourceId, resourceProjects]) =>
-			auth.client.getWorklogEntries({
+		Array.from(projectsByResource.entries()).map(async ([resourceId, resourceProjects]) => {
+			return auth.client.getWorklogEntries({
 				accessibleResourceId: resourceId,
 				projectKeys: resourceProjects.map(project => project.key),
 				userAccountIds: userIds.length > 0 ? userIds : undefined,
@@ -181,7 +182,7 @@ export const loader = withAuditContext(async function loader({ request }: Route.
 				to: toDateTime.toUTC().toISO() ?? toDate,
 				signal: request.signal
 			})
-		)
+		})
 	)
 
 	const worklogEntries = worklogPages.flatMap(page => page.entries)

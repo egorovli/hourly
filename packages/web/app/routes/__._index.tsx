@@ -26,10 +26,11 @@ import type { Route as LayoutRoute } from './+types/__.ts'
 import type { SyncWorklogsActionResponse } from './api.worklog.entries.tsx'
 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { DateTime } from 'luxon'
+import { nanoid } from 'nanoid'
 import { useRouteLoaderData } from 'react-router'
 import { toast } from 'sonner'
 import { Virtuoso } from 'react-virtuoso'
-import { nanoid } from 'nanoid'
 
 import {
 	lazy,
@@ -98,7 +99,9 @@ import {
 import { CalendarEventContextMenu } from '~/components/calendar-event-context-menu.tsx'
 import { EventDetailsSheet } from '~/components/event-details-sheet.tsx'
 import { SwipeableCalendarWrapper } from '~/components/swipeable-calendar-wrapper.tsx'
+import { TimezoneSelector } from '~/components/timezone-selector.tsx'
 import { useMobileCalendar } from '~/hooks/use-mobile-calendar.ts'
+import { useTimezone } from '~/hooks/use-timezone.ts'
 
 const FullCalendar = lazy(() => import('@fullcalendar/react'))
 
@@ -920,11 +923,24 @@ interface UseWorklogEntriesQueryOptions {
 	userIds?: string[]
 	fromDate?: Date
 	toDate?: Date
+	// timezone?: string
 	enabled?: boolean
 }
 
 function useWorklogEntriesQuery(options: UseWorklogEntriesQueryOptions) {
 	const { userId, projectIds, userIds, fromDate, toDate, enabled } = options
+
+	// console.log('useWorklogEntriesQuery options:', options)
+	// console.log('queryKey:', [
+	// 	'worklog-entries',
+	// 	JSON.stringify({
+	// 		userId: userId,
+	// 		projectIds: projectIds,
+	// 		userIds: userIds,
+	// 		fromDate: fromDate,
+	// 		toDate: toDate
+	// 	})
+	// ])
 
 	return useQuery({
 		queryKey: [
@@ -1077,6 +1093,9 @@ export default function IndexPage(): React.ReactNode {
 	const layoutLoaderData = useRouteLoaderData<LayoutRoute.ComponentProps['loaderData']>('routes/__')
 	const currentUserId = layoutLoaderData?.user.account_id
 
+	// Timezone preference from cookie
+	const timezone = useTimezone(layoutLoaderData?.preferences?.timezone)
+
 	// Calendar ref for programmatic navigation
 	const calendarRef = useRef<FullCalendarType | null>(null)
 	const [calendarTitle, setCalendarTitle] = useState('')
@@ -1161,6 +1180,7 @@ export default function IndexPage(): React.ReactNode {
 		userIds: selectedUserIds,
 		fromDate: fromDate,
 		toDate: toDate,
+		// timezone: timezone.effectiveTimezone,
 		enabled:
 			usersQuery.isSuccess &&
 			selectedUserIds.length > 0 &&
@@ -1312,6 +1332,11 @@ export default function IndexPage(): React.ReactNode {
 		}
 	}, [pendingMyWorkPreset, usersQuery.isSuccess, usersQuery.isFetching, users, currentUserId])
 
+	// Update calendar timezone when preference changes
+	// useEffect(() => {
+	// 	calendarRef.current?.getApi()?.setOption('timeZone', timezone.effectiveTimezone)
+	// }, [timezone.effectiveTimezone])
+
 	// Create lookup maps for efficient data access
 	const usersByAccountId = useMemo(() => {
 		const map = new Map<string, JiraUser>()
@@ -1339,14 +1364,28 @@ export default function IndexPage(): React.ReactNode {
 			const projectKey = getProjectKeyFromIssueKey(entry.issueKey)
 			const { backgroundColor, borderColor } = getWorklogColors(entry.authorAccountId, projectKey)
 			const isEditable = currentUserId !== undefined && entry.authorAccountId === currentUserId
-			const startedAt = Date.parse(entry.started)
+
+			// Server returns UTC times, use directly
+			const startUtc = entry.started
+			const startedAt = Date.parse(startUtc)
 			const durationSeconds = Math.max(entry.timeSpentSeconds, 0)
 
-			const endAt = Number.isNaN(startedAt)
+			// Calculate end in UTC format (consistent with start)
+			const endUtc = Number.isNaN(startedAt)
 				? undefined
-				: new Date(startedAt + durationSeconds * 1000)
+				: (DateTime.fromMillis(startedAt + durationSeconds * 1000)
+						.toUTC()
+						.toISO() ?? undefined)
 
-			// Look up author data
+			const startZoned =
+				DateTime.fromISO(startUtc, { zone: 'utc' }).setZone(timezone.effectiveTimezone).toISO() ??
+				undefined
+			const endZoned = endUtc
+				? (DateTime.fromISO(endUtc, { zone: 'utc' }).setZone(timezone.effectiveTimezone).toISO() ??
+					undefined)
+				: undefined
+
+				// Look up author data
 			const author = entry.authorAccountId ? usersByAccountId.get(entry.authorAccountId) : undefined
 
 			const authorAvatarUrl =
@@ -1365,8 +1404,8 @@ export default function IndexPage(): React.ReactNode {
 			return {
 				id: entry.id,
 				title: `${entry.issueKey} ${entry.issueSummary}`,
-				start: entry.started,
-				end: endAt,
+				start: startZoned,
+				end: endZoned,
 				editable: isEditable,
 				startEditable: isEditable,
 				durationEditable: isEditable,
@@ -1393,7 +1432,36 @@ export default function IndexPage(): React.ReactNode {
 				}
 			}
 		},
-		[currentUserId, usersByAccountId, projectsByKey]
+		[currentUserId, usersByAccountId, projectsByKey, timezone.effectiveTimezone]
+	)
+
+	const adjustEventTimesForTimezone = useCallback(
+		(event: CalendarEvent): CalendarEvent => {
+			const started = event.extendedProps?.['started']
+			const timeSpentSeconds = event.extendedProps?.['timeSpentSeconds']
+
+			if (typeof started === 'string' && typeof timeSpentSeconds === 'number') {
+				// Recalculate start and end based on timezone
+				const startedZoned =
+					DateTime.fromISO(started, { zone: 'utc' }).setZone(timezone.effectiveTimezone).toISO() ??
+					undefined
+
+				const endZoned =
+					DateTime.fromISO(started, { zone: 'utc' })
+						.plus({ seconds: timeSpentSeconds })
+						.setZone(timezone.effectiveTimezone)
+						.toISO() ?? undefined
+
+				return {
+					...event,
+					start: startedZoned,
+					end: endZoned
+				}
+			}
+
+			return event
+		},
+		[timezone.effectiveTimezone]
 	)
 
 	// Transform worklog entries to CalendarEvents and cache them
@@ -1404,7 +1472,9 @@ export default function IndexPage(): React.ReactNode {
 			// Check if we already have this event cached
 			const cached = loadedEventsRef.current.get(entry.id)
 			if (cached) {
-				eventsMap.set(entry.id, cached)
+				const event = adjustEventTimesForTimezone(cached)
+				loadedEventsRef.current.set(entry.id, event)
+				eventsMap.set(entry.id, event)
 			} else {
 				const event = transformWorklogToEvent(entry)
 				loadedEventsRef.current.set(entry.id, event)
@@ -1413,7 +1483,7 @@ export default function IndexPage(): React.ReactNode {
 		}
 
 		return eventsMap
-	}, [worklogEntries, transformWorklogToEvent])
+	}, [worklogEntries, transformWorklogToEvent, adjustEventTimesForTimezone])
 
 	// Merge loaded events with pending changes to create display events
 	const displayEvents = useMemo(() => {
@@ -2157,10 +2227,20 @@ export default function IndexPage(): React.ReactNode {
 						<span className='text-base md:text-sm font-medium text-foreground'>
 							{mobileCalendar.isMobile ? mobileCalendar.formattedDate : calendarTitle}
 						</span>
-						<div className='flex w-10 md:w-32 items-center justify-end'>
-							{entriesLoading && (
-								<Loader2Icon className='size-4 animate-spin text-muted-foreground' />
-							)}
+						<div className='flex items-center justify-end gap-2'>
+							<Loader2Icon
+								className={cn(
+									'size-4 animate-spin text-muted-foreground',
+									!entriesLoading && 'invisible'
+								)}
+							/>
+							<TimezoneSelector
+								value={timezone.preference}
+								onChange={timezone.setTimezone}
+								systemTimezone={timezone.detectedSystemTz}
+								size='sm'
+								disabled={timezone.isPending}
+							/>
 						</div>
 					</div>
 
@@ -2176,6 +2256,7 @@ export default function IndexPage(): React.ReactNode {
 								initialView={mobileCalendar.calendarOptions.initialView}
 								headerToolbar={false}
 								height='100%'
+								timeZone={timezone.effectiveTimezone}
 								dayHeaderFormat={dayHeaderFormat}
 								events={displayEvents}
 								eventTimeFormat={{
@@ -2192,9 +2273,40 @@ export default function IndexPage(): React.ReactNode {
 									/>
 								)}
 								datesSet={(args: DatesSetArg) => {
-									setFromDate(args.view.currentStart)
-									setToDate(args.view.currentEnd)
+									// args.view.currentStart and args.view.currentEnd are 00:00:00 times of the respective days in UTC
+									// e.g. if user is in Warsaw (UTC+1), it will be 01:00:00 GMT+0100 (Central European Standard Time)
+									// but we have a timezone control, so we need to treat them as 00:00:00 in the selected timezone
+
+									const zonedStart = DateTime.fromJSDate(args.view.currentStart, {
+										// zone: 'UTC'
+									})
+										.setZone(timezone.effectiveTimezone, { keepLocalTime: true })
+										.toJSDate()
+
+									const zonedEnd = DateTime.fromJSDate(args.view.currentEnd, {
+										// zone: 'utc'
+									})
+										.setZone(timezone.effectiveTimezone, { keepLocalTime: true })
+										.toJSDate()
+
+									// console.log('Start:', args.view.currentStart)
+									// console.log('Zoned Start:', zonedStart)
+
+									// console.log('End:', args.view.currentEnd)
+									// console.log('Zoned End:', zonedEnd)
+
+									// console.log('---')
+
+									// setFromDate(args.view.currentStart)
+									// console.log(args.view.currentStart)
+									setFromDate(zonedStart)
+
+									// setToDate(args.view.currentEnd)
+									// console.log(args.view.currentEnd)
+									setToDate(zonedEnd)
+
 									setCalendarTitle(args.view.title)
+									// console.log(args)
 								}}
 								firstDay={1}
 								allDaySlot={false}

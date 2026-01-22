@@ -1,3 +1,4 @@
+import type { UserPreferences } from '~/lib/cookies/preferences.ts'
 import type { Route } from './+types/__.ts'
 import type { User } from '~/lib/atlassian/user.ts'
 
@@ -16,6 +17,7 @@ import {
 
 import { requireAuthOrRedirect } from '~/lib/auth/index.ts'
 import { cached } from '~/lib/cached/index.ts'
+import { preferences } from '~/lib/cookies/preferences.ts'
 import { withRequestContext } from '~/lib/mikro-orm/index.ts'
 
 function getInitials(name: string): string {
@@ -100,8 +102,11 @@ export const loader = withRequestContext(async function loader({ request }: Rout
 	)
 	const getProjects = cached(auth.client.getProjects.bind(auth.client), cacheOpts)
 
-	const user = await getMe()
-	const accessibleResources = await getAccessibleResources()
+	const [user, accessibleResources, userPreferences] = await Promise.all([
+		getMe(),
+		getAccessibleResources(),
+		preferences.parse(request.headers.get('Cookie')) as Promise<UserPreferences | null>
+	])
 
 	const projects = await Promise.all(
 		accessibleResources.map(async resource => getProjects(resource.id))
@@ -110,6 +115,7 @@ export const loader = withRequestContext(async function loader({ request }: Rout
 	return {
 		user,
 		accessibleResources,
-		projects
+		projects,
+		preferences: userPreferences
 	}
 })

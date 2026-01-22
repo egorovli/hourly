@@ -7,6 +7,21 @@ import type { WorklogEntry, WorklogEntryPage } from './worklog-entry.ts'
 
 import { DateTime } from 'luxon'
 
+/**
+ * Normalizes a date string to UTC ISO format.
+ * Preserves the original instant in time while converting to UTC.
+ *
+ * @example
+ * normalizeToUtc('2026-01-20T10:00:00.000+0100') // Returns '2026-01-20T09:00:00.000Z'
+ */
+function normalizeToUtc(dateString: string): string {
+	const dt = DateTime.fromISO(dateString, { setZone: true })
+	if (!dt.isValid) {
+		return dateString
+	}
+	return dt.toUTC().toISO() ?? dateString
+}
+
 export interface AtlassianClientOptions {
 	accessToken: string
 	refreshToken?: string
@@ -721,9 +736,9 @@ export class AtlassianClient {
 					authorAccountId: worklog.author?.accountId,
 					authorDisplayName: worklog.author?.displayName,
 					timeSpentSeconds: worklog.timeSpentSeconds,
-					started: worklog.started,
-					created: worklog.created,
-					updated: worklog.updated,
+					started: normalizeToUtc(worklog.started),
+					created: worklog.created ? normalizeToUtc(worklog.created) : undefined,
+					updated: worklog.updated ? normalizeToUtc(worklog.updated) : undefined,
 					comment: worklog.comment
 				}
 			})
