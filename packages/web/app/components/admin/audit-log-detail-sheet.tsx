@@ -139,7 +139,10 @@ export function AuditLogDetailSheet({
 								<ActionTypeBadge actionType={entry.actionType} />
 							</DetailRow>
 							<DetailRow label='Severity'>
-								<SeverityBadge severity={entry.severity} showTooltip />
+								<SeverityBadge
+									severity={entry.severity}
+									showTooltip
+								/>
 							</DetailRow>
 							<DetailRow label='Description'>
 								<span className='text-sm'>{entry.actionDescription}</span>
@@ -288,9 +291,7 @@ function DetailRow({ label, children }: DetailRowProps): React.ReactNode {
 			<span className='text-xs text-muted-foreground font-medium uppercase tracking-wider shrink-0'>
 				{label}
 			</span>
-			<div className='text-right'>
-				{children}
-			</div>
+			<div className='text-right'>{children}</div>
 		</div>
 	)
 }

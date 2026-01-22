@@ -51,7 +51,7 @@ export function AuditLogTable({ data, actors }: AuditLogTableProps): React.React
 	function goToPage(page: number): void {
 		const newParams = new URLSearchParams(searchParams)
 		newParams.set('page[number]', page.toString())
-		setSearchParams(newParams)
+		setSearchParams(newParams, { preventScrollReset: true })
 	}
 
 	const toggleRow = useCallback((id: string) => {
@@ -89,7 +89,7 @@ export function AuditLogTable({ data, actors }: AuditLogTableProps): React.React
 	)
 
 	const canGoPrev = pagination.page > 1
-	const canGoNext = pagination.page < pagination.totalPages
+	const canGoNext = pagination.hasMore
 
 	if (entries.length === 0) {
 		return (
@@ -190,14 +190,8 @@ export function AuditLogTable({ data, actors }: AuditLogTableProps): React.React
 				</div>
 
 				{/* Pagination */}
-				<div className='flex items-center justify-between'>
-					<p className='text-sm text-muted-foreground'>
-						Showing {(pagination.page - 1) * pagination.pageSize + 1} to{' '}
-						{Math.min(pagination.page * pagination.pageSize, pagination.total)} of{' '}
-						{pagination.total} entries
-					</p>
-
-					<div className='flex items-center gap-2'>
+				{(canGoPrev || canGoNext) && (
+					<div className='flex items-center justify-end gap-2'>
 						<Button
 							variant='outline'
 							size='sm'
@@ -208,9 +202,7 @@ export function AuditLogTable({ data, actors }: AuditLogTableProps): React.React
 							Previous
 						</Button>
 
-						<span className='text-sm text-muted-foreground'>
-							Page {pagination.page} of {pagination.totalPages}
-						</span>
+						<span className='text-sm text-muted-foreground'>Page {pagination.page}</span>
 
 						<Button
 							variant='outline'
@@ -222,7 +214,7 @@ export function AuditLogTable({ data, actors }: AuditLogTableProps): React.React
 							<ChevronRightIcon className='ml-1 size-4' />
 						</Button>
 					</div>
-				</div>
+				)}
 			</div>
 
 			{/* Detail Sheet */}

@@ -5,7 +5,7 @@ import { AuditLogOutcome } from './audit-log-outcome.enum.ts'
 import { AuditLogSeverity } from './audit-log-severity.enum.ts'
 import { AuditLogTargetResourceType } from './audit-log-target-resource-type.enum.ts'
 
-export type AuditLogViewMode = 'flat' | 'grouped'
+export type AuditLogViewMode = 'flat' | 'grouped' | 'activity'
 
 export interface AuditLogEntry {
 	id: string
@@ -48,8 +48,7 @@ export interface AuditLogEntry {
 export interface AuditLogPagination {
 	page: number
 	pageSize: number
-	total: number
-	totalPages: number
+	hasMore: boolean
 }
 
 export interface AuditLogListResponse {
@@ -63,6 +62,37 @@ export interface AuditLogGroup {
 	eventCount: number
 	events: AuditLogEntry[]
 	hasFailure: boolean // Any event with outcome=failure
+	highestSeverity: AuditLogSeverity
+	timeRange: { start: string; end: string }
+}
+
+/** Default threshold for activity grouping (in milliseconds) */
+export const DEFAULT_ACTIVITY_THRESHOLD_MS = 1000
+
+/** Available threshold options for activity grouping */
+export const ACTIVITY_THRESHOLD_OPTIONS = [
+	{ value: 15, label: '15ms', description: 'Near-simultaneous only' },
+	{ value: 100, label: '100ms', description: 'Very fast actions' },
+	{ value: 1000, label: '1 second', description: 'Rapid sequential actions' },
+	{ value: 5000, label: '5 seconds', description: 'Related activity window' },
+	{ value: 30000, label: '30 seconds', description: 'Loose grouping' }
+] as const
+
+/**
+ * Activity-based grouping: groups events by actor + time proximity or shared correlation.
+ * Unlike AuditLogGroup (correlation-only), this creates "activity sessions".
+ */
+export interface ActivityAuditLogGroup {
+	/** Unique identifier: "actorKey:timestamp" */
+	groupKey: string
+	actorProfileId?: string
+	actorProvider?: string
+	/** May contain multiple merged correlation IDs */
+	correlationIds: string[]
+	primaryEvent: AuditLogEntry
+	eventCount: number
+	events: AuditLogEntry[]
+	hasFailure: boolean
 	highestSeverity: AuditLogSeverity
 	timeRange: { start: string; end: string }
 }
@@ -109,7 +139,8 @@ export const auditLogQuerySchema = z.object({
 		.default(() => []),
 	'filter[from]': z.iso.datetime().optional(),
 	'filter[to]': z.iso.datetime().optional(),
-	'view[mode]': z.enum(['flat', 'grouped']).optional().default('flat')
+	'view[mode]': z.enum(['flat', 'grouped', 'activity']).optional().default('flat'),
+	'view[threshold]': z.coerce.number().int().min(1).max(60000).optional().default(1000)
 })
 
 export type AuditLogQueryParams = z.infer<typeof auditLogQuerySchema>
@@ -125,9 +156,11 @@ export interface ResolvedActor {
 export interface AuditLogLoaderResponse {
 	entries?: AuditLogEntry[]
 	groups?: AuditLogGroup[]
+	activityGroups?: ActivityAuditLogGroup[]
 	pagination: AuditLogPagination
 	params: AuditLogQueryParams
 	actors: Record<string, ResolvedActor>
 	allActors: Record<string, ResolvedActor> // All actors in the system for filter dropdown
 	viewMode: AuditLogViewMode
+	threshold: number
 }

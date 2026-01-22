@@ -1,5 +1,6 @@
 import type { Route } from './+types/admin.audit-logs.ts'
 import type {
+	ActivityAuditLogGroup,
 	AuditLogEntry,
 	AuditLogGroup,
 	AuditLogLoaderResponse,
@@ -11,6 +12,7 @@ import type { AbstractSqlConnection } from '@mikro-orm/postgresql'
 
 import { FileTextIcon } from 'lucide-react'
 
+import { AuditLogActivityTable } from '~/components/admin/audit-log-activity-table.tsx'
 import { AuditLogFilters } from '~/components/admin/audit-log-filters.tsx'
 import { AuditLogGroupedTable } from '~/components/admin/audit-log-grouped-table.tsx'
 import { AuditLogTable } from '~/components/admin/audit-log-table.tsx'
@@ -52,6 +54,78 @@ function toAuditLogEntry(entity: AuditLog): AuditLogEntry {
 		durationMs: entity.durationMs,
 		parentEventId: entity.parentEventId,
 		sequenceNumber: entity.sequenceNumber
+	}
+}
+
+/** Raw row from Knex query with snake_case column names */
+interface AuditLogRawRow {
+	id: string
+	occurred_at: Date | string
+	actor_profile_id?: string
+	actor_provider?: string
+	action_type: string
+	action_description: string
+	severity: string
+	target_resource_type: string
+	target_resource_id?: string
+	outcome: string
+	correlation_id: string
+	session_id?: string
+	request_id: string
+	request_path: string
+	request_method: string
+	ip_address?: string
+	user_agent?: string
+	duration_ms?: number
+	parent_event_id?: string
+	sequence_number?: number
+	metadata?: Record<string, unknown>
+}
+
+/**
+ * Convert a date value from Knex to ISO string.
+ * Handles Date objects and various string formats from PostgreSQL.
+ */
+function toISOString(value: Date | string): string {
+	if (value instanceof Date) {
+		return value.toISOString()
+	}
+	// If it's already a valid ISO string, return as-is
+	// Otherwise, try to parse it as a Date
+	const date = new Date(value)
+	if (!Number.isNaN(date.getTime())) {
+		return date.toISOString()
+	}
+	// Fallback: return the string and let the frontend handle it
+	return value
+}
+
+/**
+ * Convert raw Knex row (snake_case) to AuditLogEntry interface.
+ */
+function rawRowToAuditLogEntry(row: AuditLogRawRow): AuditLogEntry {
+	return {
+		id: row.id,
+		actorProfileId: row.actor_profile_id,
+		actorProvider: row.actor_provider,
+		actionType: row.action_type as AuditLogActionType,
+		actionDescription: row.action_description,
+		severity: row.severity as AuditLogSeverity,
+		targetResourceType: row.target_resource_type as AuditLogTargetResourceType,
+		targetResourceId: row.target_resource_id,
+		outcome: row.outcome as AuditLogOutcome,
+		occurredAt: toISOString(row.occurred_at),
+		metadata: row.metadata,
+		correlationId: row.correlation_id,
+		sessionId: row.session_id,
+		requestId: row.request_id,
+		requestPath: row.request_path,
+		requestMethod: row.request_method,
+		ipAddress: row.ip_address,
+		userAgent: row.user_agent,
+		durationMs: row.duration_ms,
+		parentEventId: row.parent_event_id,
+		sequenceNumber: row.sequence_number
 	}
 }
 
@@ -124,6 +198,127 @@ function buildAuditLogGroups(entries: AuditLogEntry[]): AuditLogGroup[] {
 	return groups
 }
 
+/**
+ * Build activity-based groups from entries.
+ * Groups events by actor + time proximity or shared correlation ID.
+ */
+function buildActivityGroups(
+	entries: AuditLogEntry[],
+	thresholdMs: number
+): ActivityAuditLogGroup[] {
+	// Group entries by actor key
+	const byActor = new Map<string, AuditLogEntry[]>()
+
+	for (const entry of entries) {
+		const actorKey =
+			entry.actorProfileId && entry.actorProvider
+				? `${entry.actorProvider}:${entry.actorProfileId}`
+				: 'anonymous'
+		const existing = byActor.get(actorKey) ?? []
+		existing.push(entry)
+		byActor.set(actorKey, existing)
+	}
+
+	const groups: ActivityAuditLogGroup[] = []
+
+	for (const [actorKey, actorEntries] of byActor) {
+		// Sort by time for gap detection
+		actorEntries.sort((a, b) => new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime())
+
+		let currentGroup: AuditLogEntry[] = []
+		let activeCorrelationIds = new Set<string>()
+		let lastEventTime: Date | undefined
+
+		for (const entry of actorEntries) {
+			const eventTime = new Date(entry.occurredAt)
+			const gap = lastEventTime
+				? eventTime.getTime() - lastEventTime.getTime()
+				: Number.POSITIVE_INFINITY
+
+			const sharesCorrelation = activeCorrelationIds.has(entry.correlationId)
+			const withinThreshold = gap <= thresholdMs
+
+			if (currentGroup.length === 0 || sharesCorrelation || withinThreshold) {
+				// Merge into current group
+				currentGroup.push(entry)
+				activeCorrelationIds.add(entry.correlationId)
+				lastEventTime = eventTime
+			} else {
+				// Finalize current group and start new one
+				groups.push(finalizeActivityGroup(actorKey, currentGroup))
+				currentGroup = [entry]
+				activeCorrelationIds = new Set([entry.correlationId])
+				lastEventTime = eventTime
+			}
+		}
+
+		// Finalize the last group
+		if (currentGroup.length > 0) {
+			groups.push(finalizeActivityGroup(actorKey, currentGroup))
+		}
+	}
+
+	// Sort groups by primary event time (newest first)
+	groups.sort(
+		(a, b) =>
+			new Date(b.primaryEvent.occurredAt).getTime() - new Date(a.primaryEvent.occurredAt).getTime()
+	)
+
+	return groups
+}
+
+/**
+ * Create an ActivityAuditLogGroup from a list of grouped entries.
+ */
+function finalizeActivityGroup(actorKey: string, events: AuditLogEntry[]): ActivityAuditLogGroup {
+	// Sort events by sequence number, then by occurredAt
+	events.sort((a, b) => {
+		const seqA = a.sequenceNumber ?? 0
+		const seqB = b.sequenceNumber ?? 0
+		if (seqA !== seqB) {
+			return seqA - seqB
+		}
+		return new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime()
+	})
+
+	const primaryEvent = events[0]
+	if (!primaryEvent) {
+		throw new Error('finalizeActivityGroup called with empty events array')
+	}
+	const correlationIds = [...new Set(events.map(e => e.correlationId))]
+	const hasFailure = events.some(e => e.outcome === AuditLogOutcome.Failure)
+
+	let highestSeverity = primaryEvent.severity
+	for (const event of events) {
+		if (severityOrder[event.severity] > severityOrder[highestSeverity]) {
+			highestSeverity = event.severity
+		}
+	}
+
+	const timestamps = events.map(e => e.occurredAt)
+	const sortedTimestamps = [...timestamps].sort()
+	const start = sortedTimestamps[0] ?? primaryEvent.occurredAt
+	const end = sortedTimestamps[sortedTimestamps.length - 1] ?? primaryEvent.occurredAt
+
+	// Parse actor from actorKey
+	const [actorProvider, ...profileParts] = actorKey.split(':')
+	const actorProfileId = profileParts.join(':') || undefined
+	const isAnonymous = actorKey === 'anonymous'
+
+	return {
+		groupKey: `${actorKey}:${primaryEvent.occurredAt}`,
+		actorProfileId: isAnonymous ? undefined : actorProfileId,
+		actorProvider: isAnonymous ? undefined : actorProvider,
+		correlationIds,
+		primaryEvent,
+		eventCount: events.length,
+		events,
+		hasFailure,
+		highestSeverity,
+		timeRange: { start, end }
+	}
+}
+
 export const loader = withAuditContext(async function loader({
 	request
 }: Route.LoaderArgs): Promise<AuditLogLoaderResponse> {
@@ -143,7 +338,8 @@ export const loader = withAuditContext(async function loader({
 		'filter[to]': url.searchParams.get('filter[to]') ?? undefined,
 		'page[number]': url.searchParams.get('page[number]') ?? undefined,
 		'page[size]': url.searchParams.get('page[size]') ?? undefined,
-		'view[mode]': url.searchParams.get('view[mode]') ?? undefined
+		'view[mode]': url.searchParams.get('view[mode]') ?? undefined,
+		'view[threshold]': url.searchParams.get('view[threshold]') ?? undefined
 	}
 
 	const params = await auditLogQuerySchema.parseAsync(rawParams)
@@ -186,24 +382,121 @@ export const loader = withAuditContext(async function loader({
 	}
 
 	if (params['filter[actor]'].length > 0) {
-		where.$or = params['filter[actor]'].map(actor => {
+		const actorFilters = params['filter[actor]']
+		const hasAnonymous = actorFilters.includes('anonymous')
+		const namedActors = actorFilters.filter(a => a !== 'anonymous')
+
+		const orConditions: FilterQuery<AuditLog>[] = []
+
+		// Add anonymous filter (null actor)
+		if (hasAnonymous) {
+			orConditions.push({ actorProfileId: null })
+		}
+
+		// Add named actor filters
+		for (const actor of namedActors) {
 			const [provider, ...rest] = actor.split(':')
 			const profileId = rest.join(':') // Handle profileIds with colons
-			return { actorProvider: provider, actorProfileId: profileId }
-		})
+			orConditions.push({ actorProvider: provider, actorProfileId: profileId })
+		}
+
+		if (orConditions.length > 0) {
+			where.$or = orConditions
+		}
 	}
 
 	// Fetch audit logs with pagination
 	const page = params['page[number]']
 	const pageSize = params['page[size]']
 	const viewMode: AuditLogViewMode = params['view[mode]']
+	const threshold = params['view[threshold]']
 
 	let entries: AuditLogEntry[] = []
 	let groups: AuditLogGroup[] | undefined
-	let total: number
-	let totalPages: number
+	let activityGroups: ActivityAuditLogGroup[] | undefined
+	let hasMore = false
 
-	if (viewMode === 'grouped') {
+	if (viewMode === 'activity') {
+		// Activity mode: group by actor + time proximity or shared correlation
+		// For v1, fetch filtered events with limit and group in-memory
+		const connection = em.getConnection() as AbstractSqlConnection
+		const knex = connection.getKnex()
+
+		// Build Knex query builder with filters (reuse pattern from grouped mode)
+		const buildFilteredQuery = () => {
+			const qb = knex('audit_logs')
+
+			if (params['filter[action-type]'].length > 0) {
+				qb.whereIn('action_type', params['filter[action-type]'])
+			}
+			if (params['filter[outcome]'].length > 0) {
+				qb.whereIn('outcome', params['filter[outcome]'])
+			}
+			if (params['filter[severity]'].length > 0) {
+				qb.whereIn('severity', params['filter[severity]'])
+			}
+			if (params['filter[target-resource-type]'].length > 0) {
+				qb.whereIn('target_resource_type', params['filter[target-resource-type]'])
+			}
+			if (params['filter[from]']) {
+				qb.where('occurred_at', '>=', new Date(params['filter[from]']))
+			}
+			if (params['filter[to]']) {
+				qb.where('occurred_at', '<=', new Date(params['filter[to]']))
+			}
+			if (params['filter[actor]'].length > 0) {
+				const actorFilters = params['filter[actor]']
+				const hasAnonymous = actorFilters.includes('anonymous')
+				const namedActors = actorFilters.filter(a => a !== 'anonymous')
+
+				qb.where(function () {
+					// Add anonymous filter (null actor)
+					if (hasAnonymous) {
+						this.orWhereNull('actor_profile_id')
+					}
+					// Add named actor filters
+					for (const actor of namedActors) {
+						const [provider, ...rest] = actor.split(':')
+						const profileId = rest.join(':')
+						this.orWhere(function () {
+							this.where('actor_provider', provider).where('actor_profile_id', profileId)
+						})
+					}
+				})
+			}
+
+			return qb
+		}
+
+		// Fetch all filtered entries for grouping
+		// Use a reasonable limit to prevent memory issues
+		const maxEntriesForGrouping = 10000
+		const rawRows = (await buildFilteredQuery()
+			.select('*')
+			.orderBy([
+				{ column: 'actor_profile_id', order: 'asc' },
+				{ column: 'actor_provider', order: 'asc' },
+				{ column: 'occurred_at', order: 'asc' }
+			])
+			.limit(maxEntriesForGrouping)) as AuditLogRawRow[]
+
+		// Convert to entry format
+		const allEntries = rawRows.map(rawRowToAuditLogEntry)
+
+		// Build activity groups
+		const allActivityGroups = buildActivityGroups(allEntries, threshold)
+
+		// Paginate the groups (fetch pageSize + 1 to determine hasMore)
+		const startIndex = (page - 1) * pageSize
+		const paginatedGroups = allActivityGroups.slice(startIndex, startIndex + pageSize + 1)
+
+		// Check if there are more groups beyond this page
+		hasMore = paginatedGroups.length > pageSize
+		activityGroups = paginatedGroups.slice(0, pageSize)
+
+		// Collect entries from paginated groups for actor resolution
+		entries = activityGroups.flatMap(g => g.events)
+	} else if (viewMode === 'grouped') {
 		// Grouped mode: paginate by correlation groups using Knex
 		// This avoids loading all entries into memory for large datasets
 		const connection = em.getConnection() as AbstractSqlConnection
@@ -232,8 +525,17 @@ export const loader = withAuditContext(async function loader({
 				qb.where('occurred_at', '<=', new Date(params['filter[to]']))
 			}
 			if (params['filter[actor]'].length > 0) {
+				const actorFilters = params['filter[actor]']
+				const hasAnonymous = actorFilters.includes('anonymous')
+				const namedActors = actorFilters.filter(a => a !== 'anonymous')
+
 				qb.where(function () {
-					for (const actor of params['filter[actor]']) {
+					// Add anonymous filter (null actor)
+					if (hasAnonymous) {
+						this.orWhereNull('actor_profile_id')
+					}
+					// Add named actor filters
+					for (const actor of namedActors) {
 						const [provider, ...rest] = actor.split(':')
 						const profileId = rest.join(':')
 						this.orWhere(function () {
@@ -246,22 +548,21 @@ export const loader = withAuditContext(async function loader({
 			return qb
 		}
 
-		// Step 1: Count total distinct correlation groups
-		const countResult = await buildFilteredQuery()
-			.countDistinct('correlation_id as count')
-			.first<{ count: string }>()
-		total = Number(countResult?.count ?? 0)
-		totalPages = Math.ceil(total / pageSize)
-
-		// Step 2: Get paginated correlation IDs ordered by first occurrence (newest first)
+		// Get paginated correlation IDs ordered by first occurrence (newest first)
+		// Fetch pageSize + 1 to determine hasMore
 		const correlationRows = (await buildFilteredQuery()
 			.select('correlation_id')
 			.min('occurred_at as first_occurred')
 			.groupBy('correlation_id')
 			.orderBy('first_occurred', 'desc')
-			.limit(pageSize)
+			.limit(pageSize + 1)
 			.offset((page - 1) * pageSize)) as { correlation_id: string }[]
-		const paginatedCorrelationIds = correlationRows.map(row => row.correlation_id)
+
+		// Check if there are more groups beyond this page
+		hasMore = correlationRows.length > pageSize
+		const paginatedCorrelationIds = correlationRows
+			.slice(0, pageSize)
+			.map(row => row.correlation_id)
 
 		// Step 3: Fetch only events for paginated correlation IDs
 		if (paginatedCorrelationIds.length > 0) {
@@ -287,16 +588,16 @@ export const loader = withAuditContext(async function loader({
 			groups = []
 		}
 	} else {
-		// Flat mode: existing pagination logic
-		const [entities, flatTotal] = await em.findAndCount(AuditLog, where, {
+		// Flat mode: fetch pageSize + 1 to determine hasMore
+		const entities = await em.find(AuditLog, where, {
 			orderBy: { occurredAt: 'DESC' },
-			limit: pageSize,
+			limit: pageSize + 1,
 			offset: (page - 1) * pageSize
 		})
 
-		entries = entities.map(toAuditLogEntry)
-		total = flatTotal
-		totalPages = Math.ceil(total / pageSize)
+		// Check if there are more entries beyond this page
+		hasMore = entities.length > pageSize
+		entries = entities.slice(0, pageSize).map(toAuditLogEntry)
 	}
 
 	// Log this audit log viewing (meta-logging)
@@ -412,21 +713,32 @@ export const loader = withAuditContext(async function loader({
 	return {
 		entries: viewMode === 'flat' ? entries : undefined,
 		groups: viewMode === 'grouped' ? groups : undefined,
+		activityGroups: viewMode === 'activity' ? activityGroups : undefined,
 		pagination: {
 			page,
 			pageSize,
-			total,
-			totalPages
+			hasMore
 		},
 		params,
 		actors,
 		allActors,
-		viewMode
+		viewMode,
+		threshold
 	}
 })
 
 export default function AuditLogsPage({ loaderData }: Route.ComponentProps): React.ReactNode {
-	const { params, actors, allActors, entries, groups, pagination, viewMode } = loaderData
+	const {
+		params,
+		actors,
+		allActors,
+		entries,
+		groups,
+		activityGroups,
+		pagination,
+		viewMode,
+		threshold
+	} = loaderData
 
 	return (
 		<div className='flex flex-col gap-6 p-6'>
@@ -446,10 +758,17 @@ export default function AuditLogsPage({ loaderData }: Route.ComponentProps): Rea
 				params={params}
 				viewMode={viewMode}
 				allActors={allActors}
+				threshold={threshold}
 			/>
 
 			{/* Table */}
-			{viewMode === 'grouped' && groups ? (
+			{viewMode === 'activity' && activityGroups ? (
+				<AuditLogActivityTable
+					groups={activityGroups}
+					pagination={pagination}
+					actors={actors}
+				/>
+			) : viewMode === 'grouped' && groups ? (
 				<AuditLogGroupedTable
 					groups={groups}
 					pagination={pagination}

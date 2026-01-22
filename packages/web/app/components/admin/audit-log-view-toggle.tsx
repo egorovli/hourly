@@ -1,6 +1,6 @@
 import type { AuditLogViewMode } from '~/domain/index.ts'
 
-import { LayersIcon, ListIcon } from 'lucide-react'
+import { ActivityIcon, LayersIcon, ListIcon } from 'lucide-react'
 import { useSearchParams } from 'react-router'
 
 import { Button } from '~/components/shadcn/ui/button.tsx'
@@ -23,6 +23,11 @@ export function AuditLogViewToggle({ mode }: AuditLogViewToggleProps): React.Rea
 
 		// Reset to page 1 when switching views
 		newParams.delete('page[number]')
+
+		// Clear threshold when leaving activity mode
+		if (newMode !== 'activity') {
+			newParams.delete('view[threshold]')
+		}
 
 		setSearchParams(newParams)
 	}
@@ -56,6 +61,20 @@ export function AuditLogViewToggle({ mode }: AuditLogViewToggleProps): React.Rea
 					className='mr-1.5 size-4'
 				/>
 				Grouped
+			</Button>
+			<Button
+				variant={mode === 'activity' ? 'secondary' : 'ghost'}
+				size='sm'
+				className='h-7 px-2'
+				onClick={() => setViewMode('activity')}
+				aria-pressed={mode === 'activity'}
+				aria-label='View grouped by activity'
+			>
+				<ActivityIcon
+					aria-hidden='true'
+					className='mr-1.5 size-4'
+				/>
+				Activity
 			</Button>
 		</div>
 	)

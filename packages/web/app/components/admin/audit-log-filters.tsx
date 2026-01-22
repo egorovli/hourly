@@ -6,6 +6,8 @@ import { CalendarIcon, XIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
 
+import { AuditLogActorFilter } from '~/components/admin/audit-log-actor-filter.tsx'
+import { AuditLogThresholdSelect } from '~/components/admin/audit-log-threshold-select.tsx'
 import { AuditLogViewToggle } from '~/components/admin/audit-log-view-toggle.tsx'
 import { Button } from '~/components/shadcn/ui/button.tsx'
 import { Calendar } from '~/components/shadcn/ui/calendar.tsx'
@@ -83,12 +85,14 @@ export interface AuditLogFiltersProps {
 	params: AuditLogQueryParams
 	viewMode: AuditLogViewMode
 	allActors: Record<string, ResolvedActor>
+	threshold?: number
 }
 
 export function AuditLogFilters({
 	params,
 	viewMode,
-	allActors
+	allActors,
+	threshold
 }: AuditLogFiltersProps): React.ReactNode {
 	const [searchParams, setSearchParams] = useSearchParams()
 	const [dateRange, setDateRange] = useState<DateRange | undefined>()
@@ -175,14 +179,6 @@ export function AuditLogFilters({
 		setSearchParams(newParams)
 	}
 
-	// Build actor options from allActors prop
-	const actorOptions = Object.entries(allActors)
-		.map(([key, actor]) => ({
-			label: actor.displayName ?? actor.email ?? actor.profileId,
-			value: key // Format: "provider:profileId"
-		}))
-		.sort((a, b) => a.label.localeCompare(b.label))
-
 	const hasFilters =
 		params['filter[action-type]'].length > 0 ||
 		params['filter[outcome]'].length > 0 ||
@@ -223,9 +219,8 @@ export function AuditLogFilters({
 					onSelectionChange={values => updateArrayFilter('filter[target-resource-type]', values)}
 				/>
 
-				<FacetedFilter
-					title='Actor'
-					options={actorOptions}
+				<AuditLogActorFilter
+					actors={allActors}
 					selected={params['filter[actor]']}
 					onSelectionChange={values => updateArrayFilter('filter[actor]', values)}
 				/>
@@ -269,7 +264,12 @@ export function AuditLogFilters({
 				)}
 			</div>
 
-			<AuditLogViewToggle mode={viewMode} />
+			<div className='flex items-center gap-3'>
+				{viewMode === 'activity' && threshold !== undefined && (
+					<AuditLogThresholdSelect threshold={threshold} />
+				)}
+				<AuditLogViewToggle mode={viewMode} />
+			</div>
 		</div>
 	)
 }

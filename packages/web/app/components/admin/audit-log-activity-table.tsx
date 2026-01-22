@@ -1,6 +1,6 @@
 import type {
+	ActivityAuditLogGroup,
 	AuditLogEntry,
-	AuditLogGroup,
 	AuditLogPagination,
 	ResolvedActor
 } from '~/domain/index.ts'
@@ -11,7 +11,8 @@ import {
 	ChevronDownIcon,
 	ChevronLeftIcon,
 	ChevronRightIcon,
-	EyeIcon
+	EyeIcon,
+	LinkIcon
 } from 'lucide-react'
 import { useSearchParams } from 'react-router'
 
@@ -36,19 +37,25 @@ import {
 	CollapsibleContent,
 	CollapsibleTrigger
 } from '~/components/shadcn/ui/collapsible.tsx'
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipProvider,
+	TooltipTrigger
+} from '~/components/shadcn/ui/tooltip.tsx'
 import { cn } from '~/lib/util/index.ts'
 
-export interface AuditLogGroupedTableProps {
-	groups: AuditLogGroup[]
+export interface AuditLogActivityTableProps {
+	groups: ActivityAuditLogGroup[]
 	pagination: AuditLogPagination
 	actors?: Record<string, ResolvedActor>
 }
 
-export function AuditLogGroupedTable({
+export function AuditLogActivityTable({
 	groups,
 	pagination,
 	actors
-}: AuditLogGroupedTableProps): React.ReactNode {
+}: AuditLogActivityTableProps): React.ReactNode {
 	const [searchParams, setSearchParams] = useSearchParams()
 
 	// Sheet state for full detail view
@@ -99,8 +106,8 @@ export function AuditLogGroupedTable({
 			<div className='space-y-4'>
 				<div className='space-y-2'>
 					{groups.map(group => (
-						<AuditLogGroupRow
-							key={group.correlationId}
+						<AuditLogActivityGroupRow
+							key={group.groupKey}
 							group={group}
 							actors={actors}
 							onViewDetails={openDetailSheet}
@@ -148,30 +155,30 @@ export function AuditLogGroupedTable({
 	)
 }
 
-interface AuditLogGroupRowProps {
-	group: AuditLogGroup
+interface AuditLogActivityGroupRowProps {
+	group: ActivityAuditLogGroup
 	actors?: Record<string, ResolvedActor>
 	onViewDetails: (entry: AuditLogEntry) => void
 }
 
-function AuditLogGroupRow({
+function AuditLogActivityGroupRow({
 	group,
 	actors,
 	onViewDetails
-}: AuditLogGroupRowProps): React.ReactNode {
+}: AuditLogActivityGroupRowProps): React.ReactNode {
 	const [isOpen, setIsOpen] = useState(false)
 	const [showAllEvents, setShowAllEvents] = useState(false)
-	const { primaryEvent, events, eventCount, hasFailure, highestSeverity } = group
+	const { primaryEvent, events, eventCount, hasFailure, highestSeverity, correlationIds } = group
 
 	// Look up resolved actor info
 	const actorKey =
-		primaryEvent.actorProvider && primaryEvent.actorProfileId
-			? `${primaryEvent.actorProvider}:${primaryEvent.actorProfileId}`
+		group.actorProvider && group.actorProfileId
+			? `${group.actorProvider}:${group.actorProfileId}`
 			: undefined
 	const resolvedActor = actorKey ? actors?.[actorKey] : undefined
 
 	const displayName =
-		resolvedActor?.displayName ?? resolvedActor?.email ?? primaryEvent.actorProfileId ?? 'Anonymous'
+		resolvedActor?.displayName ?? resolvedActor?.email ?? group.actorProfileId ?? 'Anonymous'
 	const initials = getInitials(resolvedActor?.displayName, resolvedActor?.email)
 
 	// Limit visible events unless "show all" is toggled
@@ -179,8 +186,11 @@ function AuditLogGroupRow({
 	const visibleEvents = showAllEvents ? events : events.slice(0, AUDIT_LOG_MAX_VISIBLE_EVENTS)
 	const hiddenEventCount = events.length - AUDIT_LOG_MAX_VISIBLE_EVENTS
 
+	// Count of merged correlation IDs (shows activity session complexity)
+	const correlationCount = correlationIds.length
+
 	// Build accessibility label
-	const a11yLabel = `${primaryEvent.actionDescription}, ${eventCount} ${eventCount === 1 ? 'event' : 'events'}${hasFailure ? ', contains failures' : ''}. Click to ${isOpen ? 'collapse' : 'expand'}`
+	const a11yLabel = `Activity by ${displayName}, ${eventCount} ${eventCount === 1 ? 'event' : 'events'} across ${correlationCount} ${correlationCount === 1 ? 'correlation' : 'correlations'}${hasFailure ? ', contains failures' : ''}. Click to ${isOpen ? 'collapse' : 'expand'}`
 
 	return (
 		<Collapsible
@@ -222,7 +232,7 @@ function AuditLogGroupRow({
 							</Avatar>
 							<div className='flex flex-col'>
 								<span className='text-sm font-medium'>{displayName}</span>
-								<ProviderBadge provider={primaryEvent.actorProvider} />
+								<ProviderBadge provider={group.actorProvider} />
 							</div>
 						</div>
 
@@ -237,7 +247,7 @@ function AuditLogGroupRow({
 							</span>
 						</div>
 
-						{/* Event Count & Failure Indicator */}
+						{/* Event Count, Correlation Count & Failure Indicator */}
 						<div className='flex items-center gap-2'>
 							<Badge
 								variant='outline'
@@ -245,6 +255,27 @@ function AuditLogGroupRow({
 							>
 								{eventCount} {eventCount === 1 ? 'event' : 'events'}
 							</Badge>
+							{correlationCount > 1 && (
+								<TooltipProvider>
+									<Tooltip>
+										<TooltipTrigger asChild>
+											<Badge
+												variant='secondary'
+												className='font-normal gap-1'
+											>
+												<LinkIcon
+													aria-hidden='true'
+													className='size-3'
+												/>
+												{correlationCount}
+											</Badge>
+										</TooltipTrigger>
+										<TooltipContent>
+											<p>{correlationCount} merged correlation IDs</p>
+										</TooltipContent>
+									</Tooltip>
+								</TooltipProvider>
+							)}
 							{hasFailure && (
 								<AlertCircleIcon
 									aria-label='Contains failures'
@@ -306,7 +337,7 @@ function AuditLogGroupRow({
 							</thead>
 							<tbody className='divide-y divide-border/50'>
 								{visibleEvents.map((event, index) => (
-									<GroupedEventRow
+									<ActivityEventRow
 										key={event.id}
 										event={event}
 										sequenceIndex={index + 1}
@@ -339,17 +370,17 @@ function AuditLogGroupRow({
 	)
 }
 
-interface GroupedEventRowProps {
+interface ActivityEventRowProps {
 	event: AuditLogEntry
 	sequenceIndex: number
 	onViewDetails: () => void
 }
 
-function GroupedEventRow({
+function ActivityEventRow({
 	event,
 	sequenceIndex,
 	onViewDetails
-}: GroupedEventRowProps): React.ReactNode {
+}: ActivityEventRowProps): React.ReactNode {
 	return (
 		<tr className='text-sm hover:bg-muted/30 transition-colors'>
 			<td className='py-2 pr-4 text-muted-foreground'>{sequenceIndex}</td>
