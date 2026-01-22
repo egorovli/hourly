@@ -378,5 +378,31 @@ export const auditActions = {
 			severity: AuditLogSeverity.Info,
 			metadata: { filters }
 		})
+	},
+
+	/**
+	 * Preferences events
+	 */
+	preferences: {
+		updated: (
+			fields: string[],
+			changes: Record<string, { from?: unknown; to: unknown }>
+		): CreateAuditLogInput => ({
+			actionType: AuditLogActionType.Configuration,
+			actionDescription: `Updated preferences: ${fields.join(', ')}`,
+			targetResourceType: AuditLogTargetResourceType.Preferences,
+			outcome: AuditLogOutcome.Success,
+			severity: AuditLogSeverity.Info,
+			metadata: { updatedFields: fields, changes }
+		}),
+
+		updateFailed: (field: string, reason: string): CreateAuditLogInput => ({
+			actionType: AuditLogActionType.Configuration,
+			actionDescription: `Failed to update preference: ${field}`,
+			targetResourceType: AuditLogTargetResourceType.Preferences,
+			outcome: AuditLogOutcome.Failure,
+			severity: AuditLogSeverity.Warning,
+			metadata: { field, reason }
+		})
 	}
 }
