@@ -12,6 +12,7 @@ import {
 	ChevronLeftIcon,
 	ChevronRightIcon,
 	EyeIcon,
+	GlobeIcon,
 	LinkIcon
 } from 'lucide-react'
 import { useSearchParams } from 'react-router'
@@ -168,7 +169,15 @@ function AuditLogActivityGroupRow({
 }: AuditLogActivityGroupRowProps): React.ReactNode {
 	const [isOpen, setIsOpen] = useState(false)
 	const [showAllEvents, setShowAllEvents] = useState(false)
-	const { primaryEvent, events, eventCount, hasFailure, highestSeverity, correlationIds } = group
+	const {
+		primaryEvent,
+		events,
+		eventCount,
+		hasFailure,
+		highestSeverity,
+		correlationIds,
+		requestIds
+	} = group
 
 	// Look up resolved actor info
 	const actorKey =
@@ -188,9 +197,11 @@ function AuditLogActivityGroupRow({
 
 	// Count of merged correlation IDs (shows activity session complexity)
 	const correlationCount = correlationIds.length
+	// Count of merged request IDs (shows number of HTTP requests)
+	const requestCount = requestIds.length
 
 	// Build accessibility label
-	const a11yLabel = `Activity by ${displayName}, ${eventCount} ${eventCount === 1 ? 'event' : 'events'} across ${correlationCount} ${correlationCount === 1 ? 'correlation' : 'correlations'}${hasFailure ? ', contains failures' : ''}. Click to ${isOpen ? 'collapse' : 'expand'}`
+	const a11yLabel = `Activity by ${displayName}, ${eventCount} ${eventCount === 1 ? 'event' : 'events'} across ${correlationCount} ${correlationCount === 1 ? 'correlation' : 'correlations'} and ${requestCount} ${requestCount === 1 ? 'request' : 'requests'}${hasFailure ? ', contains failures' : ''}. Click to ${isOpen ? 'collapse' : 'expand'}`
 
 	return (
 		<Collapsible
@@ -272,6 +283,27 @@ function AuditLogActivityGroupRow({
 										</TooltipTrigger>
 										<TooltipContent>
 											<p>{correlationCount} merged correlation IDs</p>
+										</TooltipContent>
+									</Tooltip>
+								</TooltipProvider>
+							)}
+							{requestCount > 1 && (
+								<TooltipProvider>
+									<Tooltip>
+										<TooltipTrigger asChild>
+											<Badge
+												variant='secondary'
+												className='font-normal gap-1'
+											>
+												<GlobeIcon
+													aria-hidden='true'
+													className='size-3'
+												/>
+												{requestCount}
+											</Badge>
+										</TooltipTrigger>
+										<TooltipContent>
+											<p>{requestCount} merged requests</p>
 										</TooltipContent>
 									</Tooltip>
 								</TooltipProvider>

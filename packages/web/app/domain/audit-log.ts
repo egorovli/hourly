@@ -89,6 +89,8 @@ export interface ActivityAuditLogGroup {
 	actorProvider?: string
 	/** May contain multiple merged correlation IDs */
 	correlationIds: string[]
+	/** May contain multiple merged request IDs (one per HTTP request) */
+	requestIds: string[]
 	primaryEvent: AuditLogEntry
 	eventCount: number
 	events: AuditLogEntry[]

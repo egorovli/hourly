@@ -155,14 +155,14 @@ function buildAuditLogGroups(entries: AuditLogEntry[]): AuditLogGroup[] {
 	const groups: AuditLogGroup[] = []
 
 	for (const [correlationId, events] of groupMap) {
-		// Sort by sequence number, then by occurredAt
+		// Sort by occurredAt, then by id
 		events.sort((a, b) => {
-			const seqA = a.sequenceNumber ?? 0
-			const seqB = b.sequenceNumber ?? 0
-			if (seqA !== seqB) {
-				return seqA - seqB
+			const timeA = new Date(a.occurredAt).getTime()
+			const timeB = new Date(b.occurredAt).getTime()
+			if (timeA !== timeB) {
+				return timeA - timeB
 			}
-			return new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime()
+			return a.id.localeCompare(b.id)
 		})
 
 		const primaryEvent = events[0]
@@ -271,14 +271,14 @@ function buildActivityGroups(
  * Create an ActivityAuditLogGroup from a list of grouped entries.
  */
 function finalizeActivityGroup(actorKey: string, events: AuditLogEntry[]): ActivityAuditLogGroup {
-	// Sort events by sequence number, then by occurredAt
+	// Sort events by occurredAt, then by id
 	events.sort((a, b) => {
-		const seqA = a.sequenceNumber ?? 0
-		const seqB = b.sequenceNumber ?? 0
-		if (seqA !== seqB) {
-			return seqA - seqB
+		const timeA = new Date(a.occurredAt).getTime()
+		const timeB = new Date(b.occurredAt).getTime()
+		if (timeA !== timeB) {
+			return timeA - timeB
 		}
-		return new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime()
+		return a.id.localeCompare(b.id)
 	})
 
 	const primaryEvent = events[0]
@@ -286,6 +286,7 @@ function finalizeActivityGroup(actorKey: string, events: AuditLogEntry[]): Activ
 		throw new Error('finalizeActivityGroup called with empty events array')
 	}
 	const correlationIds = [...new Set(events.map(e => e.correlationId))]
+	const requestIds = [...new Set(events.map(e => e.requestId))]
 	const hasFailure = events.some(e => e.outcome === AuditLogOutcome.Failure)
 
 	let highestSeverity = primaryEvent.severity
@@ -310,6 +311,7 @@ function finalizeActivityGroup(actorKey: string, events: AuditLogEntry[]): Activ
 		actorProfileId: isAnonymous ? undefined : actorProfileId,
 		actorProvider: isAnonymous ? undefined : actorProvider,
 		correlationIds,
+		requestIds,
 		primaryEvent,
 		eventCount: events.length,
 		events,
