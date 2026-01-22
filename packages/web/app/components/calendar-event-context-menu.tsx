@@ -33,9 +33,6 @@ function CalendarEventContextMenu({
 	function handleDelete(): void {
 		if (eventId) {
 			onDelete(eventId)
-			toast.success('Worklog marked for deletion', {
-				description: 'Save to apply changes or discard to undo.'
-			})
 		}
 	}
 

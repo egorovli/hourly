@@ -1188,11 +1188,35 @@ export default function IndexPage(): React.ReactNode {
 		},
 
 		onSuccess: data => {
-			// Clear loaded events cache to force fresh data
-			loadedEventsRef.current.clear()
+			// Update loadedEventsRef with response data for successful saves (optimistic update)
+			// This avoids relying on immediate refetch which may return stale data due to
+			// Atlassian API eventual consistency
+			for (const result of data.saves.results) {
+				if (result.success && result.worklog) {
+					const event = transformWorklogToEvent(result.worklog)
+					// Use worklog.id directly since CalendarEvent.id is optional
+					loadedEventsRef.current.set(result.worklog.id, event)
+				}
+			}
 
-			// Invalidate worklog entries query to refetch
-			queryClient.invalidateQueries({ queryKey: ['worklog-entries'] })
+			// Remove successfully deleted worklogs from loadedEventsRef
+			for (const result of data.deletes.results) {
+				if (result.success) {
+					// Find and remove the event by worklog ID
+					for (const [eventId, event] of loadedEventsRef.current) {
+						if (event.extendedProps?.['worklogEntryId'] === result.input.worklogId) {
+							loadedEventsRef.current.delete(eventId)
+							break
+						}
+					}
+				}
+			}
+
+			// Delayed background refetch for eventual consistency
+			// The Atlassian API may take several seconds to reflect changes in subsequent reads
+			setTimeout(() => {
+				queryClient.invalidateQueries({ queryKey: ['worklog-entries'] })
+			}, 5000)
 
 			if (data.outcome === 'success' || data.outcome === 'empty') {
 				// All operations successful - clear all pending changes
