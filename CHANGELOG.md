@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.4.0](https://github.com/egorovli/hourly/compare/1.3.0...1.4.0) (2026-01-22)
+
+
+### Features
+
+* **admin:** add activity grouping mode and improve audit log UX ([1ce8968](https://github.com/egorovli/hourly/commit/1ce89683a3337c6671ba80d842d542263fe74c48)), closes [#120](https://github.com/egorovli/hourly/issues/120)
+* **admin:** improve audit log detail sheet styling ([da87d29](https://github.com/egorovli/hourly/commit/da87d29b6e984fc766c777168b6f20d1053050aa))
+
+
+### Bug Fixes
+
+* **worklog:** handle Atlassian API eventual consistency after sync ([b554646](https://github.com/egorovli/hourly/commit/b554646ccb16c5ceffc51f3df6622ad4746402c7))
+
 ## [1.3.0](https://github.com/egorovli/hourly/compare/1.2.3...1.3.0) (2026-01-21)
 
 
