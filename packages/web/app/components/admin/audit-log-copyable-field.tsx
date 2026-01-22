@@ -48,8 +48,7 @@ export function CopyableField({
 	}, [value, label])
 
 	const content = (
-		<div className={cn('flex items-center gap-1.5 group', className)}>
-			<code className='font-mono text-xs bg-muted px-1.5 py-0.5 rounded'>{displayValue}</code>
+		<div className={cn('flex items-center justify-end gap-1.5 group', className)}>
 			<Button
 				variant='ghost'
 				size='icon'
@@ -65,6 +64,7 @@ export function CopyableField({
 					<CopyIcon className='size-3 text-muted-foreground' />
 				)}
 			</Button>
+			<code className='font-mono text-xs bg-muted px-1.5 py-0.5 rounded'>{displayValue}</code>
 		</div>
 	)
 
@@ -108,8 +108,7 @@ export function CopyableText({ value, label, className }: CopyableTextProps): Re
 	}, [value, label])
 
 	return (
-		<div className={cn('flex items-center gap-1.5 group', className)}>
-			<span className='text-sm'>{value}</span>
+		<div className={cn('flex items-center justify-end gap-1.5 group', className)}>
 			<Button
 				variant='ghost'
 				size='icon'
@@ -125,6 +124,7 @@ export function CopyableText({ value, label, className }: CopyableTextProps): Re
 					<CopyIcon className='size-3 text-muted-foreground' />
 				)}
 			</Button>
+			<span className='text-sm'>{value}</span>
 		</div>
 	)
 }

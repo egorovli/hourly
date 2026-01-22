@@ -4,6 +4,12 @@ import { DateTime } from 'luxon'
 import { AlertCircleIcon, CheckCircle2Icon, ClockIcon } from 'lucide-react'
 
 import { Badge } from '~/components/shadcn/ui/badge.tsx'
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipProvider,
+	TooltipTrigger
+} from '~/components/shadcn/ui/tooltip.tsx'
 import { cn } from '~/lib/util/index.ts'
 
 /**
@@ -97,28 +103,53 @@ export function ActionTypeBadge({ actionType }: { actionType: string }): React.R
 	)
 }
 
-const severityVariantMap: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-	debug: 'outline',
-	info: 'secondary',
-	warning: 'default',
-	error: 'destructive',
-	critical: 'destructive'
+const severityStyles: Record<AuditLogSeverity, string> = {
+	debug: 'bg-slate-100 text-slate-600 border-slate-200',
+	info: 'bg-blue-50 text-blue-700 border-blue-200',
+	warning: 'bg-amber-50 text-amber-700 border-amber-200',
+	error: 'bg-red-50 text-red-700 border-red-200',
+	critical: 'bg-red-100 text-red-800 border-red-300'
+}
+
+interface SeverityBadgeProps {
+	severity: AuditLogSeverity
+	showTooltip?: boolean
 }
 
 /**
  * Badge component that displays the severity level with appropriate styling.
+ * Optionally shows a tooltip with the severity description.
  */
-export function SeverityBadge({ severity }: { severity: AuditLogSeverity }): React.ReactNode {
-	const variant = severityVariantMap[severity] ?? 'outline'
+export function SeverityBadge({
+	severity,
+	showTooltip = false
+}: SeverityBadgeProps): React.ReactNode {
+	const styles = severityStyles[severity] ?? severityStyles.info
+	const label = severity.charAt(0).toUpperCase() + severity.slice(1)
 
-	return (
+	const badge = (
 		<Badge
-			variant={variant}
-			className='font-normal text-[10px] px-1 py-0'
+			variant='outline'
+			className={cn('font-medium font-mono text-[10px] px-1.5 py-0 uppercase', styles)}
 		>
-			{severity}
+			{label}
 		</Badge>
 	)
+
+	if (showTooltip) {
+		return (
+			<TooltipProvider>
+				<Tooltip>
+					<TooltipTrigger asChild>{badge}</TooltipTrigger>
+					<TooltipContent>
+						<span className='text-xs'>{severityDescriptions[severity]}</span>
+					</TooltipContent>
+				</Tooltip>
+			</TooltipProvider>
+		)
+	}
+
+	return badge
 }
 
 /**

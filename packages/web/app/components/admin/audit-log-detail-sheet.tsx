@@ -25,7 +25,6 @@ import {
 	OutcomeIcon,
 	parseUserAgent,
 	ProviderBadge,
-	severityDescriptions,
 	SeverityBadge
 } from '~/components/admin/audit-log-utils.tsx'
 import { Avatar, AvatarFallback, AvatarImage } from '~/components/shadcn/ui/avatar.tsx'
@@ -98,8 +97,8 @@ export function AuditLogDetailSheet({
 					</SheetDescription>
 				</SheetHeader>
 
-				<ScrollArea className='flex-1 -mx-4 px-4'>
-					<div className='flex flex-col gap-4 pb-4'>
+				<ScrollArea className='flex-1 min-h-0 overflow-hidden -mx-4 px-4'>
+					<div className='flex flex-col gap-4 py-4 px-4'>
 						{/* Actor Section */}
 						<DetailSection
 							title='Actor'
@@ -140,12 +139,7 @@ export function AuditLogDetailSheet({
 								<ActionTypeBadge actionType={entry.actionType} />
 							</DetailRow>
 							<DetailRow label='Severity'>
-								<div className='flex flex-col gap-1'>
-									<SeverityBadge severity={entry.severity} />
-									<span className='text-xs text-muted-foreground'>
-										{severityDescriptions[entry.severity]}
-									</span>
-								</div>
+								<SeverityBadge severity={entry.severity} showTooltip />
 							</DetailRow>
 							<DetailRow label='Description'>
 								<span className='text-sm'>{entry.actionDescription}</span>
@@ -290,11 +284,13 @@ interface DetailRowProps {
 
 function DetailRow({ label, children }: DetailRowProps): React.ReactNode {
 	return (
-		<div className='flex flex-col gap-1'>
-			<span className='text-xs text-muted-foreground font-medium uppercase tracking-wider'>
+		<div className='flex items-start justify-between gap-4'>
+			<span className='text-xs text-muted-foreground font-medium uppercase tracking-wider shrink-0'>
 				{label}
 			</span>
-			{children}
+			<div className='text-right'>
+				{children}
+			</div>
 		</div>
 	)
 }
