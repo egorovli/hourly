@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.5.0](https://github.com/egorovli/hourly/compare/1.4.0...1.5.0) (2026-01-22)
+
+
+### Features
+
+* **audit:** add audit logging for preferences changes ([d871610](https://github.com/egorovli/hourly/commit/d871610ba897d8870bd08d189f08c253e030d7fa)), closes [#124](https://github.com/egorovli/hourly/issues/124)
+* **audit:** improve grouped view sorting and show request count ([7b7c81b](https://github.com/egorovli/hourly/commit/7b7c81beda582e8c86cbb332bda5c63af01086f1))
+* **calendar:** add quick access timezones group to timezone selector ([39e572d](https://github.com/egorovli/hourly/commit/39e572d1eb55d8ddd7ebf8e9689d795625511953))
+* **calendar:** add timezone selector for worklog display ([86f0871](https://github.com/egorovli/hourly/commit/86f0871ec3a0ccf6b39e16d801c2ae1f5fa8db9b)), closes [#122](https://github.com/egorovli/hourly/issues/122)
+* **calendar:** improve event details sheet UX ([db0b346](https://github.com/egorovli/hourly/commit/db0b3462df2377d759cc93945e9a5709074d3d3e)), closes [#125](https://github.com/egorovli/hourly/issues/125)
+
 ## [1.4.0](https://github.com/egorovli/hourly/compare/1.3.0...1.4.0) (2026-01-22)
 
 
