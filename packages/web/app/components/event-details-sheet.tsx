@@ -1,6 +1,6 @@
 import type { JiraIssueSearchResult } from '~/lib/atlassian/issue.ts'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CalendarIcon, CheckIcon, ClockIcon, LinkIcon, SearchIcon, XIcon } from 'lucide-react'
 
 import { Button } from '~/components/shadcn/ui/button.tsx'
@@ -58,6 +58,9 @@ export function EventDetailsSheet(props: EventDetailsSheetProps): React.ReactNod
 	} = props
 
 	const [selectedIssue, setSelectedIssue] = useState<JiraIssueSearchResult | undefined>(undefined)
+	const [focusedIssueIndex, setFocusedIssueIndex] = useState(-1)
+	const searchInputRef = useRef<HTMLInputElement>(null)
+	const issueListRef = useRef<HTMLDivElement>(null)
 
 	useEffect(() => {
 		if (event?.issueKey) {
@@ -67,6 +70,23 @@ export function EventDetailsSheet(props: EventDetailsSheetProps): React.ReactNod
 			setSelectedIssue(undefined)
 		}
 	}, [event?.issueKey, issues])
+
+	// Auto-focus search input when sheet opens
+	useEffect(() => {
+		if (open) {
+			const timer = setTimeout(() => searchInputRef.current?.focus(), 100)
+			return () => clearTimeout(timer)
+		}
+		// Reset focused index when sheet closes
+		setFocusedIssueIndex(-1)
+		return undefined
+	}, [open])
+
+	// Reset focused index when issues change (intentionally depends on issues.length)
+	// biome-ignore lint/correctness/useExhaustiveDependencies: we want to reset when issues change
+	useEffect(() => {
+		setFocusedIssueIndex(-1)
+	}, [issues.length])
 
 	const handleSave = useCallback(() => {
 		if (event && selectedIssue) {
@@ -85,6 +105,58 @@ export function EventDetailsSheet(props: EventDetailsSheetProps): React.ReactNod
 	const handleIssueSelect = useCallback((issue: JiraIssueSearchResult) => {
 		setSelectedIssue(issue)
 	}, [])
+
+	// Keyboard navigation for search input and issue list
+	const handleSearchKeyDown = useCallback(
+		(e: React.KeyboardEvent<HTMLInputElement>) => {
+			if (e.key === 'ArrowDown') {
+				e.preventDefault()
+				if (issues.length > 0) {
+					setFocusedIssueIndex(0)
+					// Focus the first issue button
+					const firstButton = issueListRef.current?.querySelector('button')
+					firstButton?.focus()
+				}
+			}
+		},
+		[issues.length]
+	)
+
+	const handleIssueKeyDown = useCallback(
+		(e: React.KeyboardEvent<HTMLButtonElement>, index: number, issue: JiraIssueSearchResult) => {
+			switch (e.key) {
+				case 'ArrowDown': {
+					e.preventDefault()
+					if (index < issues.length - 1) {
+						setFocusedIssueIndex(index + 1)
+						const buttons = issueListRef.current?.querySelectorAll('button')
+						buttons?.[index + 1]?.focus()
+					}
+					break
+				}
+				case 'ArrowUp': {
+					e.preventDefault()
+					if (index > 0) {
+						setFocusedIssueIndex(index - 1)
+						const buttons = issueListRef.current?.querySelectorAll('button')
+						buttons?.[index - 1]?.focus()
+					} else {
+						// Return focus to search input
+						setFocusedIssueIndex(-1)
+						searchInputRef.current?.focus()
+					}
+					break
+				}
+				case 'Enter':
+				case ' ': {
+					e.preventDefault()
+					handleIssueSelect(issue)
+					break
+				}
+			}
+		},
+		[issues.length, handleIssueSelect]
+	)
 
 	const timeDisplay = useMemo(() => {
 		if (!event) {
@@ -198,18 +270,34 @@ export function EventDetailsSheet(props: EventDetailsSheetProps): React.ReactNod
 					<div className='relative'>
 						<SearchIcon className='absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground' />
 						<Input
+							ref={searchInputRef}
 							type='search'
 							placeholder='Search issues by key or text...'
-							className='pl-9 h-11'
+							className='pl-9 pr-9 h-11'
 							value={searchQuery}
 							onChange={e => {
 								onSearchQueryChange(e.target.value)
 							}}
+							onKeyDown={handleSearchKeyDown}
 						/>
+						{searchQuery.length > 0 && (
+							<Button
+								type='button'
+								variant='ghost'
+								size='icon-sm'
+								className='absolute right-2 top-1/2 size-6 -translate-y-1/2'
+								onClick={() => onSearchQueryChange('')}
+							>
+								<XIcon className='size-3.5' />
+							</Button>
+						)}
 					</div>
 
 					<ScrollArea className='flex-1 -mx-4 px-4'>
-						<div className='flex flex-col gap-1 pb-4'>
+						<div
+							ref={issueListRef}
+							className='flex flex-col gap-1 pb-4'
+						>
 							{isLoadingIssues ? (
 								<>
 									<IssueItemSkeleton />
@@ -223,17 +311,19 @@ export function EventDetailsSheet(props: EventDetailsSheetProps): React.ReactNod
 									<p className='text-sm text-muted-foreground'>
 										{searchQuery.length > 0
 											? 'No issues found matching your search.'
-											: 'Start typing to search for issues.'}
+											: 'No issues available. Check your project and user filters.'}
 									</p>
 								</div>
 							) : (
-								issues.map(issue => {
+								issues.map((issue, index) => {
 									return (
 										<IssueListItem
 											key={issue.id}
 											issue={issue}
 											isSelected={selectedIssue?.key === issue.key}
+											isFocused={focusedIssueIndex === index}
 											onSelect={handleIssueSelect}
+											onKeyDown={e => handleIssueKeyDown(e, index, issue)}
 										/>
 									)
 								})
@@ -268,23 +358,35 @@ export function EventDetailsSheet(props: EventDetailsSheetProps): React.ReactNod
 interface IssueListItemProps {
 	issue: JiraIssueSearchResult
 	isSelected: boolean
+	isFocused: boolean
 	onSelect: (issue: JiraIssueSearchResult) => void
+	onKeyDown: (e: React.KeyboardEvent<HTMLButtonElement>) => void
 }
 
-function IssueListItem({ issue, isSelected, onSelect }: IssueListItemProps): React.ReactNode {
+function IssueListItem({
+	issue,
+	isSelected,
+	isFocused,
+	onSelect,
+	onKeyDown
+}: IssueListItemProps): React.ReactNode {
 	return (
 		<button
 			type='button'
 			className={cn(
 				'flex items-start gap-3 p-3 rounded-lg text-left transition-colors',
 				'min-h-[56px] touch-manipulation',
+				'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
 				isSelected
 					? 'bg-primary/10 border border-primary/30'
-					: 'hover:bg-muted/50 border border-transparent'
+					: isFocused
+						? 'bg-muted/70 border border-muted-foreground/20'
+						: 'hover:bg-muted/50 border border-transparent'
 			)}
 			onClick={() => {
 				onSelect(issue)
 			}}
+			onKeyDown={onKeyDown}
 		>
 			{issue.fields.issuetype?.iconUrl && (
 				<img

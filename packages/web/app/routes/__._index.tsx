@@ -1174,6 +1174,21 @@ export default function IndexPage(): React.ReactNode {
 		enabled: projectsQuery.isSuccess && selectedProjectIds.length > 0 && selectedUserIds.length > 0
 	})
 
+	// Separate issues query for event sheet search (uses its own search query)
+	const eventSheetIssuesQuery = useIssuesQuery({
+		userId: currentUserId,
+		projectIds: selectedProjectIds,
+		userIds: selectedUserIds,
+		fromDate: fromDate,
+		toDate: toDate,
+		query: deferredEventSheetSearchQuery.length > 0 ? deferredEventSheetSearchQuery : undefined,
+		enabled:
+			eventSheetOpen &&
+			projectsQuery.isSuccess &&
+			selectedProjectIds.length > 0 &&
+			selectedUserIds.length > 0
+	})
+
 	const worklogEntriesQuery = useWorklogEntriesQuery({
 		userId: currentUserId,
 		projectIds: selectedProjectIds,
@@ -1317,6 +1332,21 @@ export default function IndexPage(): React.ReactNode {
 	const accessibleResources = useMemo(() => resourcesQuery.data ?? [], [resourcesQuery.data])
 	const worklogEntries = useMemo(() => worklogEntriesQuery.data ?? [], [worklogEntriesQuery.data])
 	const issues = useMemo(() => issuesQuery.data?.issues ?? [], [issuesQuery.data])
+
+	// Derived values for event sheet issues (uses its own search query)
+	const eventSheetIssues = useMemo(() => {
+		if (eventSheetSearchQuery.length > 0) {
+			return eventSheetIssuesQuery.data?.issues ?? []
+		}
+		return issues // Fallback to sidebar issues when no search
+	}, [eventSheetSearchQuery, eventSheetIssuesQuery.data?.issues, issues])
+
+	const eventSheetIssuesLoading = useMemo(() => {
+		if (eventSheetSearchQuery.length > 0) {
+			return eventSheetIssuesQuery.isFetching
+		}
+		return issuesQuery.isFetching
+	}, [eventSheetSearchQuery, eventSheetIssuesQuery.isFetching, issuesQuery.isFetching])
 
 	// Auto-select current user when "My Work" preset is pending and users have loaded
 	// We check !usersQuery.isFetching to ensure we're using fresh data after project change
@@ -1959,6 +1989,14 @@ export default function IndexPage(): React.ReactNode {
 		setEventSheetSearchQuery('')
 	}, [])
 
+	// Handler for event sheet open/close state changes
+	const handleEventSheetOpenChange = useCallback((open: boolean) => {
+		setEventSheetOpen(open)
+		if (!open) {
+			setEventSheetSearchQuery('')
+		}
+	}, [])
+
 	// Handler for tapping on an existing event (to change its linked issue)
 	const handleEventClick = useCallback(
 		(info: {
@@ -2436,10 +2474,10 @@ export default function IndexPage(): React.ReactNode {
 			{/* Event Details Sheet for creating/editing events */}
 			<EventDetailsSheet
 				open={eventSheetOpen}
-				onOpenChange={setEventSheetOpen}
+				onOpenChange={handleEventSheetOpenChange}
 				event={editingEvent}
-				issues={issues}
-				isLoadingIssues={issuesLoading}
+				issues={eventSheetIssues}
+				isLoadingIssues={eventSheetIssuesLoading}
 				searchQuery={eventSheetSearchQuery}
 				onSearchQueryChange={setEventSheetSearchQuery}
 				onSave={handleEventSheetSave}
