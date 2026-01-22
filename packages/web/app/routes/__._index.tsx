@@ -1303,6 +1303,16 @@ export default function IndexPage(): React.ReactNode {
 	})
 
 	const users = useMemo(() => usersQuery.data?.pages.flat() ?? [], [usersQuery.data])
+
+	const quickAccessTimezones = useMemo(() => {
+		const timezones = users
+			.map(user => user.timeZone)
+			.filter(tz => typeof tz === 'string' && tz.length > 0)
+			.filter(Boolean)
+
+		return [...new Set(timezones)]
+	}, [users])
+
 	const projects = useMemo(() => projectsQuery.data ?? [], [projectsQuery.data])
 	const accessibleResources = useMemo(() => resourcesQuery.data ?? [], [resourcesQuery.data])
 	const worklogEntries = useMemo(() => worklogEntriesQuery.data ?? [], [worklogEntriesQuery.data])
@@ -1385,7 +1395,7 @@ export default function IndexPage(): React.ReactNode {
 					undefined)
 				: undefined
 
-				// Look up author data
+			// Look up author data
 			const author = entry.authorAccountId ? usersByAccountId.get(entry.authorAccountId) : undefined
 
 			const authorAvatarUrl =
@@ -2238,6 +2248,7 @@ export default function IndexPage(): React.ReactNode {
 								value={timezone.preference}
 								onChange={timezone.setTimezone}
 								systemTimezone={timezone.detectedSystemTz}
+								quickAccessTimezones={quickAccessTimezones}
 								size='sm'
 								disabled={timezone.isPending}
 							/>

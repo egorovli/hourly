@@ -29,7 +29,19 @@ const CONTINENT_GROUPS: Record<string, string> = {
 /**
  * Group display order.
  */
-const GROUP_ORDER = ['System', 'Americas', 'Europe', 'Asia', 'Pacific', 'Africa', 'Antarctica']
+const GROUP_ORDER = [
+	'System',
+	'Quick Access',
+	'Americas',
+	'Europe',
+	'Asia',
+	'Pacific',
+	'Africa',
+	'Antarctica'
+]
+
+const QUICK_ACCESS_GROUP = 'Quick Access'
+const UTC_TIMEZONE = 'Etc/UTC'
 
 /**
  * Formats offset in minutes to UTC string (e.g., "UTC-05:00").
@@ -43,10 +55,35 @@ function formatOffset(offsetInMinutes: number): string {
 }
 
 /**
+ * Creates a timezone option with formatted offset label.
+ */
+function createTimezoneOption(
+	tzName: string,
+	customLabel?: string,
+	group?: string
+): TimezoneOption | undefined {
+	const tz = rawTimeZones.find(t => t.name === tzName)
+	if (!tz) {
+		return undefined
+	}
+
+	const city = customLabel ?? tz.mainCities[0] ?? tz.name.split('/').pop()?.replace(/_/g, ' ')
+	const offset = formatOffset(tz.rawOffsetInMinutes)
+	const label = `(${offset}) ${city}`
+
+	return {
+		value: tz.name,
+		label,
+		group: group ?? CONTINENT_GROUPS[tz.continentCode] ?? 'Other'
+	}
+}
+
+/**
  * Returns a curated list of timezone options grouped by region.
  * System timezone is always first.
+ * When quickAccessTimezones is provided, adds a Quick Access group with those timezones plus UTC.
  */
-export function getTimezoneOptions(): TimezoneGroup[] {
+export function getTimezoneOptions(quickAccessTimezones?: string[]): TimezoneGroup[] {
 	const groupedOptions = new Map<string, TimezoneOption[]>()
 
 	// Add system option first
@@ -57,6 +94,42 @@ export function getTimezoneOptions(): TimezoneGroup[] {
 			group: 'System'
 		}
 	])
+
+	// Add Quick Access group if timezones are provided
+	if (quickAccessTimezones && quickAccessTimezones.length > 0) {
+		const quickAccessOptions: TimezoneOption[] = []
+		const addedTimezones = new Set<string>()
+
+		// Add provided timezones (deduplicated)
+		for (const tz of quickAccessTimezones) {
+			if (!addedTimezones.has(tz)) {
+				const tzOption = createTimezoneOption(tz, undefined, QUICK_ACCESS_GROUP)
+				if (tzOption) {
+					quickAccessOptions.push(tzOption)
+					addedTimezones.add(tz)
+				}
+			}
+		}
+
+		// Add UTC if not already included
+		if (!addedTimezones.has(UTC_TIMEZONE)) {
+			const utcOption = createTimezoneOption(UTC_TIMEZONE, 'UTC', QUICK_ACCESS_GROUP)
+			if (utcOption) {
+				quickAccessOptions.push(utcOption)
+			}
+		}
+
+		// Sort by UTC offset
+		quickAccessOptions.sort((a, b) => {
+			const tzA = rawTimeZones.find(tz => tz.name === a.value)
+			const tzB = rawTimeZones.find(tz => tz.name === b.value)
+			return (tzA?.rawOffsetInMinutes ?? 0) - (tzB?.rawOffsetInMinutes ?? 0)
+		})
+
+		if (quickAccessOptions.length > 0) {
+			groupedOptions.set(QUICK_ACCESS_GROUP, quickAccessOptions)
+		}
+	}
 
 	// Process raw timezones
 	for (const tz of rawTimeZones) {
@@ -79,8 +152,9 @@ export function getTimezoneOptions(): TimezoneGroup[] {
 	}
 
 	// Sort options within each group by offset then by label
+	// (except System and Quick Access groups which have fixed order)
 	for (const [group, options] of groupedOptions) {
-		if (group !== 'System') {
+		if (group !== 'System' && group !== QUICK_ACCESS_GROUP) {
 			options.sort((a, b) => {
 				// Extract offset for sorting
 				const offsetA = a.label.match(/\(UTC([+-]\d{2}:\d{2})\)/)?.[1] ?? ''
@@ -116,8 +190,8 @@ export function getTimezoneOptions(): TimezoneGroup[] {
 /**
  * Flattened list of all timezone options for search.
  */
-export function getAllTimezoneOptions(): TimezoneOption[] {
-	return getTimezoneOptions().flatMap(group => group.options)
+export function getAllTimezoneOptions(quickAccessTimezones?: string[]): TimezoneOption[] {
+	return getTimezoneOptions(quickAccessTimezones).flatMap(group => group.options)
 }
 
 /**

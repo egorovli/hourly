@@ -24,6 +24,8 @@ interface TimezoneSelectorProps {
 	onChange: (timezone: string) => void
 	/** The detected system timezone (for display when 'system' is selected) */
 	systemTimezone?: string
+	/** Timezones to show in the Quick Access group (e.g., team members' timezones) */
+	quickAccessTimezones?: string[]
 	size?: VariantProps<typeof buttonVariants>['size']
 	disabled?: boolean
 }
@@ -50,12 +52,13 @@ export function TimezoneSelector({
 	value,
 	onChange,
 	systemTimezone,
+	quickAccessTimezones,
 	size = 'sm',
 	disabled = false
 }: TimezoneSelectorProps): React.ReactNode {
 	const [open, setOpen] = useState(false)
 
-	const timezoneGroups = getTimezoneOptions()
+	const timezoneGroups = getTimezoneOptions(quickAccessTimezones)
 	const triggerLabel = getTriggerLabel(value, systemTimezone)
 
 	return (
