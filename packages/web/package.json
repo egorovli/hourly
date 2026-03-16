@@ -31,7 +31,7 @@
 		"@hapi/iron": "^7.0.1",
 		"@icons-pack/react-simple-icons": "^13.8.0",
 		"@mikro-orm/core": "^6.6.3",
-		"@mikro-orm/postgresql": "^6.6.3",
+		"@mikro-orm/postgresql": "^7.0.2",
 		"@mikro-orm/reflection": "^6.6.3",
 		"@mikro-orm/sql-highlighter": "^1.0.1",
 		"@mjackson/headers": "^0.11.1",
